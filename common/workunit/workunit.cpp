@@ -728,6 +728,7 @@ public:
     unsigned addLocalFileUpload(LocalFileUploadType type, char const * source, char const * destination, char const * eventTag);
     IWUResult * updateGlobalByName(const char * name);
     IWUGraph * updateGraph(const char * name);
+    IPropertyTree* ensureQuery();
     IWUQuery * updateQuery();
     IWUWebServicesInfo* updateWebServicesInfo(bool create);
     IWURoxieQueryInfo* updateRoxieQueryInfo(const char *wuid, const char *roxieClusterName);
@@ -1924,6 +1925,7 @@ public:
         conn->queryRoot()->setProp("@xmlns:xsi", "http://www.w3.org/1999/XMLSchema-instance");
         conn->queryRoot()->setPropInt("@wuidVersion", WUID_VERSION);
         Owned<CLocalWorkUnit> cw = new CLocalWorkUnit(conn, (ISecManager*)NULL, NULL, parentWuid);
+        cw->ensureQuery();
         IWorkUnit* ret = &cw->lockRemote(false);
         ret->setDebugValue("CREATED_BY", app, true);
         ret->setDebugValue("CREATED_FOR", user, true);
@@ -4800,17 +4802,22 @@ IConstWUQuery* CLocalWorkUnit::getQuery() const
     return query.getLink();
 }
 
+IPropertyTree* CLocalWorkUnit::ensureQuery()
+{
+    IPropertyTree *s = p->queryPropTree("Query");
+    if (s)
+        return s;
+    return p->addPropTree("Query", createPTreeFromXMLString("<Query fetchEntire='1'/>"));
+}
+
 IWUQuery* CLocalWorkUnit::updateQuery()
 {
     // For this to be legally called, we must have the write-able interface. So we are already locked for write.
     CriticalBlock block(crit);
     if (!query)
     {
-        IPropertyTree *s = p->queryPropTree("Query");
-        if (!s)
-            s = p->addPropTree("Query", createPTreeFromXMLString("<Query fetchEntire='1'/>"));
-        s->Link();
-        query.setown(new CLocalWUQuery(s)); 
+        IPropertyTree *s = ensureQuery();
+        query.setown(new CLocalWUQuery(LINK(s)));
     }
     return query.getLink();
 }
