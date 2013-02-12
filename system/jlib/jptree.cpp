@@ -3756,7 +3756,7 @@ class CommonReaderBase : public CInterface
     bool bufOwned, nullTerm;
     byte *buf, *bufPtr;
     size32_t bufSize, bufRemaining;
-protected:
+public:
     XmlReaderOptions readerOptions;
     bool ignoreWhiteSpace, noRoot;
     Linked<IPTreeNotifyEvent> iEvent;
@@ -3765,7 +3765,8 @@ protected:
     char nextChar;
 
 public:
-    CommonReaderBase(ISimpleReadStream &_stream, IPTreeNotifyEvent &_iEvent, XmlReaderOptions _readerOptions, size32_t _bufSize=0) : readerOptions(_readerOptions), iEvent(&_iEvent), bufSize(_bufSize)
+    CommonReaderBase(ISimpleReadStream &_stream, IPTreeNotifyEvent &_iEvent, XmlReaderOptions _readerOptions, size32_t _bufSize=0) : 
+        readerOptions(_readerOptions), iEvent(&_iEvent), bufSize(_bufSize)
     {
         if (!bufSize) bufSize = 0x8000;
         buf = new byte[bufSize];
@@ -3804,7 +3805,7 @@ public:
             delete [] buf;
     }
     IMPLEMENT_IINTERFACE;
-protected:
+
     virtual void init()
     {
         ignoreWhiteSpace = 0 != ((unsigned)readerOptions & (unsigned)xr_ignoreWhiteSpace);
@@ -3919,6 +3920,7 @@ protected:
         }
         throw createXmlReadException(code, msg, context.str(), line+1, curOffset);
     }
+    inline bool readNextToken();
     inline void readNext()
     {
         if (!readNextToken())
@@ -3932,7 +3934,6 @@ protected:
         curOffset++;
         return true;
     }
-    inline bool readNextToken();
     inline bool checkSkipWS()
     {
         while (isspace(nextChar)) if (!checkReadNext()) return false;
@@ -3944,6 +3945,52 @@ protected:
     }
 };
 
+class CInstStreamReader { public: }; // only used to ensure different template definitions.
+class CInstBufferReader { public: }; 
+class CInstStringReader { public: }; 
+
+template <> inline bool CommonReaderBase<CInstStreamReader>::readNextToken()
+{
+    // do own buffering, to have reasonable error context.
+    if (0 == bufRemaining)
+    {
+        size32_t _bufRemaining = stream->read(bufSize, buf);
+        if (!_bufRemaining)
+            return false;
+        bufRemaining = _bufRemaining;
+        bufPtr = buf;
+    }
+    --bufRemaining;
+    nextChar = *bufPtr++;
+    if (10 == nextChar)
+        line++;
+    return true;
+}
+
+template <> inline bool CommonReaderBase<CInstBufferReader>::readNextToken()
+{
+    if (0 == bufRemaining)
+        return false;
+    --bufRemaining;
+    nextChar = *bufPtr++;
+    if (10 == nextChar)
+        line++;
+    return true;
+}
+
+template <> inline bool CommonReaderBase<CInstStringReader>::readNextToken()
+{
+    nextChar = *bufPtr++;
+    if ('\0' == nextChar)
+    {
+        --bufPtr;
+        return false;
+    }
+    if (10 == nextChar)
+        line++;
+    return true;
+}
+
 template <typename X>
 class CXMLReaderBase : public CommonReaderBase<X>, implements IEntityHelper
 {
@@ -3953,6 +4000,15 @@ protected:
     bool hadXMLDecl;
 
 public:
+    typedef CommonReaderBase<X> COMMON;
+    using COMMON::nextChar;
+    using COMMON::readNext;
+    using COMMON::expecting;
+    using COMMON::match;
+    using COMMON::error;
+    using COMMON::skipWS;
+    using COMMON::rewind;
+
     CXMLReaderBase(ISimpleReadStream &_stream, IPTreeNotifyEvent &_iEvent, XmlReaderOptions _xmlReaderOptions, size32_t _bufSize=0)
         : CommonReaderBase<X>(_stream, _iEvent, _xmlReaderOptions, _bufSize)
     {
@@ -3976,7 +4032,7 @@ protected:
     void init()
     {
         CommonReaderBase<X>::init();
-        ignoreNameSpaces = 0 != ((unsigned)readerOptions & (unsigned)xr_ignoreNameSpaces);
+        ignoreNameSpaces = 0 != ((unsigned)this->readerOptions & (unsigned)xr_ignoreNameSpaces);
         reset();
     }
     void reset()
@@ -3991,7 +4047,7 @@ protected:
             loop
             {
                 id.append(nextChar);
-                readNext();
+                this->readNext();
                 if (!isValidXPathChr(nextChar)) break;
             }
         }
@@ -4301,85 +4357,42 @@ protected:
     }
 };
 
-class CInstStreamReader { public: }; // only used to ensure different template definitions.
-class CInstBufferReader { public: }; 
-class CInstStringReader { public: }; 
-
-template <> inline bool CommonReaderBase<CInstStreamReader>::readNextToken()
-{
-    // do own buffering, to have reasonable error context.
-    if (0 == bufRemaining)
-    {
-        size32_t _bufRemaining = stream->read(bufSize, buf);
-        if (!_bufRemaining)
-            return false;
-        bufRemaining = _bufRemaining;
-        bufPtr = buf;
-    }
-    --bufRemaining;
-    nextChar = *bufPtr++;
-    if (10 == nextChar)
-        line++;
-    return true;
-}
-
-template <> inline bool CommonReaderBase<CInstBufferReader>::readNextToken()
-{
-    if (0 == bufRemaining)
-        return false;
-    --bufRemaining;
-    nextChar = *bufPtr++;
-    if (10 == nextChar)
-        line++;
-    return true;
-}
-
-template <> inline bool CommonReaderBase<CInstStringReader>::readNextToken()
-{
-    nextChar = *bufPtr++;
-    if ('\0' == nextChar)
-    {
-        --bufPtr;
-        return false;
-    }
-    if (10 == nextChar)
-        line++;
-    return true;
-}
-
 
 template <class X>
 class CXMLReader : public CXMLReaderBase<X>, implements IXMLReader
 {
+    bool rootTerminated;
+    StringBuffer attrName, attrval;
+    StringBuffer tmpStr;
+
+public:
+    typedef CommonReaderBase<X> COMMON;
     typedef CXMLReaderBase<X> PARENT;
-    using PARENT::checkBOM;
-    using PARENT::readNext;
-    using PARENT::checkReadNext;
-    using PARENT::checkSkipWS;
-    using PARENT::expecting;
-    using PARENT::error;
-    using PARENT::eos;
+
+    using COMMON::nextChar;
+    using COMMON::readNext;
+    using COMMON::expecting;
+    using COMMON::match;
+    using COMMON::error;
+    using COMMON::skipWS;
+    using COMMON::checkBOM;
+    using COMMON::checkReadNext;
+    using COMMON::checkSkipWS;
+    using COMMON::eos;
+    using COMMON::curOffset;
+    using COMMON::noRoot;
+    using COMMON::ignoreWhiteSpace;
+    using COMMON::iEvent;
+
     using PARENT::parseDirective;
     using PARENT::parseOther;
     using PARENT::parsePI;
     using PARENT::parsePIOrDecl;
     using PARENT::parseComment;
     using PARENT::_decodeXML;
-
-    using PARENT::skipWS;
-    using PARENT::nextChar;
-    using PARENT::curOffset;
-    using PARENT::noRoot;
-    using PARENT::ignoreWhiteSpace;
     using PARENT::ignoreNameSpaces;
-    using PARENT::iEvent;
     using PARENT::hadXMLDecl;
 
-    bool rootTerminated;
-    StringBuffer attrName, attrval;
-    StringBuffer tmpStr;
-
-public:
     IMPLEMENT_IINTERFACE;
 
     CXMLReader(ISimpleReadStream &stream, IPTreeNotifyEvent &iEvent, XmlReaderOptions xmlReaderOptions, size32_t bufSize=0)
@@ -4628,28 +4641,31 @@ restart:
 template <class X>
 class CPullXMLReader : public CXMLReaderBase<X>, implements IPullXMLReader
 {
+    typedef CommonReaderBase<X> COMMON;
     typedef CXMLReaderBase<X> PARENT;
-    using PARENT::checkBOM;
-    using PARENT::readNext;
-    using PARENT::checkReadNext;
-    using PARENT::checkSkipWS;
-    using PARENT::expecting;
-    using PARENT::error;
-    using PARENT::eos;
+
+    using COMMON::nextChar;
+    using COMMON::readNext;
+    using COMMON::expecting;
+    using COMMON::match;
+    using COMMON::error;
+    using COMMON::skipWS;
+    using COMMON::checkBOM;
+    using COMMON::checkReadNext;
+    using COMMON::checkSkipWS;
+    using COMMON::eos;
+    using COMMON::curOffset;
+    using COMMON::noRoot;
+    using COMMON::ignoreWhiteSpace;
+    using COMMON::iEvent;
+
     using PARENT::parseDirective;
     using PARENT::parseOther;
     using PARENT::parsePI;
     using PARENT::parsePIOrDecl;
     using PARENT::parseComment;
     using PARENT::_decodeXML;
-
-    using PARENT::skipWS;
-    using PARENT::nextChar;
-    using PARENT::curOffset;
-    using PARENT::noRoot;
-    using PARENT::ignoreWhiteSpace;
     using PARENT::ignoreNameSpaces;
-    using PARENT::iEvent;
     using PARENT::hadXMLDecl;
 
     class CStateInfo : public CInterface
@@ -6017,6 +6033,27 @@ template <typename X>
 class CJSONReaderBase : public CommonReaderBase<X>
 {
 public:
+    typedef CommonReaderBase<X> COMMON;
+
+    using COMMON::init;
+    using COMMON::reset;
+    using COMMON::nextChar;
+    using COMMON::readNext;
+    using COMMON::expecting;
+    using COMMON::match;
+    using COMMON::error;
+    using COMMON::skipWS;
+    using COMMON::rewind;
+//    using COMMON::checkBOM;
+//    using COMMON::checkReadNext;
+//    using COMMON::checkSkipWS;
+//    using COMMON::eos;
+//    using COMMON::curOffset;
+//    using COMMON::noRoot;
+    using COMMON::ignoreWhiteSpace;
+//    using COMMON::iEvent;
+
+
     CJSONReaderBase(ISimpleReadStream &_stream, IPTreeNotifyEvent &_iEvent, XmlReaderOptions _readerOptions, size32_t _bufSize=0) :
       CommonReaderBase<X>(_stream, _iEvent, _readerOptions, _bufSize)
     {
