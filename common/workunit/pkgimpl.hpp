@@ -115,7 +115,6 @@ protected:
         return NULL;
     }
 
-
 public:
     IMPLEMENT_IINTERFACE;
 
@@ -149,6 +148,7 @@ public:
             return NULL;
         return node->getPropTree("QuerySets");
     }
+    virtual bool validate(IMultiException *me) const;
 };
 
 template <class TYPE>
@@ -195,10 +195,10 @@ public:
                     IPropertyTree &baseElem = baseIterator->query();
                     const char *baseId = baseElem.queryProp("@id");
                     if (!baseId)
-                        throw MakeStringException(0, "PACKAGE_ERROR: base element missing id attribute");
+                        throw MakeStringException(PACKAGE_MISSING_ID, "PACKAGE_ERROR: base element missing id attribute");
                     const IHpccPackage *base = packages->queryPackage(baseId);
                     if (!base)
-                        throw MakeStringException(0, "PACKAGE_ERROR: base package %s not found", baseId);
+                        throw MakeStringException(PACKAGE_NOT_FOUND, "PACKAGE_ERROR: base package %s not found", baseId);
                     appendBase(base);
                 }
                 while(baseIterator->next());
@@ -239,6 +239,11 @@ public:
         }
 
         return false;
+    }
+
+    virtual bool validate(IMultiException *me) const
+    {
+        return TYPE::validate(me);
     }
 };
 
@@ -318,7 +323,7 @@ public:
             IPropertyTree &packageTree = allpackages->query();
             const char *id = packageTree.queryProp("@id");
             if (!id || !*id)
-                throw MakeStringException(-1, "Invalid package map - Package element missing id attribute");
+                throw MakeStringException(PACKAGE_MISSING_ID, "Invalid package map - Package element missing id attribute");
             Owned<packageType> package = new packageType(&packageTree);
             packages.setValue(id, package.get());
             const char *queries = packageTree.queryProp("@queries");
@@ -340,6 +345,56 @@ public:
     void load(const char *id)
     {
         load(getPackageMapById(id, true));
+    }
+
+    virtual bool validate(IMultiException *me, StringArray &unmatchedQueries, StringArray &unusedPackages) const
+    {
+        bool isValid = true;
+        MapStringTo<bool> referencedPackages;
+        Owned<IPropertyTree> qs = getQueryRegistry(querySet, true);
+        if (!qs)
+            throw MakeStringException(PACKAGE_TARGET_NOT_FOUND, "Target %s not found", querySet.sget());
+        Owned<IPropertyTreeIterator> queries = qs->getElements("Query");
+        HashIterator it(packages);
+        ForEach (it)
+        {
+            const char *packageId = (const char *)it.query().getKey();
+            packageType *pkg = packages.getValue(packageId);
+            if (!pkg)
+                continue;
+            if (!pkg->validate(me))
+                isValid = false;
+            Owned<IPropertyTreeIterator> baseNodes = pkg->queryTree()->getElements("Base");
+            ForEach(*baseNodes)
+            {
+                const char *baseId = baseNodes->query().queryProp("@id");
+                if (!referencedPackages.getValue(baseId))
+                    referencedPackages.setValue(baseId, true);
+            }
+        }
+        ForEach(*queries)
+        {
+            const char *queryid = queries->query().queryProp("@id");
+            if (queryid && *queryid)
+            {
+                const IHpccPackage *matched = matchPackage(queryid);
+                if (matched)
+                {
+                    const char *matchId = matched->queryTree()->queryProp("@id");
+                    if (!referencedPackages.getValue(matchId))
+                        referencedPackages.setValue(matchId, true);
+                }
+                else
+                    unmatchedQueries.append(queryid);
+            }
+        }
+        ForEach (it)
+        {
+            const char *packageId = (const char *)it.query().getKey();
+            if (!referencedPackages.getValue(packageId))
+                unusedPackages.append(packageId);
+        }
+        return isValid;
     }
 };
 
