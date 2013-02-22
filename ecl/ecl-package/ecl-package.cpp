@@ -650,10 +650,24 @@ public:
         request->setTarget(optTarget);
 
         Owned<IClientValidatePackageResponse> resp = packageProcessClient->ValidatePackage(request);
-        if (resp->getExceptions().ordinality()==0)
+        StringArray &errors = resp->getErrors();
+        if (errors.ordinality()==0)
             fputs("   No errors found\n", stdout);
         else
-            outputMultiExceptions(resp->getExceptions());
+        {
+            fputs("   Errors:\n", stderr);
+            ForEachItemIn(i, errors)
+                fprintf(stderr, "      %s\n", errors.item(i));
+        }
+        StringArray &warnings = resp->getWarnings();
+        if (warnings.ordinality()==0)
+            fputs("   No warnings found\n", stdout);
+        else
+        {
+            fputs("   Warnings:\n", stderr);
+            ForEachItemIn(i, warnings)
+                fprintf(stderr, "      %s\n", warnings.item(i));
+        }
         StringArray &unmatchedQueries = resp->getQueries().getUnmatched();
         if (unmatchedQueries.ordinality()>0)
         {

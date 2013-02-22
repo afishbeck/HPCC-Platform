@@ -148,7 +148,7 @@ public:
             return NULL;
         return node->getPropTree("QuerySets");
     }
-    virtual bool validate(IMultiException *me) const;
+    virtual bool validate(StringArray &warn, StringArray &err) const;
 };
 
 template <class TYPE>
@@ -241,9 +241,9 @@ public:
         return false;
     }
 
-    virtual bool validate(IMultiException *me) const
+    virtual bool validate(StringArray &warn, StringArray &err) const
     {
-        return TYPE::validate(me);
+        return TYPE::validate(warn, err);
     }
 };
 
@@ -347,7 +347,7 @@ public:
         load(getPackageMapById(id, true));
     }
 
-    virtual bool validate(IMultiException *me, StringArray &unmatchedQueries, StringArray &unusedPackages) const
+    virtual bool validate(StringArray &warn, StringArray &err, StringArray &unmatchedQueries, StringArray &unusedPackages) const
     {
         bool isValid = true;
         MapStringTo<bool> referencedPackages;
@@ -362,12 +362,17 @@ public:
             packageType *pkg = packages.getValue(packageId);
             if (!pkg)
                 continue;
-            if (!pkg->validate(me))
+            if (!pkg->validate(warn, err))
                 isValid = false;
             Owned<IPropertyTreeIterator> baseNodes = pkg->queryTree()->getElements("Base");
             ForEach(*baseNodes)
             {
                 const char *baseId = baseNodes->query().queryProp("@id");
+                if (!baseId || !*baseId)
+                {
+                    VStringBuffer msg("Package '%s' contains Base element with no id attribute", packageId);
+                    err.append(msg.str());
+                }
                 if (!referencedPackages.getValue(baseId))
                     referencedPackages.setValue(baseId, true);
             }
