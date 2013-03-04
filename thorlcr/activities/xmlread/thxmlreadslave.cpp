@@ -81,7 +81,7 @@ class CXmlReadSlaveActivity : public CDiskReadSlaveActivityBase, public CThorDat
                 stream.set(crcStream);
             }
             inputIOstream.setown(createBufferedIOStream(stream));
-            xmlParser.setown(createXMLParse(*inputIOstream.get(), activity.helper->queryIteratorPath(), *this, (0 != (TDRxmlnoroot & activity.helper->getFlags()))?xr_noRoot:xr_none, 0 != (TDRusexmlcontents & activity.helper->getFlags())));
+            xmlParser.setown(createXMLParse(*inputIOstream.get(), activity.helper->queryIteratorPath(), *this, (0 != (TDRxmlnoroot & activity.helper->getFlags()))?ptr_noRoot:ptr_none, 0 != (TDRusexmlcontents & activity.helper->getFlags())));
         }
         virtual void close(CRC32 &fileCRC)
         {
@@ -123,9 +123,9 @@ class CXmlReadSlaveActivity : public CDiskReadSlaveActivityBase, public CThorDat
                 context.append("offset = ").append(localOffset);
                 throw MakeStringException(e->errorCode(), "%s", context.str());
             }
-            catch (IXMLReadException *e)
+            catch (IPTreeReadException *e)
             {
-                if (XmlRead_syntax != e->errorCode())
+                if (PTreeRead_syntax != e->errorCode())
                     throw;
                 Owned<IException> _e = e;
                 offset_t localFPos = makeLocalFposOffset(activity.queryContainer().queryJob().queryMyRank()-1, e->queryOffset());
@@ -137,7 +137,7 @@ class CXmlReadSlaveActivity : public CDiskReadSlaveActivityBase, public CThorDat
                 appendDataAsHex(context, sizeof(localFPos), &localFPos);
                 context.newline();
                 context.append(e->queryContext());
-                throw createXmlReadException(e->errorCode(), e->queryDescription(), context.str(), e->queryLine(), e->queryOffset());
+                throw createPTreeReadException(e->errorCode(), e->queryDescription(), context.str(), e->queryLine(), e->queryOffset());
             }
             catch (IOutOfMemException *e)
             {

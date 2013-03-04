@@ -20035,7 +20035,7 @@ public:
         {
             rowTransformer.set(readHelper->queryTransformer());
             assertex(reader != NULL);
-            xmlParser.setown(createXMLParse(*reader->querySimpleStream(), readHelper->queryIteratorPath(), *this, (0 != (TDRxmlnoroot & readHelper->getFlags()))?xr_noRoot:xr_none, (readHelper->getFlags() & TDRusexmlcontents) != 0));
+            xmlParser.setown(createXMLParse(*reader->querySimpleStream(), readHelper->queryIteratorPath(), *this, (0 != (TDRxmlnoroot & readHelper->getFlags()))?ptr_noRoot:ptr_none, (readHelper->getFlags() & TDRusexmlcontents) != 0));
         }
     }
 

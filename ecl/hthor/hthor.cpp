@@ -7051,7 +7051,7 @@ const void * CHThorXmlParseActivity::nextInGroup()
         }
         size32_t srchLen;
         helper.getSearchText(srchLen, srchStr, in);
-        xmlParser.setown(createXMLParse(srchStr, srchLen, helper.queryIteratorPath(), *this, xr_noRoot, helper.requiresContents()));
+        xmlParser.setown(createXMLParse(srchStr, srchLen, helper.queryIteratorPath(), *this, ptr_noRoot, helper.requiresContents()));
     }
 }
 
@@ -8856,7 +8856,7 @@ bool CHThorXmlReadActivity::openNext()
         else
             inputfileiostream.setown(createIOStream(inputfileio));
 
-        xmlParser.setown(createXMLParse(*inputfileiostream, helper.queryIteratorPath(), *this, (0 != (TDRxmlnoroot & helper.getFlags()))?xr_noRoot:xr_none, (helper.getFlags() & TDRusexmlcontents) != 0));
+        xmlParser.setown(createXMLParse(*inputfileiostream, helper.queryIteratorPath(), *this, (0 != (TDRxmlnoroot & helper.getFlags()))?ptr_noRoot:ptr_none, (helper.getFlags() & TDRusexmlcontents) != 0));
         return true;
     }
     return false;
