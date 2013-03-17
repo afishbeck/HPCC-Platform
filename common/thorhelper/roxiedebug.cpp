@@ -34,7 +34,7 @@ bool CDebugCommandHandler::checkCommand(IXmlWriter &out, const char *&supplied, 
     {
         if (!supplied[i])
         {
-            out.outputBeginNested(expected, true);
+            out.outputBeginNested(expected, XmlWriter_NestChildren);
             supplied = expected;
             return true;
         }
@@ -498,7 +498,7 @@ public:
         // Searching/breaking on unicode not supported at the moment
     }
 
-    virtual void outputBeginNested(const char *fieldname, bool nestChildren) 
+    virtual void outputBeginNested(const char *fieldname, unsigned flags)
     {
         // nothing for now
     }
@@ -836,7 +836,7 @@ void CBreakpointInfo::toXML(IXmlWriter *output) const
     ForEachItemIn(edgeIdx, activeEdges)
     {
         IActivityDebugContext &edge = activeEdges.item(edgeIdx);
-        output->outputBeginNested("edge", false);
+        output->outputBeginNested("edge", 0);
         output->outputCString(edge.queryEdgeId(), "@edgeId");
         output->outputEndNested("edge");
     }
@@ -876,20 +876,20 @@ void DebugActivityRecord::outputProperties(IXmlWriter *output)
         {
             const char *propName = iterator->getPropKey();
             const char *propValue = properties->queryProp(propName);
-            output->outputBeginNested("att", false); output->outputCString(propName, "@name"); output->outputCString(propValue, "@value"); output->outputEndNested("att");
+            output->outputBeginNested("att", 0); output->outputCString(propName, "@name"); output->outputCString(propValue, "@value"); output->outputEndNested("att");
             iterator->next();
         }
     }
     if (localCycles)
     {
-        output->outputBeginNested("att", false); 
+        output->outputBeginNested("att", 0);
         output->outputCString("localTime", "@name"); 
         output->outputUInt((unsigned) (cycle_to_nanosec(localCycles)/1000), "@value"); 
         output->outputEndNested("att");
     }
     if (totalCycles)
     {
-        output->outputBeginNested("att", false); 
+        output->outputBeginNested("att", 0);
         output->outputCString("totalTime", "@name"); 
         output->outputUInt((unsigned) (cycle_to_nanosec(totalCycles)/1000), "@value"); 
         output->outputEndNested("att");
@@ -1319,7 +1319,7 @@ void CBaseServerDebugContext::doStandardResult(IXmlWriter *output) const
     }
     if (currentException)
     {
-        output->outputBeginNested("Exception", true);
+        output->outputBeginNested("Exception", XmlWriter_NestChildren);
         output->outputCString("Roxie", "Source");
         output->outputInt(currentException->errorCode(), "Code");
         StringBuffer s;
@@ -1333,7 +1333,7 @@ void CBaseServerDebugContext::_listBreakpoint(IXmlWriter *output, IBreakpointInf
 {
     if (bp.queryMode() != BreakpointModeNone)
     {
-        output->outputBeginNested("break", true);
+        output->outputBeginNested("break", XmlWriter_NestChildren);
         output->outputInt(idx, "@idx");
         bp.toXML(output);
         output->outputEndNested("break");
@@ -1675,7 +1675,7 @@ void CBaseServerDebugContext::debugCounts(IXmlWriter *output, unsigned sinceSequ
         IGlobalEdgeRecord *edge = globalCounts.mapToValue(&edges.query());
         if (!sinceSequence || edge->queryLastSequence() > sinceSequence)
         {
-            output->outputBeginNested("edge", true);
+            output->outputBeginNested("edge", XmlWriter_NestChildren);
             output->outputCString((const char *) edges.query().getKey(), "@edgeId");
             output->outputUInt(edge->queryCount(), "@count");
             output->outputEndNested("edge");
@@ -1969,14 +1969,14 @@ void CBaseDebugGraphManager::outputLinksForChildGraph(IXmlWriter *output, const 
     ForEachItemIn(idx, sinks)
     {
         Linked<DebugActivityRecord> childNode = allActivities.getValue(&sinks.item(idx));
-        output->outputBeginNested("edge", true);
+        output->outputBeginNested("edge", XmlWriter_NestChildren);
         output->outputCString("Child", "@label");
         StringBuffer idText;
         idText.append(childNode->idText).append('_').append(parentId);
         output->outputCString(idText.str(), "@id"); // MORE - is this guaranteed to be unique?
-        output->outputBeginNested("att", false); output->outputCString("_childGraph", "@name"); output->outputInt(1, "@value"); output->outputEndNested("att");
-        output->outputBeginNested("att", false); output->outputCString("_sourceActivity", "@name"); childNode->outputId(output, "@value"); output->outputEndNested("att"); // MORE!!!
-        output->outputBeginNested("att", false); output->outputCString("_targetActivity", "@name"); output->outputCString(parentId, "@value"); output->outputEndNested("att");
+        output->outputBeginNested("att", 0); output->outputCString("_childGraph", "@name"); output->outputInt(1, "@value"); output->outputEndNested("att");
+        output->outputBeginNested("att", 0); output->outputCString("_sourceActivity", "@name"); childNode->outputId(output, "@value"); output->outputEndNested("att"); // MORE!!!
+        output->outputBeginNested("att", 0); output->outputCString("_targetActivity", "@name"); output->outputCString(parentId, "@value"); output->outputEndNested("att");
         output->outputEndNested("edge");
     }
 }
@@ -1985,7 +1985,7 @@ void CBaseDebugGraphManager::outputChildGraph(IXmlWriter *output, unsigned seque
 {
     if (allActivities.count())
     {
-        output->outputBeginNested("graph", true);
+        output->outputBeginNested("graph", XmlWriter_NestChildren);
         HashIterator edges(allProbes);
         ForEach(edges)
         {
@@ -1999,25 +1999,25 @@ void CBaseDebugGraphManager::outputChildGraph(IXmlWriter *output, unsigned seque
             DebugActivityRecord *node = allActivities.mapToValue(&nodes.query());
             if (!sequence || node->sequence > sequence) // MORE - if we start reporting any stats on nodes (seeks? scans?) this may need to change
             {
-                output->outputBeginNested("node", true);
+                output->outputBeginNested("node", XmlWriter_NestChildren);
                 node->outputId(output, "@id");
                 ThorActivityKind kind = node->activity->getKind();
                 StringBuffer kindStr(getActivityText(kind));
                 output->outputString(kindStr.length(), kindStr.str(), "@shortlabel");
                 if (node->activity->isPassThrough())
                 {
-                    output->outputBeginNested("att", false); output->outputCString("_isPassthrough", "@name"); output->outputInt(1, "@value"); output->outputEndNested("att");
+                    output->outputBeginNested("att", 0); output->outputCString("_isPassthrough", "@name"); output->outputInt(1, "@value"); output->outputEndNested("att");
                 }
                 if (node->totalCycles)
                 {
-                    output->outputBeginNested("att", false); 
+                    output->outputBeginNested("att", 0);
                     output->outputCString("totalTime", "@name"); 
                     output->outputUInt((unsigned) (cycle_to_nanosec(node->totalCycles)/1000), "@value"); 
                     output->outputEndNested("att");
                 }
                 if (node->localCycles)
                 {
-                    output->outputBeginNested("att", false); 
+                    output->outputBeginNested("att", 0);
                     output->outputCString("localTime", "@name"); 
                     output->outputUInt((unsigned) (cycle_to_nanosec(node->localCycles)/1000), "@value"); 
                     output->outputEndNested("att");
@@ -2028,7 +2028,7 @@ void CBaseDebugGraphManager::outputChildGraph(IXmlWriter *output, unsigned seque
                 output->outputEndNested("node");
             ForEachItemIn(idx, node->childGraphs)
             {
-                output->outputBeginNested("node", true);
+                output->outputBeginNested("node", XmlWriter_NestChildren);
                 IDebugGraphManager &childGraph = node->childGraphs.item(idx);
                 output->outputCString(childGraph.queryIdString(), "@id");
                 childGraph.outputChildGraph(output, sequence);
@@ -2206,10 +2206,10 @@ void CBaseDebugGraphManager::getXGMML(IXmlWriter *output, unsigned sequence, boo
 {
     // Build xgmml for this graph... as currently executing...
     CriticalBlock b(crit);
-    output->outputBeginNested("Graph", true);
+    output->outputBeginNested("Graph", XmlWriter_NestChildren);
     output->outputString(graphName.length(), graphName.get(), "@id"); // MORE here
     output->outputBool(isActive, "@active");
-    output->outputBeginNested("xgmml", true);
+    output->outputBeginNested("xgmml", XmlWriter_NestChildren);
 
     outputChildGraph(output, sequence);
 
@@ -2222,11 +2222,11 @@ void CBaseDebugGraphManager::getXGMML(IXmlWriter *output, unsigned sequence, boo
             DebugActivityRecord *target = allActivities.getValue(dependency.targetActivity);
             if (source && target)
             {
-                output->outputBeginNested("edge", true);
+                output->outputBeginNested("edge", XmlWriter_NestChildren);
                 output->outputCString(dependency.edgeId, "@id");
-                output->outputBeginNested("att", false); output->outputCString("_dependsOn", "@name"); output->outputInt(1, "@value"); output->outputEndNested("att");
-                output->outputBeginNested("att", false); output->outputCString("_sourceActivity", "@name"); source->outputId(output, "@value"); output->outputEndNested("att");
-                output->outputBeginNested("att", false); output->outputCString("_targetActivity", "@name"); target->outputId(output, "@value"); output->outputEndNested("att");
+                output->outputBeginNested("att", 0); output->outputCString("_dependsOn", "@name"); output->outputInt(1, "@value"); output->outputEndNested("att");
+                output->outputBeginNested("att", 0); output->outputCString("_sourceActivity", "@name"); source->outputId(output, "@value"); output->outputEndNested("att");
+                output->outputBeginNested("att", 0); output->outputCString("_targetActivity", "@name"); target->outputId(output, "@value"); output->outputEndNested("att");
                 output->outputEndNested("edge");
             }
             // MORE - work out why sometimes source and/or target is NULL

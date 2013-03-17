@@ -60,7 +60,7 @@ public:
     virtual void outputUDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname);
     virtual void outputUnicode(unsigned len, const UChar *field, const char *fieldname);
     virtual void outputUtf8(unsigned len, const char *field, const char *fieldname);
-    virtual void outputBeginNested(const char *fieldname, bool nestChildren);
+    virtual void outputBeginNested(const char *fieldname, unsigned flags);
     virtual void outputEndNested(const char *fieldname);
     virtual void outputSetAll();
 
@@ -82,6 +82,48 @@ protected:
     bool tagClosed;
 };
 
+class thorhelper_decl CommonJsonWriter : public CInterface, implements IXmlWriter
+{
+public:
+    CommonJsonWriter(unsigned _flags, unsigned initialIndent=0,  IXmlStreamFlusher *_flusher=NULL);
+    ~CommonJsonWriter();
+    IMPLEMENT_IINTERFACE;
+
+    CommonJsonWriter & clear();
+    unsigned length() const                                 { return out.length(); }
+    const char * str() const                                { return out.str(); }
+
+    virtual void outputQuoted(const char *text);
+    virtual void outputQString(unsigned len, const char *field, const char *fieldname);
+    virtual void outputString(unsigned len, const char *field, const char *fieldname);
+    virtual void outputBool(bool field, const char *fieldname);
+    virtual void outputData(unsigned len, const void *field, const char *fieldname);
+    virtual void outputInt(__int64 field, const char *fieldname);
+    virtual void outputUInt(unsigned __int64 field, const char *fieldname);
+    virtual void outputReal(double field, const char *fieldname);
+    virtual void outputDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname);
+    virtual void outputUDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname);
+    virtual void outputUnicode(unsigned len, const UChar *field, const char *fieldname);
+    virtual void outputUtf8(unsigned len, const char *field, const char *fieldname);
+    virtual void outputBeginNested(const char *fieldname, unsigned flags);
+    virtual void outputEndNested(const char *fieldname);
+    virtual void outputSetAll();
+
+protected:
+    inline void flush(bool isClose)
+    {
+        if (flusher)
+            flusher->flushXML(out, isClose);
+    }
+
+protected:
+    IXmlStreamFlusher *flusher;
+    UnsignedArray stack;
+    StringBuffer out;
+    unsigned flags;
+    unsigned indent;
+    unsigned nestLimit;
+};
 
 //Writes type encoded XML strings  (xsi:type="xsd:string", xsi:type="xsd:boolean" etc)
 class thorhelper_decl CommonEncodedXmlWriter : public CommonXmlWriter
@@ -110,8 +152,9 @@ public:
     virtual void outputData(unsigned len, const void *field, const char *fieldname);
 };
 
-enum XMLWriterType{WTStandard, WTEncoding, WTEncodingData64} ;
+enum XMLWriterType{WTStandard, WTEncoding, WTEncodingData64, WTJSON} ;
 CommonXmlWriter * CreateCommonXmlWriter(unsigned _flags, unsigned initialIndent=0, IXmlStreamFlusher *_flusher=NULL, XMLWriterType xmlType=WTStandard);
+thorhelper_decl IXmlWriter * createIXmlWriter(unsigned _flags, unsigned initialIndent=0, IXmlStreamFlusher *_flusher=NULL, XMLWriterType xmlType=WTStandard);
 
 class thorhelper_decl SimpleOutputWriter : public CInterface, implements IXmlWriter
 {
@@ -137,7 +180,7 @@ public:
     virtual void outputUDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname);
     virtual void outputUnicode(unsigned len, const UChar *field, const char *fieldname);
     virtual void outputUtf8(unsigned len, const char *field, const char *fieldname);
-    virtual void outputBeginNested(const char *fieldname, bool nestChildren);
+    virtual void outputBeginNested(const char *fieldname, unsigned flags);
     virtual void outputEndNested(const char *fieldname);
     virtual void outputSetAll();
 

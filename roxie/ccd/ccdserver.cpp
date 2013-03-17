@@ -10825,7 +10825,7 @@ public:
                     break;
             }
             processed++;
-            xmlOutput.clear().outputBeginNested(rowTag, false);
+            xmlOutput.clear().outputBeginNested(rowTag, 0);
             xmlHelper.toXML((const byte *)nextrec.get(), xmlOutput);
             xmlOutput.outputEndNested(rowTag);
             diskout->write(xmlOutput.length(), xmlOutput.str());
@@ -19170,12 +19170,14 @@ public:
                     rowSerializer->serialize(serializerTarget, (const byte *) row);
                     response->append(rowbuff.length(), rowbuff.toByteArray());
                 }
-                else if (response->isXml)
+                else if (response->mlFmt==MarkupFmt_XML || response->mlFmt==MarkupFmt_JSON)
                 {
-                    CommonXmlWriter xmlwrite(serverContext->getXmlFlags(), 1, response);
-                    xmlwrite.outputBeginNested("Row", false);
-                    helper.serializeXml((byte *) row, xmlwrite);
-                    xmlwrite.outputEndNested("Row");
+                    Owned<IXmlWriter> writer = createIXmlWriter(serverContext->getXmlFlags(), 1, response, (response->mlFmt==MarkupFmt_JSON) ? WTJSON : WTStandard);
+                    writer->outputBeginNested(NULL, XmlWriter_Dataset); //no output, but support json being more context sensitive
+                    writer->outputBeginNested("Row", XmlWriter_Row);
+                    helper.serializeXml((byte *) row, *writer);
+                    writer->outputEndNested("Row");
+                    writer->outputEndNested(NULL);
                 }
                 else
                 {

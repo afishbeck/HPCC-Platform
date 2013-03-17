@@ -382,7 +382,7 @@ public:
         if (xmlWriterExtra)
         {
             CommonXmlWriter xmlWriter(xmlWriterExtra->getXmlFlags());
-            xmlWriter.outputBeginNested(rowTag, false);
+            xmlWriter.outputBeginNested(rowTag, 0);
             xmlWriterExtra->toXML((const byte *)row, xmlWriter);
             xmlWriter.outputEndNested(rowTag);
             pipe->write(xmlWriter.length(), xmlWriter.str());

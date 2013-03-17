@@ -666,7 +666,7 @@ size32_t RtlRecordTypeInfo::toXML(const byte * self, const byte * selfrow, const
 {
     const char * xpath = queryXPath(field);
     if (*xpath)
-        target.outputBeginNested(xpath, false);
+        target.outputBeginNested(xpath, XmlWriter_Row);
 
     unsigned thisSize = toXMLFields(fields, self, self, target);
 
@@ -712,7 +712,7 @@ size32_t RtlSetTypeInfo::toXML(const byte * self, const byte * selfrow, const Rt
     if (hasOuterXPath(field))
     {
         queryNestedOuterXPath(outerTag, field);
-        target.outputBeginNested(outerTag, false);
+        target.outputBeginNested(outerTag, XmlWriter_Set);
     }
 
     if (*(bool *)self)
@@ -810,10 +810,9 @@ size32_t RtlDatasetTypeInfo::toXML(const byte * self, const byte * selfrow, cons
 {
     StringAttr outerTag;
     if (hasOuterXPath(field))
-    {
         queryNestedOuterXPath(outerTag, field);
-        target.outputBeginNested(outerTag, false);
-    }
+    //may not output but support json being more context sensitive
+    target.outputBeginNested(outerTag, XmlWriter_Dataset);
 
     unsigned thisSize;
     if (isLinkCounted())
@@ -840,8 +839,7 @@ size32_t RtlDatasetTypeInfo::toXML(const byte * self, const byte * selfrow, cons
         thisSize = max;
     }
 
-    if (outerTag)
-        target.outputEndNested(outerTag);
+    target.outputEndNested(outerTag);
 
     return thisSize;
 }
@@ -886,7 +884,7 @@ size32_t RtlDictionaryTypeInfo::toXML(const byte * self, const byte * selfrow, c
     if (hasOuterXPath(field))
     {
         queryNestedOuterXPath(outerTag, field);
-        target.outputBeginNested(outerTag, false);
+        target.outputBeginNested(outerTag, XmlWriter_Set);
     }
 
     unsigned thisSize;

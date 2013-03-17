@@ -5876,7 +5876,7 @@ void CHThorWorkUnitWriteActivity::execute()
             else if (agent.queryOutputFmt() == ofXML)
             {
                 CommonXmlWriter xmlwrite(0,1);
-                xmlwrite.outputBeginNested("Row", false);
+                xmlwrite.outputBeginNested("Row", 0);
                 helper.serializeXml((byte *) nextrec.get(), xmlwrite);
                 xmlwrite.outputEndNested("Row");
                 agent.queryOutputSerializer()->fwrite(seq, (const void*)xmlwrite.str(), 1, xmlwrite.length());

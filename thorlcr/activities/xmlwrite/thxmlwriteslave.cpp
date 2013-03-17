@@ -71,7 +71,7 @@ public:
             OwnedConstThorRow row = input->ungroupedNextRow();
             if (!row)
                 break;
-            xmlWriter.clear().outputBeginNested(rowTag, false);
+            xmlWriter.clear().outputBeginNested(rowTag, 0);
             helper->toXML((const byte *)row.get(), xmlWriter);
             xmlWriter.outputEndNested(rowTag);
             outraw->write(xmlWriter.length(), xmlWriter.str());

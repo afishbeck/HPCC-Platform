@@ -247,3 +247,37 @@ void outputXmlAttrUtf8(unsigned len, const char *field, const char *fieldname, S
 }
 
 //---------------------------------------------------------------------------
+
+StringBuffer &appendJSONDecimal(StringBuffer& s, const char *name, unsigned size, const void *value, unsigned precision)
+{
+    char dec[50];
+    appendJSONNameOrDelimit(s, name);
+    DecLock();
+    if (DecValid(true, size*2-1, value))
+    {
+        DecPushDecimal(value, size, precision);
+        DecPopCString(sizeof(dec), dec);
+        const char *finger = dec;
+        while(isspace(*finger)) finger++;
+        s.append(finger);
+    }
+    DecUnlock();
+    return s;
+}
+
+StringBuffer &appendJSONUDecimal(StringBuffer& s, const char *name, unsigned size, const void *value, unsigned precision)
+{
+    char dec[50];
+    appendJSONNameOrDelimit(s, name);
+    DecLock();
+    if (DecValid(false, size*2, value))
+    {
+        DecPushUDecimal(value, size, precision);
+        DecPopCString(sizeof(dec), dec);
+        const char *finger = dec;
+        while(isspace(*finger)) finger++;
+        s.append(finger);
+    }
+    DecUnlock();
+    return s;
+}

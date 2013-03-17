@@ -507,7 +507,7 @@ class DebugProbe : public InputProbe, implements IActivityDebugContext
 
     static void putAttributeUInt(IXmlWriter *output, const char *name, unsigned value)
     {
-        output->outputBeginNested("att", false);
+        output->outputBeginNested("att", 0);
         output->outputCString(name, "@name");
         output->outputInt(value, "@value");
         output->outputEndNested("att");
@@ -515,7 +515,7 @@ class DebugProbe : public InputProbe, implements IActivityDebugContext
 
     void rowToXML(IXmlWriter *output, const void *row, unsigned sequence, unsigned rowCount, bool skipped, bool limited, bool eof, bool eog) const
     {
-        output->outputBeginNested("Row", true);
+        output->outputBeginNested("Row", XmlWriter_NestChildren);
         output->outputInt(sequence, "@seq");
         if (skipped)
             output->outputBool(true, "@skip");
@@ -630,7 +630,7 @@ public:
 
     virtual void printEdge(IXmlWriter *output, unsigned startRow, unsigned numRows) const
     {
-        output->outputBeginNested("edge", true);
+        output->outputBeginNested("edge", XmlWriter_NestChildren);
         output->outputString(edgeId.length(), edgeId.get(), "@edgeId");
         if (startRow < historySize)
         {
@@ -666,7 +666,7 @@ public:
                     {
                         if (!anyMatchedYet)
                         {
-                            output->outputBeginNested("edge", true);
+                            output->outputBeginNested("edge", XmlWriter_NestChildren);
                             output->outputString(edgeId.length(), edgeId.get(), "@edgeId");
                             anyMatchedYet = true;
                         }
@@ -674,7 +674,7 @@ public:
                             rowToXML(output, rowData->queryRow(), rowData->querySequence(), rowData->queryRowCount(), rowData->wasSkipped(), rowData->wasLimited(), rowData->wasEof(), rowData->wasEog());
                         else
                         {
-                            output->outputBeginNested("Row", true);
+                            output->outputBeginNested("Row", XmlWriter_NestChildren);
                             output->outputInt(rowData->querySequence(), "@sequence");
                             output->outputInt(rowData->queryRowCount(), "@count");
                             output->outputEndNested("Row");
@@ -689,7 +689,7 @@ public:
 
     virtual void getXGMML(IXmlWriter *output) const
     {
-        output->outputBeginNested("edge", false);
+        output->outputBeginNested("edge", 0);
         sourceAct->outputId(output, "@source");
         targetAct->outputId(output, "@target");
         output->outputString(edgeId.length(), edgeId.get(), "@id");
@@ -1267,7 +1267,7 @@ public:
         Owned<IDebugGraphManager> manager = getManager();
         if (manager)
         {
-            output->outputBeginNested("Result", true);
+            output->outputBeginNested("Result", XmlWriter_NestChildren);
             IActivityDebugContext *edge = manager->lookupActivityByEdgeId(id);
             if (edge)
                 output->outputInt(edge->queryProxyId(), "@proxyId");
@@ -1672,7 +1672,7 @@ public:
     {
         DebugRequestGetResetGlobalCounts request(proxyId);
         CommonXmlWriter reply(0);
-        reply.outputBeginNested("Counts", true);
+        reply.outputBeginNested("Counts", XmlWriter_NestChildren);
         sendProxyRequest(&reply, request);
         reply.outputEndNested("Counts"); // strange way to do it...
         Owned<IPropertyTree> response = createPTreeFromXMLString(reply.str());

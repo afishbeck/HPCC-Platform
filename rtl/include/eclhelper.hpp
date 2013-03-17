@@ -148,6 +148,13 @@ interface IRecordSize : public IInterface
 };
 #endif
 
+#define XmlWriter_NestChildren      0x01
+#define XmlWriter_Dataset           0x02
+#define XmlWriter_Row               0x04
+#define XmlWriter_Set               0x08
+#define XmlWriter_Item              0x10
+#define XmlWriter_Array             0x20
+
 interface IXmlWriter : public IInterface
 {
 public:
@@ -162,7 +169,7 @@ public:
     virtual void outputUDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname) = 0;
     virtual void outputUnicode(unsigned len, const UChar *field, const char *fieldname) = 0;
     virtual void outputQString(unsigned len, const char *field, const char *fieldname) = 0;
-    virtual void outputBeginNested(const char *fieldname, bool nestChildren) = 0;
+    virtual void outputBeginNested(const char *fieldname, unsigned flags) = 0;
     virtual void outputEndNested(const char *fieldname) = 0;
     virtual void outputSetAll() = 0;
     virtual void outputUtf8(unsigned len, const char *field, const char *fieldname) = 0;

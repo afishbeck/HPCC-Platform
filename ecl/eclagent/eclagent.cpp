@@ -399,7 +399,7 @@ public:
             sanitizeQuery(queryXml, queryName, sanitizedText, isHTTP, uid, isRequest, isRequestArray);
             DBGLOG("Received debug query %s", sanitizedText.str());
 
-            FlushingStringBuffer response(client, false, true, false, false, queryDummyContextLogger());
+            FlushingStringBuffer response(client, false, MarkupFmt_XML, false, false, queryDummyContextLogger());
             response.startDataset("Debug", NULL, (unsigned) -1);
 
             if (!debugCmdHandler.get())
@@ -1223,8 +1223,8 @@ void EclAgent::setResultSet(const char * name, unsigned sequence, bool isAll, si
                 resultName.appendf("Result_%d", sequence+1);
             }
             CommonXmlWriter xmlwrite(0,1);
-            xmlwrite.outputBeginNested("Row", false);
-            xmlwrite.outputBeginNested(resultName.str(), false);
+            xmlwrite.outputBeginNested("Row", 0);
+            xmlwrite.outputBeginNested(resultName.str(), 0);
             xform->toXML(isAll, len, (const byte *)val, xmlwrite);
             xmlwrite.outputEndNested(resultName.str());
             xmlwrite.outputEndNested("Row");
@@ -3516,7 +3516,7 @@ class DebugProbe : public InputProbe, implements IActivityDebugContext
 
     static void putAttributeUInt(IXmlWriter *output, const char *name, unsigned value)
     {
-        output->outputBeginNested("att", false);
+        output->outputBeginNested("att", 0);
         output->outputCString(name, "@name");
         output->outputInt(value, "@value");
         output->outputEndNested("att");
@@ -3524,7 +3524,7 @@ class DebugProbe : public InputProbe, implements IActivityDebugContext
 
     void rowToXML(IXmlWriter *output, const void *row, unsigned sequence, unsigned rowCount, bool skipped, bool limited, bool eof, bool eog) const
     {
-        output->outputBeginNested("Row", true);
+        output->outputBeginNested("Row", XmlWriter_NestChildren);
         output->outputInt(sequence, "@seq");
         if (skipped)
             output->outputBool(true, "@skip");
@@ -3631,7 +3631,7 @@ public:
 
     virtual void printEdge(IXmlWriter *output, unsigned startRow, unsigned numRows) const
     {
-        output->outputBeginNested("edge", true);
+        output->outputBeginNested("edge", XmlWriter_NestChildren);
         output->outputString(edgeId.length(), edgeId.get(), "@edgeId");
         if (startRow < historySize)
         {
@@ -3667,7 +3667,7 @@ public:
                     {
                         if (!anyMatchedYet)
                         {
-                            output->outputBeginNested("edge", true);
+                            output->outputBeginNested("edge", XmlWriter_NestChildren);
                             output->outputString(edgeId.length(), edgeId.get(), "@edgeId");
                             anyMatchedYet = true;
                         }
@@ -3675,7 +3675,7 @@ public:
                             rowToXML(output, rowData->queryRow(), rowData->querySequence(), rowData->queryRowCount(), rowData->wasSkipped(), rowData->wasLimited(), rowData->wasEof(), rowData->wasEog());
                         else
                         {
-                            output->outputBeginNested("Row", true);
+                            output->outputBeginNested("Row", XmlWriter_NestChildren);
                             output->outputInt(rowData->querySequence(), "@sequence");
                             output->outputInt(rowData->queryRowCount(), "@count");
                             output->outputEndNested("Row");
@@ -3690,7 +3690,7 @@ public:
 
     virtual void getXGMML(IXmlWriter *output) const 
     {
-        output->outputBeginNested("edge", false);
+        output->outputBeginNested("edge", 0);
         sourceAct->outputId(output, "@source");
         targetAct->outputId(output, "@target");
         output->outputString(edgeId.length(), edgeId.get(), "@id");
