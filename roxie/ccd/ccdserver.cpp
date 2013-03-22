@@ -19173,12 +19173,14 @@ public:
                     rowSerializer->serialize(serializerTarget, (const byte *) row);
                     response->append(rowbuff.length(), rowbuff.toByteArray());
                 }
-                else if (response->isXml)
+                else if (response->mlFmt==MarkupFmt_XML || response->mlFmt==MarkupFmt_JSON)
                 {
-                    CommonXmlWriter xmlwrite(serverContext->getXmlFlags(), 1, response);
-                    xmlwrite.outputBeginNested("Row", false);
-                    helper.serializeXml((byte *) row, xmlwrite);
-                    xmlwrite.outputEndNested("Row");
+                    Owned<IXmlWriter> writer = createIXmlWriter(serverContext->getXmlFlags(), 1, response, (response->mlFmt==MarkupFmt_JSON) ? WTJSON : WTStandard);
+                    writer->outputBeginArray("Row");
+                    writer->outputBeginNested("Row", false);
+                    helper.serializeXml((byte *) row, *writer);
+                    writer->outputEndNested("Row");
+                    writer->outputEndArray("Row");
                 }
                 else
                 {

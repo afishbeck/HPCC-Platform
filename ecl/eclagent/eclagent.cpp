@@ -399,7 +399,7 @@ public:
             sanitizeQuery(queryXml, queryName, sanitizedText, isHTTP, uid, isRequest, isRequestArray);
             DBGLOG("Received debug query %s", sanitizedText.str());
 
-            FlushingStringBuffer response(client, false, true, false, false, queryDummyContextLogger());
+            FlushingStringBuffer response(client, false, MarkupFmt_XML, false, false, queryDummyContextLogger());
             response.startDataset("Debug", NULL, (unsigned) -1);
 
             if (!debugCmdHandler.get())
@@ -1224,7 +1224,7 @@ void EclAgent::setResultSet(const char * name, unsigned sequence, bool isAll, si
             }
             CommonXmlWriter xmlwrite(0,1);
             xmlwrite.outputBeginNested("Row", false);
-            xmlwrite.outputBeginNested(resultName.str(), false);
+            xmlwrite.outputBeginNested(resultName.str(), 0);
             xform->toXML(isAll, len, (const byte *)val, xmlwrite);
             xmlwrite.outputEndNested(resultName.str());
             xmlwrite.outputEndNested("Row");
