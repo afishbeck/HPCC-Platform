@@ -459,12 +459,14 @@ void CommonJsonWriter::outputBeginArray(const char *fieldname)
         fieldname = sep+1;
         sep = strchr(fieldname, '/');
     }
-    appendJSONName(out, fieldname).append(" [");
+    appendJSONName(out, fieldname).append(" [\n");
 }
 
 void CommonJsonWriter::outputEndArray(const char *fieldname)
 {
     arrays.pop();
+    if (!nestLimit)
+        out.pad(indent);
     out.append(']');
     const char * sep = (fieldname) ? strchr(fieldname, '/') : NULL;
     while (sep)
@@ -480,6 +482,7 @@ void CommonJsonWriter::outputBeginNested(const char *fieldname, bool nestChildre
     if (parentArray && !streq(parentArray, fieldname))
         parentArray = NULL;
     flush(false);
+    delimitJSON(out, !nestLimit);
     if (!nestLimit)
         out.pad(indent);
     const char * sep = (fieldname) ? strchr(fieldname, '/') : NULL;
@@ -493,11 +496,11 @@ void CommonJsonWriter::outputBeginNested(const char *fieldname, bool nestChildre
         fieldname = sep+1;
         sep = strchr(fieldname, '/');
     }
-    if (parentArray)
-        delimitJSON(out);
-    else
+    if (!parentArray)
         appendJSONName(out, fieldname).append(' ');
-    out.append("{\n");
+    if (!nestLimit)
+        out.pad(indent-1);
+    out.append("{");
     indent += 1;
     if (!nestChildren && !nestLimit)
         nestLimit = indent;
@@ -509,8 +512,6 @@ void CommonJsonWriter::outputEndNested(const char *fieldname)
     if (parentArray && !streq(parentArray, fieldname))
         parentArray = NULL;
     flush(false);
-    if (!nestLimit)
-        out.pad(indent-1);
     const char * sep = (fieldname) ? strchr(fieldname, '/') : NULL;
     while (sep)
     {
@@ -522,8 +523,6 @@ void CommonJsonWriter::outputEndNested(const char *fieldname)
     if (indent==nestLimit)
         nestLimit = 0;
     indent -= 1;
-    if (!nestLimit)
-        out.newline();
 }
 
 void CommonJsonWriter::outputSetAll()
