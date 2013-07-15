@@ -52,7 +52,7 @@ public:
         if (streq(cmd.optObj.value.sget(), "stdin"))
             cmdLine.append(" - ");
         else
-            cmdLine.append(" ").append(cmd.optObj.value.get());
+            cmdLine.append(" \"").append(cmd.optObj.value.get()).append('"');
     }
 
     bool eclcc(StringBuffer &out)
