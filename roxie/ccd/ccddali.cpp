@@ -42,6 +42,8 @@ class CDaliPackageWatcher : public CInterface, implements ISDSSubscription, impl
     StringAttr id;
     StringAttr xpath;
     mutable CriticalSection crit;
+    static CriticalSection notifyCrit;
+
 public:
     IMPLEMENT_IINTERFACE;
     CDaliPackageWatcher(const char *_id, const char *_xpath, ISDSSubscription *_notifier)
@@ -86,6 +88,8 @@ public:
     }
     virtual void onReconnect()
     {
+        //serialize notifications since they can call back into multiple CDaliPackageWatchers causing deadlocks
+        CriticalBlock serlock(notifyCrit);
         Linked<CDaliPackageWatcher> me = this;  // Ensure that I am not released by the notify call (which would then access freed memory to release the critsec)
         // It's tempting to think you can avoid holding the critsec during the notify call, and that you only need to hold it while looking up notifier
         // Despite the danger of deadlocks (that requires careful code in the notifier to avoid), I think it is neccessary to hold the lock during the call,
@@ -97,12 +101,16 @@ public:
     }
     virtual void notify(SubscriptionId subid, const char *xpath, SDSNotifyFlags flags, unsigned valueLen, const void *valueData)
     {
+        //serialize notifications since they can call back into multiple CDaliPackageWatchers causing deadlocks
+        CriticalBlock serlock(notifyCrit);
         Linked<CDaliPackageWatcher> me = this;  // Ensure that I am not released by the notify call (which would then access freed memory to release the critsec)
         CriticalBlock b(crit);
         if (notifier)
             notifier->notify(subid, xpath, flags, valueLen, valueData);
     }
 };
+
+CriticalSection CDaliPackageWatcher::notifyCrit;
 
 /*===============================================================================
 * Roxie is not a typical Dali client - if dali is available it will use it, but
