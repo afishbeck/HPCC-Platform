@@ -402,40 +402,42 @@ bool deletePkgInfo(const char *packageMap, const char *target, const char *proce
     return true;
 }
 
-void activatePackageMapInfo(const char *target, const char *packageMap, const char *process, bool activate)
+void activatePackageMapInfo(const char *target, const char *pmid, const char *process, bool activate)
 {
     if (!target || !*target)
         throw MakeStringException(PKG_TARGET_NOT_DEFINED, "No target defined");
+
+    if (!pmid || !*pmid)
+        return;
 
     Owned<IRemoteConnection> globalLock = querySDS().connect("PackageSets", myProcessSession(), RTM_LOCK_WRITE|RTM_CREATE_QUERY, SDS_LOCK_TIMEOUT);
     if (!globalLock)
         throw MakeStringException(PKG_DALI_LOOKUP_ERROR, "Unable to retrieve PackageSets information from dali /PackageSets");
 
-    StringBuffer lcName(target);
-    lcName.toLowerCase();
+    StringBuffer lcTarget(target);
+    lcTarget.toLowerCase();
 
     IPropertyTree *root = globalLock->queryRoot();
     if (!root)
-        throw MakeStringException(PKG_ACTIVATE_NOT_FOUND, "Unable to retrieve PackageSet information");
+        throw MakeStringException(PKG_ACTIVATE_NOT_FOUND, "Unable to retrieve PackageSets information");
 
     StringBuffer pkgSetId;
     buildPkgSetId(pkgSetId, process);
-    VStringBuffer pkgSet_xpath("PackageSet[@id='%s']", pkgSetId.str());
-    IPropertyTree *pkgSetTree = root->queryPropTree(pkgSet_xpath.str());
-    if (pkgSetTree)
-    {
-        if (packageMap && *packageMap)
-        {
-            StringBuffer lcMapName(packageMap);
-            lcMapName.toLowerCase();
-            VStringBuffer xpath_map("PackageMap[@id=\"%s\"]", lcMapName.str());
-            IPropertyTree *mapTree = pkgSetTree->queryPropTree(xpath_map);
-            if (activate)
-                makePackageActive(pkgSetTree, mapTree, lcName.str());
-            else
-                mapTree->setPropBool("@active", false);
-        }
-    }
+    VStringBuffer xpath("PackageSet[@id='%s']", pkgSetId.str());
+    IPropertyTree *pkgSetTree = root->queryPropTree(xpath);
+    if (!pkgSetTree)
+        throw MakeStringException(PKG_ACTIVATE_NOT_FOUND, "Unable to open PackageSet %s for process %s", pkgASetId, process);
+
+    StringBuffer lcPMID(pmid);
+    lcPMID.toLowerCase();
+    VStringBuffer xpathMapEntry("PackageMap[querySet='%s'][@id='%s']", lcTarget.str(), lcPMID.str());
+    IPropertyTree *pkgSetMapEntry = pkgSetTree->queryPropTree(xpathMapEntry);
+    if (!pkgSetMapEntry)
+        throw MakeStringException(PKG_ACTIVATE_NOT_FOUND, "PackageMap %s not found in PackageSet for target %s", pmid, target);
+    if (activate)
+        makePackageActive(pkgSetTree, pkgSetMapEntry, lcTarget);
+    else
+        pkgSetMapEntry->setPropBool("@active", false);
 }
 
 bool CWsPackageProcessEx::onAddPackage(IEspContext &context, IEspAddPackageRequest &req, IEspAddPackageResponse &resp)
