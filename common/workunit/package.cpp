@@ -210,10 +210,11 @@ extern WORKUNIT_API IHpccPackageSet *createPackageSet(const char *process)
     return new CHpccPackageSet(process);
 }
 
-extern WORKUNIT_API IPropertyTree * getPackageMapById(const char * id, bool readonly)
+extern WORKUNIT_API IPropertyTree * getPackageMapById(const char *target, const char * id, bool readonly)
 {
-    StringBuffer xpath;
-    xpath.append("/PackageMaps/PackageMap[@id=\"").append(id).append("\"]");
+    VStringBuffer xpath("/PackageMaps/PackageMap[@id=\'%s']", id);
+    if (target && *target)
+    	xpath.appendf("[@target='%s']", target)
     Owned<IRemoteConnection> conn = querySDS().connect(xpath.str(), myProcessSession(), readonly ? RTM_LOCK_READ : RTM_LOCK_WRITE, SDS_LOCK_TIMEOUT);
     if (!conn)
         return NULL;
@@ -242,13 +243,23 @@ extern WORKUNIT_API IPropertyTree * resolveActivePackageMap(const char *process,
     Owned<IPropertyTreeIterator> it = ps->getElements("PackageMap[@active='1']");
     ForEach(*it)
     {
-        IPropertyTree &pm = it->query();
-        if (checkPackageMapMatchesTarget(target, pm.queryProp("@querySet")))
-            return getPackageMapById(pm.queryProp("@id"), readonly);
+        IPropertyTree &mapEntry = it->query();
+        if (checkPackageMapMatchesTarget(target, mapEntry.queryProp("@querySet")))
+        {
+            IPropertyTree *mapTree = getPackageMapById(target, mapEntry.queryProp("@id"), readonly);
+            if (!mapTree) //look for global PackageMap without target specified
+                mapTree = getPackageMapById(target, mapEntry.queryProp("@id"), readonly);
+        }
     }
     return NULL;
 }
 
+extern WORKUNIT_API IPropertyTree * resolvePackageMap(IPropertyTree *pkgMapRegistry, const char *target, const char *pmid, bool checkNoTarget);
+{
+
+}
+
+//find PackageSet for actual process cluster (matching via PackageSet/@process mask)
 extern WORKUNIT_API IPropertyTree * resolvePackageSetRegistry(const char *process, bool readonly)
 {
     if (!process || !*process)
@@ -271,3 +282,75 @@ extern WORKUNIT_API IPropertyTree * resolvePackageSetRegistry(const char *proces
     }
     return NULL;
 }
+
+//return and optionally create the PackageSet that specifies the given processMask
+extern WORKUNIT_API IPropertyTree *getPkgSetRegistry(const char *processMask, bool readonly)
+{
+    Owned<IRemoteConnection> globalLock = querySDS().connect("/PackageSets/", myProcessSession(), RTM_LOCK_WRITE|RTM_CREATE_QUERY, SDS_LOCK_TIMEOUT);
+    if (!globalLock)
+        throw MakeStringException(PACKAGE_SETS_NOT_FOUND, "Unable to access /PackageSets from dali");
+
+    //Only lock the branch for the target we're interested in.
+    StringBuffer id;
+    VStringBuffer xpath("/PackageSets/PackageSet[@id='%s']", generatePkgSetId(id, processMask).str());
+
+    Owned<IRemoteConnection> conn = querySDS().connect(xpath.str(), myProcessSession(), readonly ? RTM_LOCK_READ : RTM_LOCK_WRITE, SDS_LOCK_TIMEOUT);
+    if (!conn)
+    {
+        if (readonly)
+            return NULL;
+
+        Owned<IPropertyTree> pkgSet = createPTree();
+        pkgSet->setProp("@id", id);
+        pkgSet->setProp("@process", (!processMask || !*processMask) ? "*" : processMask);
+
+        globalLock->queryRoot()->addPropTree("PackageSet", pkgSet.getClear());
+        globalLock->commit();
+
+        conn.setown(querySDS().connect(xpath, myProcessSession(), RTM_LOCK_WRITE, SDS_LOCK_TIMEOUT));
+        if (!conn)
+            throw MakeStringException(PACKAGE_SET_NOT_FOUND, "Unable to retrieve PackageSet from dali %s", xpath.str());
+    }
+
+    return conn->getRoot();
+}
+
+extern WORKUNIT_API void activatePackageMap(IPropertyTree *pkgSetEntry, IPropertyTree *pkgMapEntry, const char *target, bool activate)
+{
+    VStringBuffer xpath("PackageMap[@querySet='%s'][@active='1']", target);
+    Owned<IPropertyTreeIterator> iter = pkgSetEntry->getElements(xpath.str());
+    if (activate)
+    {
+        ForEach(*iter)
+            iter->query().setPropBool("@active", false);
+    }
+    pkgMapEntry->setPropBool("@active", activate);
+}
+
+extern WORKUNIT_API void activatePackageMap(IPropertyTree *pkgSetEntry, const char *target, const char *pmid, bool activate)
+{
+    StringBuffer lcTarget(target);
+    target = lcTarget.toLowerCase().str();
+
+    StringBuffer lcPMID(pmid);
+    pmid = lcPMID.toLowerCase().str();
+
+    VStringBuffer xpath("PackageMap[@querySet='%s'][@id='%s']", target, pmid);
+    IPropertyTree *pkgMapEntry = pkgSetEntry->queryPropTree(xpath);
+    if (!pkgMapEntry)
+        throw MakeStringException(PACKAGE_MISSING_ID, "PACKAGE_ERROR: PackageMap %s not found for target %s", pmid, target);
+    activatePackageMap(pkgSetEntry, pkgMapEntry, target, activate);
+}
+
+extern WORKUNIT_API void activatePackageMap(const char *processMask, const char *target, const char *pmid, bool activate)
+{
+    if (!target || !*target)
+        throw MakeStringException(PACKAGE_TARGET_NOT_FOUND, "No target defined");
+
+    if (!pmid || !*pmid)
+        throw MakeStringException(PACKAGE_MISSING_ID, "No pmid defined");
+
+    activatePackageMap(getPkgSetRegistry(processMask, false), target, pmid, activate);
+}
+
+

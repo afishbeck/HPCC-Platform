@@ -27,7 +27,9 @@
 #define PACKAGE_MISSING_ID            PACKAGE_ERROR_START+1
 #define PACKAGE_NO_SUBFILES           PACKAGE_ERROR_START+2
 #define PACKAGE_NOT_FOUND             PACKAGE_ERROR_START+3
-#define PACKAGE_QUERY_NOT_FOUND           PACKAGE_ERROR_START+4
+#define PACKAGE_QUERY_NOT_FOUND       PACKAGE_ERROR_START+4
+#define PACKAGE_SETS_NOT_FOUND        PACKAGE_ERROR_START+5
+#define PACKAGE_SET_NOT_FOUND         PACKAGE_ERROR_START+6
 
 
 interface IHpccPackage : extends IInterface
@@ -57,13 +59,26 @@ interface IHpccPackageSet : extends IInterface
 
 extern WORKUNIT_API IHpccPackageMap *createPackageMapFromXml(const char *xml, const char *queryset, const char *id);
 extern WORKUNIT_API IHpccPackageMap *createPackageMapFromPtree(IPropertyTree *t, const char *queryset, const char *id);
-
 extern WORKUNIT_API IHpccPackageSet *createPackageSet(const char *process);
+
+extern WORKUNIT_API IPropertyTree * getPkgSetRegistry(const char *processMask, bool readonly);
+
 extern WORKUNIT_API IPropertyTree * getPackageMapById(const char * id, bool readonly);
 extern WORKUNIT_API IPropertyTree * getPackageSetById(const char * id, bool readonly);
 extern WORKUNIT_API IPropertyTree * resolvePackageSetRegistry(const char *process, bool readonly);
 extern WORKUNIT_API IPropertyTree * resolveActivePackageMap(const char *process, const char *target, bool readonly);
+extern WORKUNIT_API IPropertyTree * resolvePackageMap(IPropertyTree *pkgMapRegistry, const char *target, const char *pmid, bool checkNoTarget);
+
 extern WORKUNIT_API hash64_t pkgHash64Data(size32_t len, const void *buf, hash64_t hval);
+
+extern WORKUNIT_API void activatePackageMap(IPropertyTree *pkgSetEntry, IPropertyTree *pkgMapEntry, const char *target);
+extern WORKUNIT_API void activatePackageMap(IPropertyTree *pkgSetEntry, const char *target, const char *pmid, bool activate);
+extern WORKUNIT_API void activatePackageMap(const char *process, const char *target, const char *pmid, bool activate);
+
+inline StringBuffer &generatePkgSetId(StringBuffer &id, const char *process)
+{
+    return id.append("default_").append(process).replace('*', '#').replace('?', '~');
+}
 
 
 #endif
