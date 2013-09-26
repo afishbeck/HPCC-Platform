@@ -71,7 +71,7 @@ class ReferencedFile : public CInterface, implements IReferencedFile
 {
 public:
     IMPLEMENT_IINTERFACE;
-    ReferencedFile(const char *name, bool isSubFile=false, unsigned _flags=0) : flags(_flags)
+    ReferencedFile(const char *name, bool isSubFile=false, unsigned _flags=0, const char *_pkgid=NULL) : flags(_flags), pkgid(_pkgid)
     {
         StringBuffer ip;
         StringBuffer lc(skipForeign(name, &ip));
@@ -97,12 +97,14 @@ public:
 
     virtual const char *getLogicalName() const {return logicalName.get();}
     virtual unsigned getFlags() const {return flags;}
+    virtual const char *queryPackageId() const {return pkgid.get();}
     virtual const SocketEndpoint &getForeignIP() const {return foreignNode->endpoint();}
     virtual void cloneInfo(IDFUhelper *helper, IUserDescriptor *user, INode *remote, const char *dstCluster, const char *srcCluster, bool overwrite=false);
     void cloneSuperInfo(ReferencedFileList *list, IUserDescriptor *user, INode *remote, bool overwrite);
 
 public:
     StringAttr logicalName;
+    StringAttr pkgid;
     Owned<INode> foreignNode;
 
     unsigned flags;
@@ -121,7 +123,7 @@ public:
         }
     }
 
-    void ensureFile(const char *ln, unsigned flags);
+    void ensureFile(const char *ln, unsigned flags, const char *pkgid);
 
     virtual void addFile(const char *ln);
     virtual void addFiles(StringArray &files);
@@ -377,9 +379,9 @@ public:
     Owned<HashIterator> iter;
 };
 
-void ReferencedFileList::ensureFile(const char *ln, unsigned flags)
+void ReferencedFileList::ensureFile(const char *ln, unsigned flags, const char *pkgid)
 {
-    Owned<ReferencedFile> file = new ReferencedFile(ln, false, flags);
+    Owned<ReferencedFile> file = new ReferencedFile(ln, false, flags, pkgid);
     if (!file->logicalName.length())
         return;
     ReferencedFile *existing = map.getValue(file->getLogicalName());
@@ -394,7 +396,7 @@ void ReferencedFileList::ensureFile(const char *ln, unsigned flags)
 
 void ReferencedFileList::addFile(const char *ln)
 {
-    ensureFile(ln, 0);
+    ensureFile(ln, 0, NULL);
 }
 
 void ReferencedFileList::addFiles(StringArray &files)
@@ -433,22 +435,27 @@ void ReferencedFileList::addFilesFromQuery(IConstWorkUnit *cw, const IHpccPackag
                 node.getPropBool("att[@name='_isTransformSpill']/@value"))
                 continue;
             unsigned flags = 0;
-            if (pkg && pkg->hasSuperFile(logicalName))
+            const char *pkgid = NULL;
+            if (pkg)
             {
-                flags |= (RefFileSuper | RefFileInPackage);
-                Owned<ISimpleSuperFileEnquiry> ssfe = pkg->resolveSuperFile(logicalName);
-                if (ssfe && ssfe->numSubFiles()>0)
+                const char *pkgid = pkg->locateSuperFile(logicalName);
+                if (pkgid)
                 {
-                    unsigned count = ssfe->numSubFiles();
-                    while (count--)
+                    flags |= (RefFileSuper | RefFileInPackage);
+                    Owned<ISimpleSuperFileEnquiry> ssfe = pkg->resolveSuperFile(logicalName);
+                    if (ssfe && ssfe->numSubFiles()>0)
                     {
-                        StringBuffer subfile;
-                        ssfe->getSubFileName(count, subfile);
-                        ensureFile(subfile, RefSubFile | RefFileInPackage);
+                        unsigned count = ssfe->numSubFiles();
+                        while (count--)
+                        {
+                            StringBuffer subfile;
+                            ssfe->getSubFileName(count, subfile);
+                            ensureFile(subfile, RefSubFile | RefFileInPackage, NULL);
+                        }
                     }
                 }
             }
-            ensureFile(logicalName, flags);
+            ensureFile(logicalName, flags, pkgid);
         }
     }
 }
