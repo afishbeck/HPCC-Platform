@@ -27,7 +27,7 @@ require([
     "dijit/layout/BorderContainer",
     "dijit/layout/ContentPane",
 
-    "dojo/text!./templates/GraphWidget.html",
+    "dojo/text!/esp/files/templates/GraphWidget.html",
 
     "dijit/Toolbar", "dijit/ToolbarSeparator", "dijit/form/Button"
 ],
