@@ -303,7 +303,7 @@ void CommonXmlWriter::outputEndNested(const char *fieldname, bool doIndent)
     }
     else
     {
-        if (!nestLimit)
+        if (!nestLimit && doIndent)
             out.pad(indent-1);
         out.append("</").append(fieldname).append('>');
     }

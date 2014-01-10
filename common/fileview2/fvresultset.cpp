@@ -3649,15 +3649,10 @@ extern FILEVIEW_API unsigned getResultCursorXml(IStringVal & ret, IResultSetCurs
 
 extern FILEVIEW_API unsigned getResultXml(IStringVal & ret, INewResultSet * result, const char* name,unsigned start, unsigned count, const char * schemaName)
 {
-    StringBuffer s;
-    StringBufferAdaptor adaptor(s);
-
-    Owned<IResultSetCursor> cursor = result->createCursor();
-    unsigned c = getResultCursorXml(adaptor, cursor, name, start, count, schemaName);
-    Owned<CommonXmlWriter> writer = CreateCommonXmlWriter(0);
-    writeResultXml(*writer, result, name, start, count, schemaName);
-    s.append(writer->str());
-    return c;
+    Owned<CommonXmlWriter> writer = CreateCommonXmlWriter(XWFexpandempty);
+    unsigned rc = writeResultXml(*writer, result, name, start, count, schemaName);
+    ret.set(writer->str());
+    return rc;
 }
 
 extern FILEVIEW_API unsigned getResultJSON(IStringVal & ret, INewResultSet * result, const char* name,unsigned start, unsigned count)
@@ -3816,9 +3811,8 @@ extern FILEVIEW_API IStringVal& getFullWorkUnitResultsXML(const char *username, 
     SCMStringBuffer wuid;
     cw->getWuid(wuid);
 
-    Owned<CommonXmlWriter> writer = CreateCommonXmlWriter(0);
+    Owned<CommonXmlWriter> writer = CreateCommonXmlWriter(XWFexpandempty);
     writeFullWorkUnitResults(username, password, cw, *writer, flags, minSeverity, "Result");
-
     str.set(writer->str());
     return str;
 }
