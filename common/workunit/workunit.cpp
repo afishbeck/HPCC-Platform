@@ -1564,6 +1564,7 @@ class CLocalWUResult : public CInterface, implements IWUResult
     friend class CLocalWorkUnit;
 
     Owned<IPropertyTree> p;
+    Owned<IProperties> xmlns;
     void getSchema(TypeInfoArray &types, StringAttrArray &names, IStringVal * ecl=NULL) const;
 
 public:
@@ -1601,6 +1602,7 @@ public:
     virtual WUResultFormat getResultFormat() const;
     virtual unsigned    getResultHash() const;
     virtual bool        getResultIsAll() const;
+    virtual IProperties *queryXmlns();
 
     // interface IWUResult
     virtual void        setResultStatus(WUResultStatus status);
@@ -1633,6 +1635,7 @@ public:
     virtual void        setResultFormat(WUResultFormat format);
     virtual void        setResultXML(const char *val);
     virtual void        setResultRow(unsigned len, const void * data);
+    virtual void        setXmlns(const char *prefix, const char *uri);
 };
 
 class CLocalWUPlugin : public CInterface, implements IWUPlugin
@@ -3488,6 +3491,7 @@ void CLocalWorkUnit::loadXML(const char *xml)
 {
     CriticalBlock block(crit);
     init();
+    DBGLOG("%s",xml);
     assertex(xml);
     p.setown(createPTreeFromXMLString(xml));
 }
@@ -5973,6 +5977,7 @@ void CLocalWorkUnit::loadResults() const
         for (r->first(); r->isValid(); r->next())
         {
             IPropertyTree *rp = &r->query();
+            const char *xmlns = rp->queryProp("@xmlns:yyy");
 
             rp->Link();
             results.append(*new CLocalWUResult(rp));
@@ -7741,6 +7746,24 @@ IStringVal& CLocalWUResult::getResultXml(IStringVal &str) const
     return str;
 }
 
+IProperties *CLocalWUResult::queryXmlns()
+{
+    if (xmlns)
+        return xmlns;
+    xmlns.setown(createProperties());
+    Owned<IAttributeIterator> it = p->getAttributes();
+    unsigned prefixLen = strlen("@xmlns:");
+    ForEach(*it)
+    {
+        const char *name = it->queryName();
+        if (!strncmp("@xmlns:", name, prefixLen))
+        {
+            xmlns->setProp(name+prefixLen, it->queryValue());
+        }
+    }
+    return xmlns;
+}
+
 unsigned CLocalWUResult::getResultFetchSize() const
 {
     return p->getPropInt("fetchSize", 100);
@@ -7828,6 +7851,13 @@ void CLocalWUResult::setResultSequence(unsigned seq)
 void CLocalWUResult::setResultSchemaRaw(unsigned size, const void *schema)
 {
     p->setPropBin("SchemaRaw", size, schema);
+}
+void CLocalWUResult::setXmlns(const char *prefix, const char *uri)
+{
+    StringBuffer xpath("@xmlns");
+    if (prefix && *prefix)
+        xpath.append(':').append(prefix);
+    p->setProp(xpath, uri);
 }
 void CLocalWUResult::setResultScalar(bool isScalar)
 {
