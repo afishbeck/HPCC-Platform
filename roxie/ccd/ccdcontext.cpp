@@ -2760,7 +2760,7 @@ public:
         return trim ? XWFtrim|XWFopt : XWFexpandempty;
     }
 
-    virtual IProperties *queryXmlns(unsigned seqNo)
+    virtual const IProperties *queryXmlns(unsigned seqNo)
     {
         IConstWorkUnit *cw = serverQueryFactory->queryWorkUnit();
         if (cw)
