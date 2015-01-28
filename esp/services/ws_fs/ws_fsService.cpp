@@ -2072,9 +2072,12 @@ bool CFileSprayEx::onSprayVariable(IEspContext &context, IEspSprayVariable &req,
         source->setMaxRecordSize(req.getSourceMaxRecordSize());
         source->setFormat((DFUfileformat)req.getSourceFormat());
 
-        // if rowTag specified, it means it's xml format, otherwise it's csv
-        const char* rowtag = req.getSourceRowTag();
-        if(rowtag != NULL && *rowtag != '\0')
+        StringBuffer rowtag;
+        if (req.getIsJSON())
+            rowtag.append("j::");
+        rowtag.append(req.getSourceRowTag());
+        // if rowTag specified, it means it's xml or json format, otherwise it's csv
+        if(rowtag.length())
         {
             source->setRowTag(rowtag);
             options->setKeepHeader(true);

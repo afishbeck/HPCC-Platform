@@ -137,11 +137,40 @@ public:
 };
 
 
+void doWaitForAttach()
+{
+    bool x = true;
+    while(x)
+    {
+        if (x)
+            x = true;
+        else
+            x = false;
+        DBGLOG("here here now");
+    }
+
+    DBGLOG("getting real");
+}
+
 int main(int argc, char * argv[])
 {
     InitModuleObjects();
     setDaliServixSocketCaching(true);
+
+    DBGLOG("come on now friggin gdb");
+
+    doWaitForAttach();
+
+
+    DBGLOG("getting really real");
+
     FtSlave slave;
+
+    DBGLOG("gunna run");
+
     slave.run(argc, argv);
+
+    DBGLOG("exiting");
+
     return 0;
 }

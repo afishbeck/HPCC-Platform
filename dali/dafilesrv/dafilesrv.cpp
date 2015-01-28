@@ -428,7 +428,7 @@ int main(int argc,char **argv)
     }
     if (isdaemon) {
 #ifdef _WIN32
-        class cserv: public CService
+        class cserv: public CServiceServiceMain
         {
             bool stopped;
             bool started;

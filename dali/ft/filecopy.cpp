@@ -1531,6 +1531,15 @@ void FileSprayer::analyseFileHeaders(bool setcurheadersize)
 void FileSprayer::locateXmlHeader(IFileIO * io, unsigned headerSize, offset_t & xmlHeaderLength, offset_t & xmlFooterLength)
 {
     Owned<IFileIOStream> in = createIOStream(io);
+
+    if (!strncmp(srcFormat.rowTag, "j::", 3))
+    {
+        JsonSplitter jsplitter(srcFormat, *in);
+        xmlHeaderLength = jsplitter.getHeaderLength();
+        xmlFooterLength = jsplitter.getFooterLength();
+        return;
+    }
+
     XmlSplitter splitter(srcFormat);
     BufferedDirectReader reader;
 

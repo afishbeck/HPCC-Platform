@@ -23,6 +23,7 @@
 #include "daft.hpp"
 #include "daftformat.hpp"
 #include "rmtpass.hpp"
+#include "jptree.hpp"
 
 //---------------------------------------------------------------------------
 
@@ -133,6 +134,7 @@ public:
     CInputBasePartitioner(unsigned _headerSize, unsigned expectedRecordSize);
     ~CInputBasePartitioner();
 
+    virtual void setSourceIO(unsigned _whichInput, const RemoteFilename & _fullPath, bool compressedInput, const char *decryptKey);
     virtual void setSource(unsigned _whichInput, const RemoteFilename & _fullPath, bool compressedInput, const char *decryptKey);
 
     virtual void beginTransform(offset_t thisOffset, offset_t thisLength, TransformCursor & cursor);
@@ -359,6 +361,158 @@ protected:
     Linked<IFileIOStream> stream;
 };
 
+//adfjson
+
+class DALIFT_API JsonSplitter : public CInterface, implements IPTreeNotifyEvent
+{
+    IMPLEMENT_IINTERFACE;
+
+public:
+    JsonSplitter(const FileFormat & format, IFileIOStream &stream) : headerLength(0), lastRowEndOffset(0)
+    {
+        size = stream.size();
+        const char *rowTag = format.rowTag;
+        if (!strncmp(rowTag, "j::", 3))
+            rowTag+=3;
+        rowPath.set(rowTag);
+        reader.setown(createPullJSONStreamReader(stream, *this));
+    }
+
+    virtual void beginNode(const char *tag, offset_t startOffset)
+    {
+        if (tag && streq(tag, rowPath))
+            headerLength = startOffset;
+    }
+    virtual void newAttribute(const char *name, const char *value)
+    {
+    }
+    virtual void beginNodeContent(const char *tag)
+    {
+    }
+    virtual void endNode(const char *tag, unsigned length, const void *value, bool binary, offset_t endOffset)
+    {
+        if (tag && streq(tag, rowPath))
+            lastRowEndOffset = endOffset;
+    }
+
+    offset_t getHeaderLength()
+    {
+        while (!headerLength && reader->next());
+        return headerLength;
+    }
+    offset_t getFooterLength()
+    {
+        while (reader->next());
+        return size - lastRowEndOffset;
+    }
+
+protected:
+    Owned<IPullPTreeReader> reader;
+    StringAttr rowPath;
+    offset_t headerLength;
+    offset_t lastRowEndOffset;
+    offset_t size;
+};
+
+
+
+class DALIFT_API JsonPartitionParser : public CInterface, implements IPTreeNotifyEvent
+{
+public:
+    IMPLEMENT_IINTERFACE;
+    JsonPartitionParser(IFileIOStream *in, const char *rowPath) : pathPos(0)
+    {
+        inStream.set(in);
+        reader.setown(createPullJSONStreamReader(*inStream, *this));
+        pathNodes.appendList(rowPath, "/");
+    }
+    Owned<IPullPTreeReader> reader;
+
+    virtual void beginNode(const char *tag, offset_t startOffset)
+    {
+    }
+    virtual void newAttribute(const char *name, const char *value)
+    {
+    }
+    virtual void beginNodeContent(const char *tag)
+    {
+    }
+    virtual void endNode(const char *tag, unsigned length, const void *value, bool binary, offset_t endOffset)
+    {
+    }
+
+private:
+    Owned<IFileIOStream> inStream;
+    StringArray pathNodes;
+    StringArray curPath;
+    unsigned pathPos;
+};
+
+class DALIFT_API CJsonInputPartitioner : public CPartitioner
+{
+public:
+    CJsonInputPartitioner(const FileFormat & _format);
+    ~CJsonInputPartitioner();
+
+    virtual void setSource(unsigned _whichInput, const RemoteFilename & _fullPath, bool compressedInput, const char *decryptKey);
+
+    virtual void beginTransform(offset_t thisOffset, offset_t thisLength, TransformCursor & cursor);
+    virtual void endTransform(TransformCursor & cursor);
+    virtual unsigned transformBlock(offset_t endOffset, TransformCursor & cursor);
+    virtual crc32_t getInputCRC() { return inputCRC; }
+    virtual void setInputCRC(crc32_t value) { doInputCRC = true; inputCRC = value; }
+
+protected:
+    bool ensureBuffered(unsigned required);
+    virtual void findSplitPoint(offset_t curOffset, PartitionCursor & cursor);
+    virtual size32_t getSplitRecordSize(const byte * record, unsigned maxToRead, bool processFullBuffer) = 0;
+    virtual size32_t getTransformRecordSize(const byte * record, unsigned maxToRead) = 0;
+
+    inline byte *bufferBase()
+    {
+        return (byte *)((bufattr.length()!=bufferSize)?bufattr.allocate(bufferSize):bufattr.bufferBase());
+    }
+    virtual void killBuffer()  { bufattr.clear(); }
+    virtual void clearBufferOverrun() { numOfBufferOverrun = 0; numOfProcessedBytes = 0; }
+protected:
+    FileFormat      format;
+    Owned<IFileIOStream>   inStream;
+    Owned<JsonPartitionParser> json;
+    MemoryAttr             bufattr;
+    size32_t               headerSize;
+    size32_t               blockSize;
+    size32_t               bufferSize;
+    size32_t               numInBuffer;
+    size32_t               bufferOffset;
+    unsigned               inputCRC;
+    bool                   doInputCRC;
+    static IFileIOCache    *openfilecache;
+    static CriticalSection openfilecachesect;
+
+    unsigned               numOfBufferOverrun;
+    unsigned               numOfProcessedBytes;
+};
+
+
+class DALIFT_API CJsonPartitioner : public CJsonInputPartitioner
+{
+public:
+    CJsonPartitioner(const FileFormat & _format);
+
+    virtual void setTarget(IOutputProcessor * _target);
+
+
+protected:
+    virtual size32_t getSplitRecordSize(const byte * record, unsigned maxToRead, bool processFullBuffer);
+    virtual size32_t getTransformRecordSize(const byte * record, unsigned maxToRead);
+
+protected:
+    size32_t recordSize;
+    unsigned        unitSize;
+    UtfReader::UtfFormat utfFormat;
+};
+
+
 class DALIFT_API XmlSplitter
 {
 public:
@@ -379,7 +533,7 @@ protected:
     UtfReader::UtfFormat utfFormat;
 };
 
-
+//adfjson
 
 class DALIFT_API CXmlPartitioner : public CInputBasePartitioner
 {
@@ -399,6 +553,7 @@ protected:
     UtfReader::UtfFormat utfFormat;
 };
 
+//adfjson
 
 class DALIFT_API CXmlQuickPartitioner : public CXmlPartitioner
 {
@@ -412,6 +567,8 @@ protected:
 protected:
     bool                        noTranslation;
 };
+
+
 
 //---------------------------------------------------------------------------
 

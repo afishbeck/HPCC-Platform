@@ -89,6 +89,9 @@ define([
             this.sprayXmlForm = registry.byId(this.id + "SprayXmlForm");
             this.sprayXmlDestinationSelect = registry.byId(this.id + "SprayXmlDestinationSelect");
             this.sprayXmlGrid = registry.byId(this.id + "SprayXmlGrid");
+            this.sprayJsonForm = registry.byId(this.id + "SprayJsonForm");
+            this.sprayJsonDestinationSelect = registry.byId(this.id + "SprayJsonDestinationSelect");
+            this.sprayJsonGrid = registry.byId(this.id + "SprayJsonGrid");
             this.sprayVariableForm = registry.byId(this.id + "SprayVariableForm");
             this.sprayVariableDestinationSelect = registry.byId(this.id + "SprayVariableDestination");
             this.sprayVariableGrid = registry.byId(this.id + "SprayVariableGrid");
@@ -388,6 +391,21 @@ define([
             });
         },
 
+        _onSprayJson: function(event) {
+            var context = this;
+            this._spraySelectedOneAtATime("SprayJsonDropDown", "SprayJsonForm", function (request, item) {
+                lang.mixin(request, {
+                    sourceRowTag: item.targetRowTag,
+                    isJSON: true
+                });
+                FileSpray.SprayVariable({
+                    request: request
+                }).then(function (response) {
+                    context._handleResponse("SprayResponse.wuid", response);
+                });
+            });
+        },
+
         _onSprayVariable: function (event) {
             var context = this;
             this._spraySelectedOneAtATime("SprayVariableDropDown", "SprayVariableForm", function (request, item) {
@@ -426,6 +444,9 @@ define([
                 Groups: true
             });
             this.sprayXmlDestinationSelect.init({
+                Groups: true
+            });
+            this.sprayJsonDestinationSelect.init({
                 Groups: true
             });
             this.sprayVariableDestinationSelect.init({
@@ -578,6 +599,24 @@ define([
                 }
             });
 
+            this.sprayJsonGrid.createGrid({
+                idProperty: "calculatedID",
+                columns: {
+                    targetName: editor({
+                        label: this.i18n.TargetName,
+                        width: 144,
+                        autoSave: true,
+                        editor: "text"
+                    }),
+                    targetRowTag: editor({
+                        label: this.i18n.RowPath,
+                        width: 72,
+                        autoSave: true,
+                        editor: "text"
+                    })
+                }
+            });
+
             this.sprayVariableGrid.createGrid({
                 idProperty: "calculatedID",
                 columns: {
@@ -623,6 +662,7 @@ define([
             registry.byId(this.id + "SprayFixedDropDown").set("disabled", !hasSelection);
             registry.byId(this.id + "SprayDelimitedDropDown").set("disabled", !hasSelection);
             registry.byId(this.id + "SprayXmlDropDown").set("disabled", !hasSelection);
+            registry.byId(this.id + "SprayJsonDropDown").set("disabled", !hasSelection);
             registry.byId(this.id + "SprayVariableDropDown").set("disabled", !hasSelection);
             registry.byId(this.id + "SprayBlobDropDown").set("disabled", !hasSelection);
 
@@ -640,6 +680,7 @@ define([
                 this.sprayFixedGrid.setData(data);
                 this.sprayDelimitedGrid.setData(data);
                 this.sprayXmlGrid.setData(data);
+                this.sprayJsonGrid.setData(data);
                 this.sprayVariableGrid.setData(data);
                 this.sprayBlobGrid.setData(data);
             }
