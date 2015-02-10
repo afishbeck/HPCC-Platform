@@ -1550,17 +1550,11 @@ offset_t XmlSplitter::getFooterLength(BufferedDirectReader & reader, offset_t si
 CJsonInputPartitioner::CJsonInputPartitioner(const FileFormat & _format)
 {
     format.set(_format);
-    headerSize = format.maxRecordSize;
-    blockSize = 0x40000;
-    bufferSize = 4 * blockSize + format.maxRecordSize;
-    doInputCRC = false;
     CriticalBlock block(openfilecachesect);
     if (!openfilecache)
         openfilecache = createFileIOCache(16);
     else
         openfilecache->Link();
-
-    clearBufferOverrun();
 }
 
 IFileIOCache *CJsonInputPartitioner::openfilecache = NULL;
@@ -1605,130 +1599,11 @@ void CJsonInputPartitioner::setSource(unsigned _whichInput, const RemoteFilename
     json.setown(new JsonPartitionParser(inStream, format.rowTag));
 }
 
-bool CJsonInputPartitioner::ensureBuffered(unsigned required)
-{
-    // returns false if eof hit
-    return true;
-}
-
 void CJsonInputPartitioner::findSplitPoint(offset_t splitOffset, PartitionCursor & cursor)
 {
-    offset_t inputOffset = cursor.inputOffset;
-    offset_t nextInputOffset = cursor.nextInputOffset;
-    const byte *buffer = bufferBase();
 
-    offset_t logStepOffset;
-    if( (splitOffset-inputOffset) < 1000000000 )
-    {
-        logStepOffset = splitOffset / 4;  // 25% step to display progress for files < ~1G split
-    }
-    else
-    {
-        logStepOffset = splitOffset / 100;  // 1% step to display progress for files > ~1G split
-    }
-    offset_t oldInputOffset = nextInputOffset;
-
-    while (nextInputOffset < splitOffset)
-    {
-        if( nextInputOffset > oldInputOffset + logStepOffset)
-        {
-            // Display progress
-            oldInputOffset = nextInputOffset;
-            LOG(MCdebugProgressDetail, unknownJob, "findSplitPoint(splitOffset:%"I64F"d) progress: %3.0f%% done.", splitOffset, (double)100.0*(double)nextInputOffset/(double)splitOffset);
-        }
-
-        inputOffset = nextInputOffset;
-
-        ensureBuffered(headerSize);
-        assertex((headerSize ==0) || (numInBuffer != bufferOffset));
-
-        bool processFullBuffer =  (nextInputOffset + blockSize) < splitOffset;
-
-        unsigned size = getSplitRecordSize(buffer+bufferOffset, numInBuffer-bufferOffset, processFullBuffer);
-
-        if (size==0)
-            throwError1(DFTERR_PartitioningZeroSizedRowLink,((offset_t)(buffer+bufferOffset)));
-
-        if (size > bufferSize)
-        {
-            LOG(MCdebugProgressDetail, unknownJob, "Split record size %d (0x%08x) is larger than the buffer size: %d", size, size, bufferSize);
-            throwError2(DFTERR_WrongSplitRecordSize, size, size);
-        }
-
-        ensureBuffered(size);
-
-        nextInputOffset += size;
-        if (target)
-        {
-            //Need to be very careful which offsets get updated (e.g. blocked format on
-            //boundary needs to close block correctly...
-            //NB: If equal, then will update outside the loop
-            if (nextInputOffset > splitOffset)
-                target->finishOutputOffset();
-            cursor.outputOffset = target->getOutputOffset();
-            target->updateOutputOffset(size, buffer+bufferOffset);
-        }
-
-        bufferOffset += size;
-    }
-    if (nextInputOffset == splitOffset)
-    {
-        inputOffset = nextInputOffset;
-        if (target)
-        {
-            target->finishOutputOffset();
-            cursor.outputOffset = target->getOutputOffset();
-        }
-    }
-
-    cursor.inputOffset = inputOffset;
-    cursor.nextInputOffset = nextInputOffset;
-    LOG(MCdebugProgressDetail, unknownJob, "findSplitPoint(splitOffset:%"I64F"d) progress: %3.0f%% done.", splitOffset, 100.0);
 }
 
-
-
-void CJsonInputPartitioner::beginTransform(offset_t thisOffset, offset_t thisLength, TransformCursor & cursor)
-{
-    cursor.inputOffset = thisOffset;
-    inStream->seek(thisOffset, IFSbegin);
-}
-
-void CJsonInputPartitioner::endTransform(TransformCursor & cursor)
-{
-    target->finishOutputRecords();
-}
-
-unsigned CJsonInputPartitioner::transformBlock(offset_t endOffset, TransformCursor & cursor)
-{
-    const byte *buffer = bufferBase();
-    offset_t startOffset = cursor.inputOffset;
-    offset_t inputOffset = startOffset;
-
-    while (inputOffset - startOffset < 32768)
-    {
-        if (inputOffset == endOffset)
-            break;
-
-        ensureBuffered(headerSize);
-        assertex((headerSize ==0) || (numInBuffer != bufferOffset));
-        unsigned readSize = numInBuffer - bufferOffset;
-        if (readSize + inputOffset > endOffset)
-            readSize = (unsigned)(endOffset - inputOffset);
-        unsigned size = getTransformRecordSize(buffer+bufferOffset, readSize);
-        ensureBuffered(size);
-
-        if (doInputCRC)
-            inputCRC = crc32((const char *)buffer+bufferOffset, size, inputCRC);
-        target->outputRecord(size, buffer+bufferOffset);
-
-        inputOffset += size;
-        bufferOffset += size;
-    }
-
-    cursor.inputOffset = inputOffset;
-    return (size32_t)(inputOffset - startOffset);
-}
 
 
 CJsonPartitioner::CJsonPartitioner(const FileFormat & _format) : CJsonInputPartitioner(_format)
@@ -1739,22 +1614,18 @@ CJsonPartitioner::CJsonPartitioner(const FileFormat & _format) : CJsonInputParti
 
 size32_t CJsonPartitioner::getSplitRecordSize(const byte * start, unsigned maxToRead, bool processFullBuffer)
 {
-    return recordSize;
+    UNIMPLEMENTED;
 }
 
 size32_t CJsonPartitioner::getTransformRecordSize(const byte * start, unsigned maxToRead)
 {
-    //Need to be careful that multi-byte characters aren't split.
-    UtfReader reader(utfFormat, false);
-    reader.set(maxToRead, start);
-    return reader.getLegalLength();
+    UNIMPLEMENTED;
 }
 
 
 void CJsonPartitioner::setTarget(IOutputProcessor * _target)
 {
-    Owned<IOutputProcessor> hook = new CUtfProcessorHook(format.type, _target);
-    CJsonInputPartitioner::setTarget(hook);
+    UNIMPLEMENTED;
 }
 
 
@@ -2308,10 +2179,7 @@ IFormatProcessor * createFormatProcessor(const FileFormat & srcFormat, const Fil
                 partitioner = new CJsonPartitioner(srcFormat);
             else
             {
-                if (calcOutput && !sameFormats)
                     partitioner = new CXmlPartitioner(srcFormat);
-                else
-                    partitioner = new CXmlQuickPartitioner(srcFormat, sameFormats);
             }
         }
         else
@@ -2372,7 +2240,7 @@ IFormatPartitioner * createFormatPartitioner(const SocketEndpoint & ep, const Fi
                 if (!strncmp(srcFormat.rowTag, "j::", 3))
                     return new CJsonPartitioner(srcFormat);
                 else
-                    return new CXmlQuickPartitioner(srcFormat, sameFormats);
+                    return new CXmlPartitioner(srcFormat);
             }
             else
             {
@@ -2407,7 +2275,7 @@ IFormatPartitioner * createFormatPartitioner(const SocketEndpoint & ep, const Fi
                 if (!strncmp(srcFormat.rowTag, "j::", 3))
                     return new CJsonPartitioner(srcFormat);
                 else
-                    return new CXmlQuickPartitioner(srcFormat, sameFormats);
+                    return new CXmlPartitioner(srcFormat);
             }
             else
                 return new CUtfQuickPartitioner(srcFormat, sameFormats);

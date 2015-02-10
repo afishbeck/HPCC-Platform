@@ -424,12 +424,52 @@ public:
     {
         inStream.set(in);
         reader.setown(createPullJSONStreamReader(*inStream, *this));
+        while (*rowPath=='/')
+            rowPath++;
         pathNodes.appendList(rowPath, "/");
     }
     Owned<IPullPTreeReader> reader;
 
+    bool checkIgnoreBeginDepth(const char *tag)
+    {
+        if (tangentDepth)
+        {
+            tangentDepth++;
+            return true;
+        }
+        if (rowDepth)
+        {
+            rowDepth++;
+            return true;
+        }
+        if (pathPos==0 && streq(tag, "__array__")) //ignore root array
+            return true;
+        return false;
+    }
     virtual void beginNode(const char *tag, offset_t startOffset)
     {
+        if (checkIgnoreBeginDepth(tag))
+            return;
+        if (!pathNodes.ordinality()) //no path, root objects are rows
+        {
+            rowDepth=1;
+            lastRowStart=startOffset;
+            return;
+        }
+
+        if (streq(tag, pathNodes.item(pathPos))) //closer to a row
+        {
+            pathPos++;
+            if (pathPos==pathNodes.ordinality()) //start a row
+            {
+                rowDepth=1;
+                lastRowStart=startOffset;
+            }
+        }
+        else //off on a tangent
+        {
+            tangent=1;
+        }
     }
     virtual void newAttribute(const char *name, const char *value)
     {
@@ -437,15 +477,44 @@ public:
     virtual void beginNodeContent(const char *tag)
     {
     }
+    void decRowDepth(offset_t endOffset)
+    {
+        rowDepth--;
+        if (!rowDepth)
+            lastRowEnd=endOffset;
+    }
     virtual void endNode(const char *tag, unsigned length, const void *value, bool binary, offset_t endOffset)
     {
+        if (tangentDepth)
+            tangentDepth--;
+        else if (rowDepth)
+            decRowDepth(endOffset);
+        else if (pathPos)
+            pathPos--;
+    }
+
+    bool findNextRowStart()
+    {
+        while (reader->next())
+            if (rowDepth==1)
+                return true;
+        return false;
+    }
+
+    bool findNextRowEnd()
+    {
+        while (reader->next())
+            if (rowDepth==1)
+                return true;
+        return false;
     }
 
 private:
     Owned<IFileIOStream> inStream;
     StringArray pathNodes;
-    StringArray curPath;
     unsigned pathPos;
+    offset_t lastRowStart;
+    offset_t lastRowEnd;
 };
 
 class DALIFT_API CJsonInputPartitioner : public CPartitioner
@@ -456,41 +525,21 @@ public:
 
     virtual void setSource(unsigned _whichInput, const RemoteFilename & _fullPath, bool compressedInput, const char *decryptKey);
 
-    virtual void beginTransform(offset_t thisOffset, offset_t thisLength, TransformCursor & cursor);
-    virtual void endTransform(TransformCursor & cursor);
-    virtual unsigned transformBlock(offset_t endOffset, TransformCursor & cursor);
-    virtual crc32_t getInputCRC() { return inputCRC; }
-    virtual void setInputCRC(crc32_t value) { doInputCRC = true; inputCRC = value; }
+    //virtual void beginTransform(offset_t thisOffset, offset_t thisLength, TransformCursor & cursor);
+    //virtual void endTransform(TransformCursor & cursor);
+    //virtual unsigned transformBlock(offset_t endOffset, TransformCursor & cursor);
+    //virtual crc32_t getInputCRC() { return inputCRC; }
+    //virtual void setInputCRC(crc32_t value) { doInputCRC = true; inputCRC = value; }
 
 protected:
-    bool ensureBuffered(unsigned required);
     virtual void findSplitPoint(offset_t curOffset, PartitionCursor & cursor);
-    virtual size32_t getSplitRecordSize(const byte * record, unsigned maxToRead, bool processFullBuffer) = 0;
-    virtual size32_t getTransformRecordSize(const byte * record, unsigned maxToRead) = 0;
 
-    inline byte *bufferBase()
-    {
-        return (byte *)((bufattr.length()!=bufferSize)?bufattr.allocate(bufferSize):bufattr.bufferBase());
-    }
-    virtual void killBuffer()  { bufattr.clear(); }
-    virtual void clearBufferOverrun() { numOfBufferOverrun = 0; numOfProcessedBytes = 0; }
 protected:
     FileFormat      format;
     Owned<IFileIOStream>   inStream;
     Owned<JsonPartitionParser> json;
-    MemoryAttr             bufattr;
-    size32_t               headerSize;
-    size32_t               blockSize;
-    size32_t               bufferSize;
-    size32_t               numInBuffer;
-    size32_t               bufferOffset;
-    unsigned               inputCRC;
-    bool                   doInputCRC;
     static IFileIOCache    *openfilecache;
     static CriticalSection openfilecachesect;
-
-    unsigned               numOfBufferOverrun;
-    unsigned               numOfProcessedBytes;
 };
 
 
@@ -501,6 +550,13 @@ public:
 
     virtual void setTarget(IOutputProcessor * _target);
 
+    //Processing.
+    virtual void beginTransform(offset_t thisOffset, offset_t thisLength, TransformCursor & cursor){UNIMPLEMENTED;}
+    virtual void endTransform(TransformCursor & cursor){UNIMPLEMENTED;}
+    virtual crc32_t getInputCRC(){return 0;}
+    virtual void setInputCRC(crc32_t value){UNIMPLEMENTED;}
+    virtual unsigned transformBlock(offset_t endOffset, TransformCursor & cursor){UNIMPLEMENTED;}
+    virtual void killBuffer(){}
 
 protected:
     virtual size32_t getSplitRecordSize(const byte * record, unsigned maxToRead, bool processFullBuffer);

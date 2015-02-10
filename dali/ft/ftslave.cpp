@@ -139,7 +139,7 @@ public:
 
 void doWaitForAttach()
 {
-    bool x = true;
+    bool x = false;
     while(x)
     {
         if (x)
