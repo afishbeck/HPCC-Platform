@@ -758,19 +758,13 @@ public:
         else
             timeLimitMS = (unsigned)(dval * 1000);
 
+        httpHeaderString.set(s.setown(helper->getHttpHeaderString()));
+
         if (wscType == STsoap)
         {
             soapaction.set(s.setown(helper->getSoapAction()));
             if(soapaction.get() && !isValidHttpValue(soapaction.get()))
                 throw MakeStringException(-1, "SOAPAction value contained illegal characters: %s", soapaction.get());
-
-            httpHeaderName.set(s.setown(helper->getHttpHeaderName()));
-            if(httpHeaderName.get() && !isValidHttpValue(httpHeaderName.get()))
-                throw MakeStringException(-1, "HTTPHEADER name contained illegal characters: %s", httpHeaderName.get());
-
-            httpHeaderValue.set(s.setown(helper->getHttpHeaderValue()));
-            if(httpHeaderValue.get() && !isValidHttpValue(httpHeaderValue.get()))
-                throw MakeStringException(-1, "HTTPHEADER value contained illegal characters: %s", httpHeaderValue.get());
 
             StringAttr proxyAddress;
             proxyAddress.set(s.setown(helper->getProxyAddress()));
@@ -817,7 +811,7 @@ public:
         {
             service.toUpperCase();  //GET/PUT/POST
             if (strcmp(service.str(), "GET"))
-                throw MakeStringException(0, "HTTPCALL Only 'GET' service supported");
+                throw MakeStringException(0, "HTTPCALL Only 'GET' http method currently supported");
             OwnedRoxieString acceptTypeSupplied(helper->getAcceptType()); // text/html, text/xml, etc
             acceptType.set(acceptTypeSupplied);
             acceptType.trim();
@@ -1043,8 +1037,7 @@ protected:
     const IContextLogger &logctx;
     unsigned flags;
     StringAttr soapaction;
-    StringAttr httpHeaderName;
-    StringAttr httpHeaderValue;
+    StringAttr httpHeaderString;
     StringAttr inputpath;
     StringBuffer service;
     StringBuffer acceptType;//for httpcall, text/plain, text/html, text/xml, etc
@@ -1372,19 +1365,18 @@ private:
         {
             request.append("Authorization: Basic ").append(master->authToken).append("\r\n");
         }
+
+        if (master->httpHeaderString.length())
+        {
+            if (soapTraceLevel > 6 || master->logXML)
+                master->logctx.CTXLOG("%s: Adding HTTP Headers(%s)",  master->wscCallTypeText(), master->httpHeaderString.str());
+            request.append(master->httpHeaderString.str());
+        }
+
         if (master->wscType == STsoap)
         {
             if (master->soapaction.get())
                 request.append("SOAPAction: ").append(master->soapaction.get()).append("\r\n");
-
-            if (master->httpHeaderName.get() && master->httpHeaderValue.get())
-            {
-                StringBuffer hdr = master->httpHeaderName.get();
-                hdr.append(": ").append(master->httpHeaderValue);
-                if (soapTraceLevel > 6 || master->logXML)
-                    master->logctx.CTXLOG("SOAPCALL: Adding HTTP Header(%s)", hdr.str());
-                request.append(hdr.append("\r\n"));
-            }
             request.append("Content-Type: text/xml\r\n");
         }
         else if(master->wscType == SThttp)

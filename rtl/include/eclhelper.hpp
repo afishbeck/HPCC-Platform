@@ -2157,8 +2157,7 @@ struct IHThorWebServiceCallActionArg : public IHThorArg
     virtual const char * getSoapAction()              { return NULL; }
     virtual const char * getNamespaceName()           { return NULL; }
     virtual const char * getNamespaceVar()            { return NULL; }
-    virtual const char * getHttpHeaderName()          { return NULL; }
-    virtual const char * getHttpHeaderValue()         { return NULL; }
+    virtual const char * getHttpHeaderString()          { return NULL; }
     virtual const char * getProxyAddress()            { return NULL; }
     virtual const char * getAcceptType()              { return NULL; }
 };

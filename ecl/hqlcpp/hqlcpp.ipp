@@ -1741,6 +1741,7 @@ public:
     void doBuildUnsigned64Function(BuildCtx & ctx, const char * name, IHqlExpression * value);
     void doBuildVarStringFunction(BuildCtx & ctx, const char * name, IHqlExpression * value);
     void doBuildDataFunction(BuildCtx & ctx, const char * name, IHqlExpression * value);
+    void doBuildStringFunction(BuildCtx & ctx, const char * name, const char * value);
     void doBuildStringFunction(BuildCtx & ctx, const char * name, IHqlExpression * value);
     void doBuildDoubleFunction(BuildCtx & ctx, const char * name, IHqlExpression * value);
     void doBuildFunction(BuildCtx & ctx, ITypeInfo * type, const char * name, IHqlExpression * value);

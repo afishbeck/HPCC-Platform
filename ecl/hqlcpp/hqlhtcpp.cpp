@@ -3013,6 +3013,13 @@ void HqlCppTranslator::doBuildStringFunction(BuildCtx & ctx, const char * name, 
     doBuildFunction(ctx, unknownStringType, name, value);
 }
 
+void HqlCppTranslator::doBuildStringFunction(BuildCtx & ctx, const char * name, const char * value)
+{
+    StringBuffer s;
+    s.append("virtual const char * ").append(name).append("() { return \"").append(value).append("\"; }");
+    ctx.addQuoted(s);
+}
+
 void HqlCppTranslator::doBuildVarStringFunction(BuildCtx & ctx, const char * name, IHqlExpression * value)
 {
     StringBuffer s;
@@ -17089,12 +17096,24 @@ ABoundActivity * HqlCppTranslator::doBuildActivitySOAP(BuildCtx & ctx, IHqlExpre
     if (action)
         doBuildVarStringFunction(instance->startctx, "getSoapAction", action->queryChild(0));
 
-    IHqlExpression * httpHeader = expr->queryAttribute(httpHeaderAtom);
-    if (httpHeader)
+    HqlExprArray httpHeaderExprs;
+    gatherAttributes(httpHeaderExprs, httpHeaderAtom, expr);
+    StringBuffer httpHeaderString;
+    ForEachItemIn(i, httpHeaderExprs)
     {
-        doBuildVarStringFunction(instance->startctx, "getHttpHeaderName", httpHeader->queryChild(0));
-        doBuildVarStringFunction(instance->startctx, "getHttpHeaderValue", httpHeader->queryChild(1));
+        IHqlExpression * httpHeader = &httpHeaderExprs.item(i);
+        StringBuffer s;
+        if (getUTF8Value(s, httpHeader->queryChild(0)).length())
+        {
+            s.append(": ");
+            getUTF8Value(s, httpHeader->queryChild(1));
+            s.append("\r\n");
+            httpHeaderString.append(s);
+        }
     }
+
+    if (httpHeaderString.length())
+        doBuildStringFunction(instance->startctx, "getHttpHeaderString", httpHeaderString.str());
 
     IHqlExpression * proxyAddress = expr->queryAttribute(proxyAddressAtom);
     if (proxyAddress)
@@ -17252,6 +17271,31 @@ ABoundActivity * HqlCppTranslator::doBuildActivityHTTP(BuildCtx & ctx, IHqlExpre
 
     //virtual void toXML(const byte * self, StringBuffer & out) = 0;
     buildHTTPtoXml(instance->startctx);
+
+    HqlExprArray httpHeaderExprs;
+    gatherAttributes(httpHeaderExprs, httpHeaderAtom, expr);
+    StringBuffer httpHeaderString;
+    ForEachItemIn(i, httpHeaderExprs)
+    {
+        IHqlExpression * httpHeader = &httpHeaderExprs.item(i);
+        StringBuffer s;
+        if (getUTF8Value(s, httpHeader->queryChild(0)).length())
+        {
+            s.append(": ");
+            getUTF8Value(s, httpHeader->queryChild(1));
+            s.append("\r\n");
+            httpHeaderString.append(s);
+        }
+    }
+
+    if (httpHeaderString.length())
+        doBuildStringFunction(instance->startctx, "getHttpHeaderString", httpHeaderString.str());
+
+    IHqlExpression * proxyAddress = expr->queryAttribute(proxyAddressAtom);
+    if (proxyAddress)
+    {
+        doBuildVarStringFunction(instance->startctx, "getProxyAddress", proxyAddress->queryChild(0));
+    }
 
     //virtual const char * queryOutputIteratorPath()
     IHqlExpression * separator = expr->queryAttribute(separatorAtom);
