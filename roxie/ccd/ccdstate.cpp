@@ -802,7 +802,7 @@ public:
     {
         return BASE::isActive();
     }
-    virtual bool validate(StringArray &queryids, StringArray &wrn, StringArray &err, StringArray &unmatchedQueries, StringArray &unusedPackages, StringArray &unmatchedFiles) const
+    virtual bool validate(StringArray &queryids, StringArray &wrn, StringArray &err, StringArray &unmatchedQueries, StringArray &unusedPackages, IPropertyTree &unmatchedFiles) const
     {
         return BASE::validate(queryids, wrn, err, unmatchedQueries, unusedPackages, unmatchedFiles);
     }

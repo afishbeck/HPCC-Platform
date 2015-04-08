@@ -35,6 +35,7 @@
 #define RefFileCloned         0x100
 #define RefFileInPackage      0x200
 #define RefFileNotOnSource    0x400
+#define RefFileNotOptional    0x800
 
 interface IReferencedFile : extends IInterface
 {

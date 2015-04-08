@@ -761,7 +761,7 @@ bool CWsPackageProcessEx::onValidatePackage(IEspContext &context, IEspValidatePa
     StringArray errors;
     StringArray unmatchedQueries;
     StringArray unusedPackages;
-    StringArray unmatchedFiles;
+    Owned<IPropertyTree> unmatchedFiles = createPTree(iptiter_sort);
 
     Owned<IHpccPackageSet> set;
     Owned<IPropertyTree> mapTree;
@@ -834,7 +834,7 @@ bool CWsPackageProcessEx::onValidatePackage(IEspContext &context, IEspValidatePa
         if (queryid && *queryid)
             queriesToVerify.appendUniq(queryid);
     }
-    map->validate(queriesToVerify, warnings, errors, unmatchedQueries, unusedPackages, unmatchedFiles);
+    map->validate(queriesToVerify, warnings, errors, unmatchedQueries, unusedPackages, *unmatchedFiles);
 
     resp.setPMID(map->queryPackageId());
     resp.setWarnings(warnings);

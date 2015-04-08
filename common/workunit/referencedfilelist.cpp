@@ -144,7 +144,7 @@ public:
 
     void reset()
     {
-        flags &= (RefSubFile | RefFileIndex | RefFileForeign | RefFileSuper | RefSubFile | RefFileInPackage);
+        flags &= (RefSubFile | RefFileIndex | RefFileForeign | RefFileSuper | RefSubFile | RefFileInPackage | RefFileNotOptional);
     }
 
     IPropertyTree *getRemoteFileTree(IUserDescriptor *user, INode *remote, const char *remotePrefix);
@@ -629,6 +629,8 @@ void ReferencedFileList::addFilesFromQuery(IConstWorkUnit *cw, const IHpccPackag
                 node.getPropBool("att[@name='_isTransformSpill']/@value"))
                 continue;
             unsigned flags = 0;
+            if (!getIsOpt(node)) //making this flag negative means any non-optional instance will win, and the file will be marked non-optional
+                flags |= RefFileNotOptional;
             if (pkg)
             {
                 const char *pkgid = pkg->locateSuperFile(logicalName);
