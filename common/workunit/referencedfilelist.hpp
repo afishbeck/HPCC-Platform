@@ -45,6 +45,7 @@ interface IReferencedFile : extends IInterface
     virtual const char *queryPackageId() const =0;
     virtual __int64 getFileSize()=0;
     virtual unsigned getNumParts()=0;
+    virtual StringArray &getUsedByQueries()=0;
 };
 
 interface IReferencedFileIterator : extends IIteratorOf<IReferencedFile> { };

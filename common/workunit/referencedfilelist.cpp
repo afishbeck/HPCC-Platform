@@ -178,6 +178,16 @@ public:
     {
         return numParts;
     }
+    virtual StringArray &getUsedByQueries(){return usedBy;}
+    void addUsedByQuery(const char *queryid, bool inPkg)
+    {
+        if (queryid && *queryid)
+        {
+            StringBuffer id(inPkg ? "+" : "-");
+            id.append(queryid);
+            usedBy.append(id);
+        }
+    }
 
 public:
     StringAttr logicalName;
@@ -185,6 +195,7 @@ public:
     StringAttr daliip;
     StringAttr filePrefix;
     StringAttr fileSrcCluster;
+    StringArray usedBy;
     __int64 fileSize;
     unsigned numParts;
     unsigned flags;
@@ -219,7 +230,7 @@ public:
     virtual void addFiles(StringArray &files);
     virtual void addFilesFromWorkUnit(IConstWorkUnit *cw);
     virtual void addFilesFromQuery(IConstWorkUnit *cw, const IHpccPackageMap *pm, const char *queryid);
-    virtual void addFilesFromQuery(IConstWorkUnit *cw, const IHpccPackage *pkg);
+    virtual void addFilesFromQuery(IConstWorkUnit *cw, const IHpccPackage *pkg, const char *queryid);
     virtual void addFilesFromPackageMap(IPropertyTree *pm);
 
     void addFileFromSubFile(IPropertyTree &subFile, const char *_daliip, const char *srcCluster, const char *_remotePrefix);
@@ -531,7 +542,7 @@ public:
     Owned<HashIterator> iter;
 };
 
-void ReferencedFileList::ensureFile(const char *ln, unsigned flags, const char *pkgid, bool noDfsResolution, const char *daliip, const char *srcCluster, const char *prefix)
+void ReferencedFileList::ensureFile(const char *ln, unsigned flags, const char *pkgid, bool noDfsResolution, const char *daliip, const char *srcCluster, const char *prefix, const char *usedByQuery)
 {
     if (!allowForeign && checkForeign(ln))
         throw MakeStringException(-1, "Foreign file not allowed%s: %s", (flags & RefFileInPackage) ? " (declared in package)" : "", ln);
@@ -541,9 +552,13 @@ void ReferencedFileList::ensureFile(const char *ln, unsigned flags, const char *
         return;
     ReferencedFile *existing = map.getValue(file->getLogicalName());
     if (existing)
+    {
+        existing->addUsedByQuery(usedByQuery, flags & RefFileInPackage);
         existing->flags |= flags;
+    }
     else
     {
+        file->addUsedByQuery(usedByQuery, flags & RefFileInPackage);
         const char *refln = file->getLogicalName();
         // NOTE: setValue links its parameter
         map.setValue(refln, file);
@@ -606,7 +621,7 @@ void ReferencedFileList::addFilesFromPackageMap(IPropertyTree *pm)
         addFilesFromPackage(packages->query(), ip, cluster, prefix);
 }
 
-void ReferencedFileList::addFilesFromQuery(IConstWorkUnit *cw, const IHpccPackage *pkg)
+void ReferencedFileList::addFilesFromQuery(IConstWorkUnit *cw, const IHpccPackage *pkg, const char *queryid)
 {
     Owned<IConstWUGraphIterator> graphs = &cw->getGraphs(GraphTypeActivities);
     ForEach(*graphs)
@@ -645,14 +660,14 @@ void ReferencedFileList::addFilesFromQuery(IConstWorkUnit *cw, const IHpccPackag
                         {
                             StringBuffer subfile;
                             ssfe->getSubFileName(count, subfile);
-                            ensureFile(subfile, RefSubFile | RefFileInPackage, pkgid, false);
+                            ensureFile(subfile, RefSubFile | RefFileInPackage, pkgid, false, queryid);
                         }
                     }
                 }
-                ensureFile(logicalName, flags, pkgid, pkg->isCompulsory());
+                ensureFile(logicalName, flags, pkgid, pkg->isCompulsory(), queryid);
             }
             else
-                ensureFile(logicalName, flags, NULL, false);
+                ensureFile(logicalName, flags, NULL, false, queryid);
         }
     }
 }
@@ -662,7 +677,7 @@ void ReferencedFileList::addFilesFromQuery(IConstWorkUnit *cw, const IHpccPackag
     const IHpccPackage *pkg = NULL;
     if (pm && queryid && *queryid)
         pkg = pm->matchPackage(queryid);
-    addFilesFromQuery(cw, pkg);
+    addFilesFromQuery(cw, pkg, queryid);
 }
 
 void ReferencedFileList::addFilesFromWorkUnit(IConstWorkUnit *cw)

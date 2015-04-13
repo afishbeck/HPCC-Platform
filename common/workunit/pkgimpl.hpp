@@ -439,7 +439,7 @@ public:
         }
     }
 
-    virtual bool validate(StringArray &queriesToCheck, StringArray &warn, StringArray &err, StringArray &unmatchedQueries, StringArray &unusedPackages, IPropertyTree &unmatchedFiles) const
+    virtual bool validate(StringArray &queriesToCheck, StringArray &warn, StringArray &err, StringArray &unmatchedQueries, StringArray &unusedPackages, IReferencedFileList &filelist) const
         //StringArray &unmatchedQueries, StringArray &unusedPackages, StringArray &unmatchedCompulsoryFiles, StringArray &unmatchedNonOptFiles, StringArray &unmatchedOptFiles) const
     {
         bool isValid = true;
@@ -502,14 +502,8 @@ public:
             const char *queryid = queries->query().queryProp("@id");
             if (queryid && *queryid)
             {
-                IPropertyTree *queryUnmatchedFiles = ensurePTree(&unmatchedFiles, queryid);
-                IPropertyTree *unmatchedCompulsory = ensurePTree(queryUnmatchedFiles, "compulsory");
-                IPropertyTree *unmatchedNonOpt = ensurePTree(queryUnmatchedFiles, "nonOptional");
-                IPropertyTree *unmatchedOpt = ensurePTree(queryUnmatchedFiles, "optional");
-
                 const IHpccPackage *pkg = this->matchPackage(queryid);
 
-                Owned<IReferencedFileList> filelist = createReferencedFileList(NULL, true, false);
                 Owned<IConstWorkUnit> cw = wufactory->openWorkUnit(queries->query().queryProp("@wuid"), false);
 
                 StringArray libnames, unresolvedLibs;
@@ -526,8 +520,8 @@ public:
                         unmatchedQueries.append(libname);
                 }
 
-                filelist->addFilesFromQuery(cw, this, queryid);
-                Owned<IReferencedFileIterator> refFiles = filelist->getFiles();
+                filelist.addFilesFromQuery(cw, this, queryid);
+                Owned<IReferencedFileIterator> refFiles = filelist.getFiles();
                 ForEach(*refFiles)
                 {
                     IReferencedFile &rf = refFiles->query();
@@ -554,13 +548,6 @@ public:
 
                         continue;
                     }
-
-                    if (!(rf.getFlags() & RefFileNotOptional))
-                        unmatchedOpt->addProp("File", rf.getLogicalName());
-                    else if (pkg && pkg->isCompulsory())
-                        unmatchedCompulsory->addProp("File", rf.getLogicalName());
-                    else
-                        unmatchedNonOpt->addProp("File", rf.getLogicalName());
                 }
 
                 const IHpccPackage *matched = matchPackage(queryid);
