@@ -605,6 +605,266 @@ public:
     StringAttr optWsdlAddress;
 };
 
+class Esdl2JavaCmd : public EsdlConvertCmd
+{
+public:
+    Esdl2JavaCmd()
+    {
+        StringBuffer componentsfolder;
+        if (getComponentFilesRelPathFromBin(componentsfolder))
+            optHPCCCompFilesDir.set(componentsfolder.str());
+        else
+            optHPCCCompFilesDir.set(COMPONENTFILES_DIR);
+    }
+
+    virtual bool parseCommandLineOptions(ArgvIterator &iter)
+    {
+        if (iter.done())
+        {
+            usage();
+            return false;
+        }
+
+        //First two parameters' order is fixed.
+        for (int par = 0; par < 2 && !iter.done(); par++)
+        {
+            const char *arg = iter.query();
+            if (*arg != '-')
+            {
+                if (optSource.isEmpty())
+                    optSource.set(arg);
+                else if (optOutDirPath.isEmpty())
+                    optOutDirPath.set(arg);
+                else
+                {
+                    fprintf(stderr, "\nunrecognized argument detected before required parameters: %s\n", arg);
+                    usage();
+                    return false;
+                }
+            }
+            else
+            {
+                fprintf(stderr, "\noption detected before required parameters: %s\n", arg);
+                usage();
+                return false;
+            }
+
+            iter.next();
+        }
+
+        for (; !iter.done(); iter.next())
+        {
+            if (iter.matchFlag(optHPCCCompFilesDir, HPCC_COMPONENT_FILES_DIR) || iter.matchFlag(optHPCCCompFilesDir, HPCC_COMPONENT_FILES_DIR_CDE))
+                continue;
+
+            if (matchCommandLineOption(iter, true)!=EsdlCmdOptionMatch)
+                return false;
+        }
+
+        return true;
+    }
+
+    esdlCmdOptionMatchIndicator matchCommandLineOption(ArgvIterator &iter, bool finalAttempt)
+    {
+        if (iter.matchOption(optSource, ESDL_CONVERT_SOURCE))
+            return EsdlCmdOptionMatch;
+        if (iter.matchOption(optOutDirPath, ESDL_CONVERT_OUTDIR))
+            return EsdlCmdOptionMatch;
+
+        return EsdlCmdCommon::matchCommandLineOption(iter, true);
+    }
+
+
+    virtual bool finalizeOptions(IProperties *globals)
+    {
+        return EsdlConvertCmd::finalizeOptions(globals);
+    }
+
+    virtual int processCMD()
+    {
+        if (!optOutDirPath.isEmpty())
+            recursiveCreateDirectory(optOutDirPath.get());
+
+        StringBuffer srcPath;
+        StringBuffer srcName;
+        StringBuffer srcExt;
+        StringBuffer srcProt;
+
+        splitFilename(optSource.get(), &srcProt, &srcPath, &srcName, &srcExt);
+
+        if (srcProt.length() > 0)
+            srcPath.insert(0, srcProt.str());
+
+        unsigned start = msTick();
+        EsdlIndexedPropertyTrees trees;
+        trees.loadFile(srcPath.str(), srcName.str(), srcExt.str(), NULL, optProcessIncludes, false, optRollUpEclToSingleFile);
+        DBGLOG("Time taken to load ESDL files %u", msTick() - start);
+
+        StringBuffer idxxml("<types><type name=\"StringArrayItem\" src=\"share\"/>");
+
+        DBGLOG("\tSTART INDEX");
+        HashIterator iit(trees.index);
+        for (iit.first(); iit.isValid(); iit.next())
+        {
+            const char *key = (const char *) iit.get().getKey();
+            TypeEntry ** typ = trees.index.getValue(key);
+            if (typ)
+            {
+                StringBuffer src((*typ)->src.get());
+                if (!strnicmp(src.str(), "wsm_", 4))
+                    src.remove(0, 4);
+                idxxml.appendf("<type name=\"%s\" src=\"%s\" ", (*typ)->name.get(), src.str());
+                if ((*typ)->comment.length())
+                    idxxml.appendf("comment=\"%s\" ", (*typ)->comment.str());
+                if ((*typ)->base_type.length())
+                    idxxml.appendf("base_type=\"%s\" ", (*typ)->base_type.get());
+                idxxml.append("/>");
+            }
+        }
+
+        DBGLOG("\tEND INDEX");
+        idxxml.append("</types>");
+
+        idxxml.append("<keywords>");
+        idxxml.append("</keywords>");
+
+        if (true)
+        {
+            StringBuffer entireesxdl;
+
+            Owned<IPropertyTreeIterator> files = trees.all->getElements("esxdl");
+            ForEach(*files)
+            {
+                IPropertyTree &file = files->query();
+                const char * filename = file.queryProp("@name");
+                StringBuffer xmlfile;
+                toXML(&file, xmlfile, 0,0);
+
+                outputEcl(srcPath.str(), filename, optOutDirPath.get(), idxxml.str(), xmlfile);
+            }
+        }
+        else
+        {
+            int count = trees.all->getCount("esxdl");
+            if (trees.all->getCount("esxdl") > 0)
+            {
+                IPropertyTree *file = trees.all->getPropTree("esxdl[1]");
+                if (file)
+                {
+                    StringBuffer xmlfile;
+                    toXML(file, xmlfile, 0,0);
+
+                    outputEcl(srcPath.str(), srcName.str(), optOutDirPath.get(), idxxml.str(), xmlfile);
+                }
+            }
+        }
+
+        DBGLOG("Time taken to translate ESDL files %u", msTick() - start);
+        return 0;
+    }
+
+    virtual void usage()
+    {
+        fputs("\nUsage:\n\n"
+                "esdl java sourcePath outputPath \n"
+                "\nsourcePath must be absolute path to the ESDL Definition file containing the"
+                "EsdlService definition for the service you want to work with.\n"
+                "outputPath must be the absolute path where the JAVA output will be created."
+                "   Options:\n"
+                ,stdout);
+    }
+
+    void outputJava(const char *srcpath, const char *file, const char *path, const char *types, const char * xml)
+    {
+        DBGLOG("Generating ECL file for %s", file);
+
+        StringBuffer filePath;
+        StringBuffer fileName;
+        StringBuffer fileExt;
+
+        splitFilename(file, NULL, &filePath, &fileName, &fileExt);
+
+        const char *finger = fileName.str();
+        if (!strnicmp(finger, "wsm_", 4))
+            finger+=4;
+
+        StringBuffer outfile;
+        if (path && *path)
+        {
+            outfile.append(path);
+            if (outfile.length() && !strchr("/\\", outfile.charAt(outfile.length()-1)))
+                outfile.append('/');
+        }
+        outfile.append(finger).append(".java");
+
+        {
+            //If the target output file cannot be accessed, this operation will
+            //throw, and will be caught and reported at the shell level.
+            Owned<IFile> ofile =  createIFile(outfile.str());
+            if (ofile)
+            {
+                Owned<IFileIO> fileIO = ofile->open(IFOcreate);
+                fileIO.clear();
+            }
+        }
+
+        StringBuffer fullname(srcpath);
+        if (fullname.length() && !strchr("/\\", fullname.charAt(fullname.length()-1)))
+            fullname.append('/');
+        fullname.append(fileName.str()).append(".xml");
+
+        StringBuffer expstr;
+        expstr.append("<expesdl>");
+        expstr.append(types);
+        expstr.append(xml);
+        expstr.append("</expesdl>");
+
+        Owned<IProperties> params = createProperties();
+        params->setProp("sourceFileName", finger);
+        StringBuffer esdl2eclxslt (optHPCCCompFilesDir.get());
+        esdl2eclxslt.append("/xslt/esdl2java.xslt");
+        esdl2eclxsltTransform(expstr.str(), esdl2eclxslt.toCharArray(), params, outfile.str());
+    }
+
+    void esdl2eclxsltTransform(const char* xml, const char* sheet, IProperties *params, const char *filename)
+    {
+        StringBuffer xsl;
+        xsl.loadFile(sheet);
+
+        Owned<IXslProcessor> proc  = getXslProcessor();
+        Owned<IXslTransform> trans = proc->createXslTransform();
+
+        trans->setXmlSource(xml, strlen(xml));
+        trans->setXslSource(xsl, xsl.length(), "esdl2ecl", ".");
+
+        if (params)
+        {
+            Owned<IPropertyIterator> it = params->getIterator();
+            for (it->first(); it->isValid(); it->next())
+            {
+                const char *key = it->getPropKey();
+                //set parameter in the XSL transform skipping over the @ prefix, if any
+                const char* paramName = *key == '@' ? key+1 : key;
+                trans->setParameter(paramName, StringBuffer().append('\'').append(params->queryProp(key)).append('\'').str());
+            }
+        }
+
+        trans->setResultTarget(filename);
+
+        try
+        {
+            trans->transform();
+        }
+        catch(...)
+        {
+            fprintf(stdout, "Error transforming Esdl to ECL file %s", filename);
+        }
+    }
+
+public:
+    StringAttr optHPCCCompFilesDir;
+};
+
 //=========================================================================================
 
 IEsdlCommand *createCoreEsdlCommand(const char *cmdname)
@@ -615,6 +875,8 @@ IEsdlCommand *createCoreEsdlCommand(const char *cmdname)
         return new Esdl2XSDCmd();
     if (strieq(cmdname, "ECL"))
         return new Esdl2EclCmd();
+    if (strieq(cmdname, "JAVA"))
+        return new Esdl2JavaCmd();
     if (strieq(cmdname, "WSDL"))
         return new Esdl2WSDLCmd();
     if (strieq(cmdname, "PUBLISH"))

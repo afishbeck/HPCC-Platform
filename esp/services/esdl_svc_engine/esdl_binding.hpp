@@ -293,6 +293,8 @@ public:
     {
     }
 
+    virtual int onGet(CHttpRequest* request, CHttpResponse* response);
+
     virtual void initEsdlServiceInfo(IEsdlDefService &srvdef);
 
     virtual void addService(const char * name, const char * host, unsigned short port, IEspService & service);
@@ -306,6 +308,8 @@ public:
     int onGetXsd(IEspContext &context, CHttpRequest* request, CHttpResponse* response, const char *serviceName, const char *methodName);
     virtual bool getSchema(StringBuffer& schema, IEspContext &ctx, CHttpRequest* req, const char *service, const char *method, bool standalone);
     int onGetWsdl(IEspContext &context, CHttpRequest* request, CHttpResponse* response, const char *serviceName, const char *methodName);
+    int onJavaPlugin(IEspContext &context, CHttpRequest* request, CHttpResponse* response, const char *serviceName, const char *methodName);
+
     int onGetXForm(IEspContext &context, CHttpRequest* request,   CHttpResponse* response, const char *serv, const char *method);
     virtual int onGetFile(IEspContext &context, CHttpRequest* request, CHttpResponse* response, const char *pathex);
     int getJsonTestForm(IEspContext &context, CHttpRequest* request, CHttpResponse* response);

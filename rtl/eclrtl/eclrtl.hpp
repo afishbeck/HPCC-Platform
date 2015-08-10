@@ -833,7 +833,7 @@ interface IEmbedContext : extends IInterface
 {
     virtual IEmbedFunctionContext *createFunctionContext(unsigned flags, const char *options) = 0; // legacy
     virtual IEmbedFunctionContext *createFunctionContextEx(ICodeContext * ctx, unsigned flags, const char *options) = 0;
-//    virtual IEmbedServiceContext *createServiceContext(const char *service, unsigned flags, const char *options) = 0;
+    virtual IEmbedServiceContext *createServiceContext(const char *service, unsigned flags, const char *options) = 0;
     // MORE - add syntax checked here!
 };
 

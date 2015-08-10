@@ -31,6 +31,8 @@
 #include "jsonhelpers.hpp"
 #include "eclhelper.hpp"    //IXMLWriter
 #include "thorxmlwrite.hpp" //JSON WRITER
+#include "workunit.hpp"
+#include "wuwebview.hpp"
 
 /*
  * trim xpath at first instance of element
@@ -195,10 +197,40 @@ bool EsdlServiceImpl::loadLogggingManager()
     return true;
 }
 
+
+#include "eclrtl.hpp"
+
+namespace javaembed { IEmbedContext* getEmbedContext(); }
+
 void EsdlServiceImpl::init(const IPropertyTree *cfg,
                            const char *process,
                            const char *service)
 {
+   Owned<IEmbedContext> javaplugin = javaembed::getEmbedContext();
+   Owned<IEmbedServiceContext> srvctx = javaplugin->createServiceContext("WsWorkunits.WsWorkunitsService", EFimport, "classpath=/opt/HPCCSystems/classes");
+   Owned<IEmbedFunctionContext> javactx;
+   const char *signature = "WsWorkunits.WsWorkunitsService.WUAbort:(LWsWorkunits/EsdlContext;LWsWorkunits/WUAbortRequest;)LWsWorkunits/WUAbortResponse;";
+   if (srvctx->checkFunctionExists(signature))
+       javactx.setown(srvctx->createFunctionContext(signature));
+
+
+// javactx->importFunction(strlen(signature), signature);//
+    IXmlWriter *writer = dynamic_cast<IXmlWriter *>(javactx->bindParamWriter("context"));
+    if (writer)
+    {
+       writer->outputCString("johndoe", "username");
+       javactx->paramWriterCommit(writer);
+    }
+
+    writer = dynamic_cast<IXmlWriter *>(javactx->bindParamWriter("request"));
+    if (writer)
+    {
+       writer->outputCString("here I am!", "logthis");
+       javactx->paramWriterCommit(writer);
+    }
+
+    javactx->callFunction();
+
     m_espServiceName.set(service);
     m_espProcName.set(process);
 
@@ -947,6 +979,10 @@ void EsdlBindingImpl::initEsdlServiceInfo(IEsdlDefService &srvdef)
     xsltpath.append("xslt/esxdl2xsd.xslt");
     m_xsdgen->loadTransform(xsltpath, xsdparams, EsdlXslToXsd );
     m_xsdgen->loadTransform(xsltpath, wsdlparams, EsdlXslToWsdl );
+
+
+    xsltpath.set(getCFD()).append("xslt/esdl2javaplugin.xslt");
+    m_xsdgen->loadTransform(xsltpath, NULL, EsdlXslToJavaPlugin );
 }
 
 void EsdlBindingImpl::getSoapMessage(StringBuffer& soapmsg,
@@ -1363,6 +1399,110 @@ StringBuffer &EsdlBindingImpl::generateNamespace(IEspContext &context,
     ns.append("@ver=").appendf("%g", context.getClientVersion());
     return ns.toLowerCase();
 }
+
+
+int EsdlBindingImpl::onJavaPlugin(IEspContext &context,
+                               CHttpRequest* request,
+                               CHttpResponse* response,
+                               const char *serviceName,
+                               const char *methodName)
+{
+    StringBuffer serviceQName;
+    StringBuffer methodQName;
+    StringBuffer out;
+
+    Owned<CSoapFault> soapFault;
+
+    if (!serviceName || !*serviceName)
+        serviceName = m_espServiceName.get();
+
+    if (!m_esdl || !qualifyServiceName(context, serviceName, methodName, serviceQName, &methodQName))
+    {
+        response->setStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+        out.set("The service has not been properly loaded.");
+    }
+    else
+    {
+        StringBuffer ns;
+        generateNamespace(context, request, serviceName, methodName, ns);
+
+        try
+        {
+            Owned<IEsdlDefObjectIterator> it = m_esdl->getDependencies(serviceName, methodName, context.getClientVersion(), context.queryRequestParameters(), ESDLDEP_FLAGS);
+            m_xsdgen->toJavaPlugin( *it, out, context.queryRequestParameters(), ESDLDEP_FLAGS);
+        }
+        catch (IException *E)
+        {
+            throw makeWsException(*E, WSERR_CLIENT , "ESP");
+        }
+        catch (...)
+        {
+            throw makeWsException(ERR_ESDL_BINDING_INTERNERR, WSERR_CLIENT , "ESP", "Could not generate JavaPlugin for this service." );
+        }
+        response->setStatus(HTTP_STATUS_OK);
+    }
+
+    response->setContent(out.str());
+    response->setContentType(HTTP_TYPE_TEXT_PLAIN_UTF8);
+    response->send();
+
+    return 0;
+}
+
+int EsdlBindingImpl::onGet(CHttpRequest* request, CHttpResponse* response)
+{
+    Owned<IMultiException> me = MakeMultiException("DynamicESDL");
+
+    try
+    {
+        IEspContext *context = request->queryContext();
+        IProperties *parms = request->queryParameters();
+
+        const char *thepath = request->queryPath();
+
+        StringBuffer root;
+        firstPathNode(thepath, root);
+
+        if (!strieq(root, "esdl"))
+            return EspHttpBinding::onGet(request, response);
+
+        StringBuffer action;
+        nextPathNode(thepath, action);
+        if(!strieq(action, "plugin"))
+            return EspHttpBinding::onGet(request, response);
+        StringBuffer language;
+        nextPathNode(thepath, language);
+        if (!strieq(language, "java"))
+            throw MakeStringException(-1, "Unsupported embedded language %s", language.str());
+
+        StringBuffer servicename;
+        nextPathNode(thepath, servicename);
+        if (!servicename.length())
+            throw MakeStringExceptionDirect(-1, "Service name required to generate Java plugin code");
+
+        StringBuffer methodname;
+        nextPathNode(thepath, methodname);
+
+        return onJavaPlugin(*context, request, response, servicename, methodname);
+    }
+    catch (IMultiException* mex)
+    {
+        me->append(*mex);
+        mex->Release();
+    }
+    catch (IException* e)
+    {
+        me->append(*e);
+    }
+    catch (...)
+    {
+        me->append(*MakeStringExceptionDirect(-1, "Unknown Exception"));
+    }
+
+    response->handleExceptions(getXslProcessor(), me, "DynamicESDL", "", StringBuffer(getCFD()).append("./smc_xslt/exceptions.xslt").str());
+    return 0;
+}
+
 
 int EsdlBindingImpl::onGetXsd(IEspContext &context,
                               CHttpRequest* request,
