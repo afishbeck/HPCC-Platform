@@ -30,6 +30,7 @@
 #include "build-config.h"
 #include "roxiemem.hpp"
 #include "nbcd.hpp"
+#include "thorxmlwrite.hpp"
 
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
@@ -693,7 +694,7 @@ public:
 
 // A JavaObjectBuilder object is used to construct a Java object from an ECL row
 
-class JavaObjectBuilder : public JavaObjectAccessor, implements IFieldProcessor, implements IXmlWriter
+class JavaObjectBuilder : public JavaObjectAccessor, implements IFieldProcessor, implements IXmlWriterExt
 {
 public:
     IMPLEMENT_IINTERFACE;
@@ -710,6 +711,26 @@ public:
     {
         row = JNIenv->NewObject(Class, constructor);
     }
+    IXmlWriterExt & clear()
+    {
+        UNIMPLEMENTED;
+    }
+    virtual size32_t length() const
+    {
+        return 0;
+    }
+    virtual const char *str() const
+    {
+        UNIMPLEMENTED;
+    }
+    virtual void rewindTo(unsigned int prevlen)
+    {
+    }
+    virtual void outputNumericString(const char *field, const char *fieldname)
+    {
+        processString(rtlUtf8Length(strlen(field), field), field, fieldname);
+    }
+
     virtual void processString(unsigned numchars, const char *text, const char *fieldname)
     {
         //jfieldID fieldId = getFieldId(fieldname, "Ljava/lang/String;", "String");

@@ -198,14 +198,11 @@ bool EsdlServiceImpl::loadLogggingManager()
 }
 
 
-#include "eclrtl.hpp"
-
-namespace javaembed { IEmbedContext* getEmbedContext(); }
-
 void EsdlServiceImpl::init(const IPropertyTree *cfg,
                            const char *process,
                            const char *service)
 {
+/*
    Owned<IEmbedContext> javaplugin = javaembed::getEmbedContext();
    Owned<IEmbedServiceContext> srvctx = javaplugin->createServiceContext("WsWorkunits.WsWorkunitsService", EFimport, "classpath=/opt/HPCCSystems/classes");
    Owned<IEmbedFunctionContext> javactx;
@@ -213,8 +210,6 @@ void EsdlServiceImpl::init(const IPropertyTree *cfg,
    if (srvctx->checkFunctionExists(signature))
        javactx.setown(srvctx->createFunctionContext(signature));
 
-
-// javactx->importFunction(strlen(signature), signature);//
     IXmlWriter *writer = dynamic_cast<IXmlWriter *>(javactx->bindParamWriter("context"));
     if (writer)
     {
@@ -230,7 +225,7 @@ void EsdlServiceImpl::init(const IPropertyTree *cfg,
     }
 
     javactx->callFunction();
-
+*/
     m_espServiceName.set(service);
     m_espProcName.set(process);
 
@@ -261,6 +256,87 @@ void EsdlServiceImpl::init(const IPropertyTree *cfg,
         throw MakeStringException(-1, "Could not access ESDL service configuration: esp process '%s' service name '%s'", process, service);
 }
 
+void EsdlServiceImpl::configureJavaMethod(const char *method, IPropertyTree &entry)
+{
+    const char *javamethod = entry.queryProp("@javamethod");
+    if (!javamethod || !*javamethod)
+    {
+        DBGLOG("ESDL binding - found java target method \"%s\" without java method defined.", method);
+        return;
+    }
+
+    StringArray javaNodes;
+    javaNodes.appendList(javamethod, ".");
+    if (javaNodes.length()<2)
+    {
+        DBGLOG("ESDL binding - found java target method \"%s\" without java class and method path fully defined (%s).", method, javamethod);
+        return;
+    }
+
+    StringBuffer classname;
+    aindex_t methodNode = javaNodes.length()-1;
+    for (aindex_t i = 0; i<methodNode ; i++)
+    {
+        if (classname.length())
+            classname.append('.');
+        classname.append(javaNodes.item(i));
+    }
+    entry.setProp("@javaclass", classname);
+
+    if (!javaServiceMap.getValue(classname))
+    {
+        Owned<IEmbedServiceContext> srvctx = ensureJavaEmbeded().createServiceContext(classname, EFimport, "classpath=/opt/HPCCSystems/classes");
+        Owned<IEmbedFunctionContext> javactx;
+        const char *signature = "WsWorkunits.WsWorkunitsService.WUAbort:(LWsWorkunits/EsdlContext;LWsWorkunits/WUAbortRequest;)LWsWorkunits/WUAbortResponse;";
+        if (srvctx->checkFunctionExists(signature))
+            javactx.setown(srvctx->createFunctionContext(signature));
+
+         IXmlWriter *writer = dynamic_cast<IXmlWriter *>(javactx->bindParamWriter("context"));
+         if (writer)
+         {
+            writer->outputCString("johndoe", "username");
+            javactx->paramWriterCommit(writer);
+         }
+
+         writer = dynamic_cast<IXmlWriter *>(javactx->bindParamWriter("request"));
+         if (writer)
+         {
+            writer->outputCString("here I am!", "logthis");
+            javactx->paramWriterCommit(writer);
+         }
+
+         javactx->callFunction();
+
+         javaServiceMap.setValue(classname, srvctx.getClear());
+    }
+}
+
+void EsdlServiceImpl::configureUrlMethod(const char *method, IPropertyTree &entry)
+{
+    const char *url = entry.queryProp("@url");
+    if (!url || !*url)
+    {
+        DBGLOG("ESDL binding - found target method \"%s\" without target url!", method);
+        return;
+    }
+
+    if (!entry.hasProp("@queryname"))
+    {
+        DBGLOG("ESDL binding - found target method \"%s\" without target query!", method);
+        return;
+    }
+
+    StringBuffer protocol, name, pw, path, iplist, ops;
+    EsdlBindingImpl::splitURLList(url, protocol, name, pw, iplist, path, ops);
+
+    entry.setProp("@prot", protocol);
+    entry.setProp("@path", path);
+
+    Owned<ISmartSocketFactory> sf = createSmartSocketFactory(iplist, true);
+    connMap.remove(method);
+    connMap.setValue(method, sf.getClear());
+}
+
 void EsdlServiceImpl::configureTargets(IPropertyTree *cfg, const char *service)
 {
     StringBuffer lc(service);
@@ -279,35 +355,16 @@ void EsdlServiceImpl::configureTargets(IPropertyTree *cfg, const char *service)
             m_pServiceMethodTargets->addPropTree("Target", createPTreeFromIPT(&itns->query()));
 
         Owned<IPropertyTreeIterator> iter = m_pServiceMethodTargets->getElements("Target");
-        StringBuffer targetname;
-        StringBuffer targeturl;
         ForEach(*iter)
         {
-            iter->query().getProp("@name", targetname.clear());
-            if (targetname.length() > 0)
-            {
-                if (!iter->query().hasProp("@queryname"))
-                {
-                    DBGLOG("ESDL binding - found target method \"%s\" without target query!", targetname.str());
-                    continue;
-                }
-
-                iter->query().getProp("@url", targeturl.clear());
-
-                StringBuffer protocol, name, pw, path, iplist, ops;
-                EsdlBindingImpl::splitURLList(targeturl.str(),protocol,name,pw,iplist,path,ops);
-
-                iter->query().setProp("@prot", protocol.str());
-                iter->query().setProp("@path", path.str());
-
-                Owned<ISmartSocketFactory> sf = createSmartSocketFactory(iplist.str(), true);
-                connMap.remove(targetname.str());
-                connMap.setValue(targetname.str(), sf.get());
-            }
-            else
-            {
+            const char *method = iter->query().queryProp("@name");
+            if (!method || !*method)
                 throw MakeStringException(-1, "ESDL binding - found target method entry without name!");
-            }
+            const char *type = iter->query().queryProp("@querytype");
+            if (type && strieq(type, "java"))
+                configureJavaMethod(method, iter->query());
+            else
+                configureUrlMethod(method, iter->query());
         }
     }
     else
@@ -317,6 +374,36 @@ void EsdlServiceImpl::configureTargets(IPropertyTree *cfg, const char *service)
 #define ROXIEREQ_FLAGS (ESDL_TRANS_START_AT_ROOT | ESDL_TRANS_ROW_OUT | ESDL_TRANS_TRIM | ESDL_TRANS_OUTPUT_XMLTAG)
 #define ESDLREQ_FLAGS (ESDL_TRANS_START_AT_ROOT | ESDL_TRANS_TRIM | ESDL_TRANS_OUTPUT_XMLTAG)
 #define ESDLDEP_FLAGS (DEPFLAG_COLLAPSE | DEPFLAG_ARRAYOF)
+
+enum EsdlMethodImplType
+{
+    EsdlMethodImplUnknown,
+    EsdlMethodImplRoxie,
+    EsdlMethodImplWsEcl,
+    EsdlMethodImplProxy,
+    EsdlMethodImplJava
+};
+
+inline EsdlMethodImplType getEsdlMethodImplType(const char *querytype)
+{
+    if (querytype)
+    {
+        if (strieq(querytype, "roxie"))
+            return EsdlMethodImplRoxie;
+        if (strieq(querytype, "wsecl"))
+            return EsdlMethodImplWsEcl;
+        if (strieq(querytype, "proxy"))
+            return EsdlMethodImplProxy;
+        if (strieq(querytype, "java"))
+            return EsdlMethodImplJava;
+    }
+    return EsdlMethodImplRoxie;
+}
+
+static inline bool isPublishedQuery(EsdlMethodImplType implType)
+{
+    return (implType==EsdlMethodImplRoxie || implType==EsdlMethodImplWsEcl);
+}
 
 void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
                                            IEsdlDefService &srvdef,
@@ -333,9 +420,8 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
     const char *mthName = mthdef.queryName();
     context.addTraceSummaryValue("method", mthName);
 
-    StringBuffer soapresp;
-    bool isroxie = false;
-    bool isproxy = false;
+    StringBuffer origResp;
+    EsdlMethodImplType implType = EsdlMethodImplUnknown;
 
     if(stricmp(mthName, "echotest")==0 || mthdef.hasProp("EchoTest"))
     {
@@ -345,45 +431,89 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
     else
     {
         if (!m_pServiceMethodTargets)
-            throw makeWsException( ERR_ESDL_BINDING_INTERNERR, WSERR_CLIENT, "ESP", "Service methods not configured!");
+            throw makeWsException( ERR_ESDL_BINDING_INTERNERR, WSERR_CLIENT, "ESDL", "Service methods not configured!");
 
         VStringBuffer xpath("Target[@name=\"%s\"]", mthName);
         tgtcfg.setown(m_pServiceMethodTargets->getPropTree(xpath.str()));
 
         if (!tgtcfg)
-            throw makeWsException( ERR_ESDL_BINDING_BADREQUEST, WSERR_CLIENT, "ESP", "Target not configured for method: %s", mthName );
+            throw makeWsException( ERR_ESDL_BINDING_BADREQUEST, WSERR_CLIENT, "ESDL", "Target not configured for method: %s", mthName );
 
-        const char *querytype = tgtcfg->queryProp("@querytype");
-        isroxie = querytype && (strnicmp(querytype, "roxie", 5)==0 || strnicmp(querytype, "wsecl", 5)==0);
-        isproxy = (querytype && strnicmp(querytype, "proxy", 5)==0);
+        implType = getEsdlMethodImplType(tgtcfg->queryProp("@querytype"));
 
-        Owned<IXmlWriterExt> reqWriter = createIXmlWriterExt(0, 0, NULL, WTStandard);
+        if (implType==EsdlMethodImplJava)
+        {
+            const char *srvname = srvdef.queryName();
+            const char *classname = tgtcfg->queryProp("@javaclass");
+            Linked<IEmbedServiceContext> srvctx = javaServiceMap.getValue(classname);
+            if (!srvctx)
+                throw makeWsException(ERR_ESDL_BINDING_BADREQUEST, WSERR_SERVER, "ESDL", "Java class %s not loaded for method %s", classname, mthName);
 
-        //Preprocess Request
-        StringBuffer reqcontent;
-        unsigned xflags = (isroxie) ? ROXIEREQ_FLAGS : ESDLREQ_FLAGS;
-        m_pEsdlTransformer->process(context, EsdlRequestMode, srvdef.queryName(), mthdef.queryName(), *req, reqWriter.get(), xflags, NULL);
+            //"WsWorkunits.WsWorkunitsService.WUAbort:(LWsWorkunits/EsdlContext;LWsWorkunits/WUAbortRequest;)LWsWorkunits/WUAbortResponse;";
+            StringBuffer signature(tgtcfg->queryProp("@javamethod"));
+            signature.append(":(");
+            signature.append("L").append(srvname).append("/EsdlContext;");
+            signature.append("L").append(srvname).append("/").append(mthdef.queryRequestType()).append(";");
+            signature.append(")");
+            signature.append("L").append(srvname).append("/").append(mthdef.queryResponseType()).append(";");
 
-        if(isroxie)
-            tgtctx.setown(createTargetContext(context, tgtcfg.get(), srvdef, mthdef, req));
+            Owned<IEmbedFunctionContext> javactx;
+            javactx.setown(srvctx->createFunctionContext(signature));
+            if (!javactx)
+                throw makeWsException(ERR_ESDL_BINDING_BADREQUEST, WSERR_SERVER, "ESDL", "Java method %s could not be loaded from class %s in esdl method %s", tgtcfg->queryProp("@javamethod"), classname, mthName);
 
-        reqcontent.set(reqWriter->str());
-        handleFinalRequest(context,tgtcfg,tgtctx,srvdef,mthdef,ns,reqcontent,soapresp,isroxie,isproxy);
+             IXmlWriterExt *writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter("context"));
+             if (writer)
+             {
+                writer->outputCString("johndoe", "username");
+                javactx->paramWriterCommit(writer);
+             }
+
+             writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter("request"));
+             m_pEsdlTransformer->process(context, EsdlRequestMode, srvdef.queryName(), mthdef.queryName(), *req, writer, ESDLREQ_FLAGS, NULL);
+             javactx->paramWriterCommit(writer);
+
+             javactx->callFunction();
+
+             Owned<IXmlWriterExt> javaRespWriter = createIXmlWriterExt(0, 0, NULL, WTStandard);
+             javactx->writeResult(javaRespWriter);
+             origResp.set(javaRespWriter->str());
+
+             Owned<IXmlWriterExt> finalRespWriter = createIXmlWriterExt(0, 0, NULL, (flags & ESDL_BINDING_RESPONSE_JSON) ? WTJSON : WTStandard);
+             m_pEsdlTransformer->processHPCCResult(context, mthdef, origResp.str(), finalRespWriter, logdata, ESDL_TRANS_OUTPUT_ROOT, ns, schema_location);
+
+             out.append(finalRespWriter->str());
+        }
+        else
+        {
+            Owned<IXmlWriterExt> reqWriter = createIXmlWriterExt(0, 0, NULL, WTStandard);
+
+            //Preprocess Request
+            StringBuffer reqcontent;
+            unsigned xflags = (isPublishedQuery(implType)) ? ROXIEREQ_FLAGS : ESDLREQ_FLAGS;
+            m_pEsdlTransformer->process(context, EsdlRequestMode, srvdef.queryName(), mthdef.queryName(), *req, reqWriter.get(), xflags, NULL);
+
+            if(isPublishedQuery(implType))
+                tgtctx.setown(createTargetContext(context, tgtcfg.get(), srvdef, mthdef, req));
+
+            reqcontent.set(reqWriter->str());
+            handleFinalRequest(context, tgtcfg, tgtctx, srvdef, mthdef, ns, reqcontent, origResp, isPublishedQuery(implType), implType==EsdlMethodImplProxy);
+
+            if (isPublishedQuery(implType))
+            {
+                Owned<IXmlWriterExt> respWriter = createIXmlWriterExt(0, 0, NULL, (flags & ESDL_BINDING_RESPONSE_JSON) ? WTJSON : WTStandard);
+                m_pEsdlTransformer->processHPCCResult(context, mthdef, origResp.str(), respWriter.get(), logdata, ESDL_TRANS_OUTPUT_ROOT, ns, schema_location);
+
+                out.append(respWriter->str());
+            }
+            else if(implType==EsdlMethodImplProxy)
+                getSoapBody(out, origResp);
+            else
+                m_pEsdlTransformer->process(context, EsdlResponseMode, srvdef.queryName(), mthdef.queryName(), out, origResp.str(), ESDL_TRANS_OUTPUT_ROOT, ns, schema_location);
+        }
     }
 
-    if (isroxie)
-    {
-        Owned<IXmlWriterExt> respWriter = createIXmlWriterExt(0, 0, NULL, (flags & ESDL_BINDING_RESPONSE_JSON) ? WTJSON : WTStandard);
-        m_pEsdlTransformer->processHPCCResult(context, mthdef, soapresp.str(), respWriter.get(), logdata, ESDL_TRANS_OUTPUT_ROOT, ns, schema_location);
-
-        out.append(respWriter->str());
-    }
-    else if(isproxy)
-        getSoapBody(out, soapresp);
-    else
-        m_pEsdlTransformer->process(context, EsdlResponseMode, srvdef.queryName(), mthdef.queryName(), out, soapresp.str(), ESDL_TRANS_OUTPUT_ROOT, ns, schema_location);
-
-    handleResultLogging(context, tgtcfg.get(), req,  soapresp.str(), out.str());
+    handleResultLogging(context, tgtcfg.get(), req,  origResp.str(), out.str());
     ESPLOG(LogMax,"Customer Response: %s", out.str());
 }
 
@@ -981,8 +1111,8 @@ void EsdlBindingImpl::initEsdlServiceInfo(IEsdlDefService &srvdef)
     m_xsdgen->loadTransform(xsltpath, wsdlparams, EsdlXslToWsdl );
 
 
-    xsltpath.set(getCFD()).append("xslt/esdl2javaplugin.xslt");
-    m_xsdgen->loadTransform(xsltpath, NULL, EsdlXslToJavaPlugin );
+//   xsltpath.set(getCFD()).append("xslt/esdl2javaplugin.xslt");
+//   m_xsdgen->loadTransform(xsltpath, NULL, EsdlXslToJavaPlugin );
 }
 
 void EsdlBindingImpl::getSoapMessage(StringBuffer& soapmsg,

@@ -604,7 +604,7 @@ public:
 public:
     StringAttr optWsdlAddress;
 };
-
+/*
 class Esdl2JavaCmd : public EsdlConvertCmd
 {
 public:
@@ -864,7 +864,7 @@ public:
 public:
     StringAttr optHPCCCompFilesDir;
 };
-
+*/
 //=========================================================================================
 
 IEsdlCommand *createCoreEsdlCommand(const char *cmdname)
@@ -875,8 +875,8 @@ IEsdlCommand *createCoreEsdlCommand(const char *cmdname)
         return new Esdl2XSDCmd();
     if (strieq(cmdname, "ECL"))
         return new Esdl2EclCmd();
-    if (strieq(cmdname, "JAVA"))
-        return new Esdl2JavaCmd();
+    //if (strieq(cmdname, "JAVA"))
+       //return new Esdl2JavaCmd();
     if (strieq(cmdname, "WSDL"))
         return new Esdl2WSDLCmd();
     if (strieq(cmdname, "PUBLISH"))
