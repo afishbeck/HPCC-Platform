@@ -31,6 +31,7 @@
 #include "roxiemem.hpp"
 #include "nbcd.hpp"
 #include "thorxmlwrite.hpp"
+#include "esdl_def.hpp"
 
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
@@ -349,6 +350,39 @@ protected:
     unsigned limit;
     bool inSet;
     bool inDataSet;
+};
+
+class JavaObjectXmlWriter : public CInterface
+{
+protected:
+    JavaObjectXmlWriter(JNIEnv *_JNIenv, jobject _obj, const char *_reqType, IEsdlDefinition &_esdl, IXmlWriter &_writer)
+    : JNIenv(_JNIenv), obj(_obj), writer(_writer), esdl(_esdl), reqType(_reqType)
+    {
+        Class = (jclass) JNIenv->NewGlobalRef(JNIenv->GetObjectClass(obj));
+    }
+    ~JavaObjectAccessor()
+    {
+    }
+    void write()
+    {
+        IEsdlDefStruct *reqStruct = esdl.queryStruct(reqType);
+        const char *name = reqStruct->queryName();
+        writer.outputBeginNested(name);
+        writer.outputEndNested(name);
+    }
+
+    void checkException()
+    {
+        javaembed::checkException(JNIenv);
+    }
+
+    JNIEnv *JNIenv;
+    jclass Class;
+    jobject obj;
+
+    IXmlWriter &writer;
+    IEsdlDefinition &esdl;
+    StringAttr *reqType;
 };
 
 // A JavaRowBuilder object is used to construct an ECL row from a Java object
@@ -1910,6 +1944,11 @@ public:
         JavaRowBuilder javaRowBuilder(JNIenv, &dummyField, result);
         return typeInfo->build(builder, 0, &dummyField, javaRowBuilder);
     }
+    void writeObjectResult(jobject result, IEsdlDefinition *esdl, const char *name, IXmlWriter *writer)
+    {
+        JavaObjectXmlWriter x(result, esdl, name, writer);
+        x.write();
+    }
 
 private:
     StringAttr returnType;
@@ -2461,8 +2500,9 @@ public:
         }
         addArg(v);
     }
-    virtual void writeResult(IInterface *writer)
+    virtual void writeResult(IInterface *esdl, const char *type, IInterface *writer)
     {
+        return sharedCtx->writeObjectResult(result.l, esdl, type, writer);
     }
     virtual void importFunction(size32_t lenChars, const char *utf)
     {
