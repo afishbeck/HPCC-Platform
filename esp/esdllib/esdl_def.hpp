@@ -19,9 +19,9 @@
 #define ESDLDEF_HPP
 
 #include "jliball.hpp"
-#include "esp.hpp"
-#include "soapesp.hpp"
-#include "ws_ecl_client.hpp"
+//#include "esp.hpp"
+//#include "soapesp.hpp"
+//#include "ws_ecl_client.hpp"
 #include "jqueue.tpp"
 
 #ifdef _WIN32

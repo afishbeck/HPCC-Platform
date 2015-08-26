@@ -476,7 +476,7 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
              javactx->callFunction();
 
              Owned<IXmlWriterExt> javaRespWriter = createIXmlWriterExt(0, 0, NULL, WTStandard);
-             javactx->writeResult(javaRespWriter);
+             javactx->writeResult(m_esdl, mthdef.queryResponseType(), javaRespWriter);
              origResp.set(javaRespWriter->str());
 
              Owned<IXmlWriterExt> finalRespWriter = createIXmlWriterExt(0, 0, NULL, (flags & ESDL_BINDING_RESPONSE_JSON) ? WTJSON : WTStandard);
@@ -1060,6 +1060,7 @@ void EsdlBindingImpl::addService(const char * name,
                     name = loadedservicename.str();
                     m_espServiceName.set(name);
                     m_pESDLService->m_espServiceType.set(name);
+                    m_pESDLService->m_esdl.set(m_esdl);
                 }
 
                 if (srvdef)

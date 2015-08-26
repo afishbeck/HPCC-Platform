@@ -25,6 +25,9 @@
 #include "esdl_transformer.hpp"
 #include <xpp/XmlPullParser.h>
 #include <map>
+#include "esp.hpp"
+#include "soapesp.hpp"
+#include "ws_ecl_client.hpp"
 #include "esdl_def.hpp"
 #include "eclhelper.hpp"
 

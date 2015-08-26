@@ -354,20 +354,20 @@ protected:
 
 class JavaObjectXmlWriter : public CInterface
 {
-protected:
+public:
     JavaObjectXmlWriter(JNIEnv *_JNIenv, jobject _obj, const char *_reqType, IEsdlDefinition &_esdl, IXmlWriter &_writer)
     : JNIenv(_JNIenv), obj(_obj), writer(_writer), esdl(_esdl), reqType(_reqType)
     {
         Class = (jclass) JNIenv->NewGlobalRef(JNIenv->GetObjectClass(obj));
     }
-    ~JavaObjectAccessor()
+    ~JavaObjectXmlWriter()
     {
     }
     void write()
     {
         IEsdlDefStruct *reqStruct = esdl.queryStruct(reqType);
         const char *name = reqStruct->queryName();
-        writer.outputBeginNested(name);
+        writer.outputBeginNested(name, true);
         writer.outputEndNested(name);
     }
 
@@ -382,7 +382,7 @@ protected:
 
     IXmlWriter &writer;
     IEsdlDefinition &esdl;
-    StringAttr *reqType;
+    StringAttr reqType;
 };
 
 // A JavaRowBuilder object is used to construct an ECL row from a Java object
@@ -925,10 +925,16 @@ public:
         else
         {
            jfieldID fieldId = getFieldId(fieldname, "Ljava/math/BigInteger;", "__int64");
-           jclass bigIntClass = JNIenv->FindClass("java/math/BigInteger");
-           jmethodID fromLongMethod = JNIenv->GetMethodID(bigIntClass, "valueOf", "(J)Ljava/math/BigInteger;");
-           jobject value = JNIenv->CallStaticObjectMethod(bigIntClass, fromLongMethod, field);
-           JNIenv->SetObjectField(row, fieldId, value);
+           if (fieldId)
+           {
+               jclass bigIntClass = JNIenv->FindClass("java/math/BigInteger");
+               jmethodID bigIntConstructor = JNIenv->GetMethodID(bigIntClass, "<init>", "(Ljava/lang/String;)V");
+
+               StringBuffer s;
+               s.append(field);
+               jobject value = JNIenv->NewObject(bigIntClass, bigIntConstructor, JNIenv->NewStringUTF(s.str()));
+               JNIenv->SetObjectField(row, fieldId, value);
+           }
         }
     }
     virtual void processInt(__int64 value, const RtlFieldInfo * field)
@@ -1946,7 +1952,7 @@ public:
     }
     void writeObjectResult(jobject result, IEsdlDefinition *esdl, const char *name, IXmlWriter *writer)
     {
-        JavaObjectXmlWriter x(result, esdl, name, writer);
+        JavaObjectXmlWriter x(JNIenv, result, name, *esdl, *writer);
         x.write();
     }
 
@@ -2502,7 +2508,7 @@ public:
     }
     virtual void writeResult(IInterface *esdl, const char *type, IInterface *writer)
     {
-        return sharedCtx->writeObjectResult(result.l, esdl, type, writer);
+        return sharedCtx->writeObjectResult(result.l, dynamic_cast<IEsdlDefinition*>(esdl), type, dynamic_cast<IXmlWriter*>(writer));
     }
     virtual void importFunction(size32_t lenChars, const char *utf)
     {
@@ -2515,8 +2521,10 @@ public:
     {
         if (*argsig != ')')
             throw MakeStringException(0, "javaembed: Too few ECL parameters passed for Java signature %s", sharedCtx->querySignature());
-        sharedCtx->callFunction(result, args);
-        //sharedCtx->callFunction(result, args, instance);
+        if (instance)
+            sharedCtx->callFunction(result, args, instance);
+        else
+            sharedCtx->callFunction(result, args);
     }
 
     virtual void compileEmbeddedScript(size32_t lenChars, const char *script)

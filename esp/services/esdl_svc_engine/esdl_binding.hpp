@@ -81,6 +81,7 @@ public:
     Owned<IPropertyTree>        m_pServiceConfig;
     Owned<IPropertyTree>        m_pServiceMethodTargets;
     Owned<IEsdlTransformer>     m_pEsdlTransformer;
+    Owned<IEsdlDefinition>      m_esdl;
 
 public:
     IMPLEMENT_IINTERFACE;

@@ -1187,7 +1187,7 @@ public:
     virtual void paramWriterCommit(IInterface *writer)
     {
     }
-    virtual void writeResult(IInterface *writer)
+    virtual void writeResult(IInterface *esdl, const char *name, IInterface *writer)
     {
     }
 
