@@ -604,6 +604,362 @@ public:
 public:
     StringAttr optWsdlAddress;
 };
+
+
+class Esdl2JavaCmd : public EsdlHelperConvertCmd
+{
+public:
+    Esdl2JavaCmd() : optVersion(0), optEnforceOptional(true), optRawOutput(false), optXformTimes(1), optFlags(0), outfileext(".java")
+    {}
+
+    virtual bool parseCommandLineOptions(ArgvIterator &iter)
+    {
+        if (iter.done())
+        {
+            usage();
+            return false;
+        }
+
+        //First two parameters' order is fixed.
+        for (int par = 0; par < 2 && !iter.done(); par++)
+        {
+            const char *arg = iter.query();
+            if (*arg != '-')
+            {
+                if (optSource.isEmpty())
+                    optSource.set(arg);
+                else if (optService.isEmpty())
+                    optService.set(arg);
+                else
+                {
+                    fprintf(stderr, "\nunrecognized argument detected before required parameters: %s\n", arg);
+                    usage();
+                    return false;
+                }
+            }
+            else
+            {
+                fprintf(stderr, "\noption detected before required parameters: %s\n", arg);
+                usage();
+                return false;
+            }
+
+            iter.next();
+        }
+
+        for (; !iter.done(); iter.next())
+        {
+            if (parseCommandLineOption(iter))
+                continue;
+
+            if (matchCommandLineOption(iter, true)!=EsdlCmdOptionMatch)
+                return false;
+        }
+
+        return true;
+    }
+
+    virtual bool parseCommandLineOption(ArgvIterator &iter)
+    {
+        if (iter.matchOption(optVersionStr, ESDLOPT_VERSION))
+            return true;
+        if (iter.matchOption(optService, ESDLOPT_SERVICE))
+            return true;
+        if (iter.matchOption(optMethod, ESDLOPT_METHOD))
+            return true;
+        if (iter.matchOption(optXsltPath, ESDLOPT_XSLT_PATH))
+            return true;
+        if (iter.matchOption(optPreprocessOutputDir, ESDLOPT_PREPROCESS_OUT))
+            return true;
+        if (iter.matchOption(optOptional, ESDLOPT_OPT_PARAM_VAL) || iter.matchOption(optOptional, ESDLOPT_OPTIONAL_PARAM_VAL))
+            return true;
+        if (iter.matchFlag(optEnforceOptional, ESDLOPT_NO_OPTIONAL_ATTRIBUTES))
+            return true;
+        if (iter.matchOption(optXformTimes, ESDLOPT_NUMBER))
+            return true;
+        if (iter.matchFlag(optNoCollapse, ESDLOPT_NO_COLLAPSE))
+            return true;
+        if (EsdlConvertCmd::parseCommandLineOption(iter))
+            return true;
+
+        return false;
+    }
+
+    esdlCmdOptionMatchIndicator matchCommandLineOption(ArgvIterator &iter, bool finalAttempt)
+    {
+        return EsdlConvertCmd::matchCommandLineOption(iter, true);
+    }
+
+    virtual bool finalizeOptions(IProperties *globals)
+    {
+        if (optSource.isEmpty())
+        {
+            usage();
+            throw( MakeStringException(0, "\nError: Source esdl parameter required\n"));
+        }
+
+        if( optService.isEmpty() )
+        {
+            usage();
+            throw( MakeStringException(0, "A service name must be provided") );
+        }
+
+        if (!optVersionStr.isEmpty())
+        {
+            optVersion = atof( optVersionStr.get() );
+            if( optVersion <= 0 )
+            {
+                throw MakeStringException( 0, "Version option must be followed by a real number > 0" );
+            }
+        }
+
+        if (optXsltPath.isEmpty())
+        {
+            StringBuffer tmp;
+            if (getComponentFilesRelPathFromBin(tmp))
+                optXsltPath.set(tmp.str());
+            else
+                optXsltPath.set(COMPONENTFILES_DIR);
+        }
+
+        fullxsltpath.set(optXsltPath);
+        fullxsltpath.append("/xslt/esdl2javaplugin.xslt");
+
+        if (!optPreprocessOutputDir.isEmpty())
+            optRawOutput = true;
+
+        if (optNoCollapse)
+        {
+            unsetFlag(DEPFLAG_COLLAPSE);
+        }
+
+        return true;
+    }
+
+    virtual void doTransform(IEsdlDefObjectIterator& objs, StringBuffer &out, double version=0, IProperties *opts=NULL, const char *ns=NULL, unsigned flags=0 )
+    {
+        TimeSection ts("transforming via XSLT");
+        helper->toJavaPlugin( objs, out, opts, optFlags );
+    }
+
+    virtual void loadTransform( StringBuffer &xsltpath, IProperties *params)
+    {
+        TimeSection ts("loading XSLT");
+        helper->loadTransform( xsltpath, params, EsdlXslToJavaPlugin );
+    }
+
+    virtual void setTransformParams(IProperties *params )
+    {
+        helper->setTransformParams(EsdlXslToJavaPlugin, params);
+    }
+
+    virtual int processCMD()
+    {
+        loadServiceDef();
+        createOptionals();
+
+        Owned<IEsdlDefObjectIterator> structs = esdlDef->getDependencies( optService.get(), optMethod.get(), ESDLOPTLIST_DELIMITER, optVersion, opts.get(), optFlags );
+
+        if( optRawOutput )
+        {
+            outputRaw(*structs);
+        }
+
+        if( !optXsltPath.isEmpty() )
+        {
+            createParams();
+
+            loadTransform( fullxsltpath, params);
+
+            for( unsigned i=0; i < optXformTimes; i++ )
+            {
+                doTransform( *structs, outputBuffer, optVersion, opts.get(), NULL, optFlags );
+            }
+
+            outputToFile();
+
+            printf( "%s\n", outputBuffer.str() );
+        }
+        else
+        {
+            throw( MakeStringException(0, "Path to /xslt/esdl2javaplugin.xslt is empty, cannot perform transform.") );
+        }
+
+        return 0;
+    }
+
+    void printOptions()
+    {
+        puts("Options:");
+        puts("  --version <version number> : Constrain to interface version\n");
+        puts("  --method <method name>[;<method name>]* : Constrain to list of specific method(s)\n" );
+        puts("  --xslt <xslt file path> : Path to '/xslt/esdl2javaplugin.xslt' file to transform EsdlDef to Java code\n" );
+        puts("  --preprocess-output <raw output directory> : Output pre-processed xml file to specified directory before applying XSLT transform\n" );
+        puts("  --show-inheritance : Turns off the collapse feature. Collapsing optimizes the XML output to strip out structures\n" );
+        puts("                        only used for inheritance, and collapses their elements into their child. That simplifies the\n" );
+        puts("                        stylesheet. By default this option is on.");
+    }
+
+    virtual void usage()
+    {
+        puts("Usage:");
+        puts("esdl java sourcePath serviceName [options]\n" );
+        puts("\nsourcePath must be absolute path to the ESDL Definition file containing the" );
+        puts("EsdlService definition for the service you want to work with.\n" );
+        puts("serviceName EsdlService definition for the service you want to work with.\n" );
+
+        printOptions();
+        EsdlConvertCmd::usage();
+    }
+
+    virtual void outputRaw( IEsdlDefObjectIterator& obj)
+    {
+        if( optRawOutput )
+        {
+            StringBuffer xmlOut;
+            StringBuffer empty;
+
+            xmlOut.appendf( "<esxdl name=\"%s\">", optService.get());
+            helper->toXML( obj, xmlOut, optVersion, opts.get(), optFlags );
+            xmlOut.append("</esxdl>");
+
+            saveAsFile( optPreprocessOutputDir.get(), empty, xmlOut.str(), NULL );
+        }
+    }
+    virtual void createOptionals()
+    {
+        // 09jun2011 tja: We must ensure that the opts IProperties object is
+        // valid/non-null. This is because by passing null/invalid in to the
+        // getDependencies call we're indicating that we want to turn off
+        // optional filtering.
+
+        if( optEnforceOptional )
+        {
+            opts.setown(createProperties(false));
+            if( optOptional.length() )
+            {
+                opts->setProp(optOptional.get(), 1);
+            }
+        }
+    }
+
+    void createParams()
+    {
+        params.set(createProperties());
+        params->setProp( "optional", optOptional );
+    }
+
+    virtual void loadServiceDef()
+    {
+        serviceDef.setown( createIFile(optSource) );
+        if( serviceDef->exists() )
+        {
+            if( serviceDef->isFile() )
+            {
+                if( serviceDef->size() > 0 )
+                {
+                    // Realized a subtle source of potential problems. Because there
+                    // can be multiple EsdlStruct definitions with the same name
+                    // in multiple files, you need to be careful that only those files
+                    // explicitly included by your service are loaded to the
+                    // EsdlDefinition object that you'll getDependencies() on. If not,
+                    // you could inadvertently getDependencies() from a different structure
+                    // with the same name. This means we can only reliably process one
+                    // Web Service at a time, and must load files by explicitly loading
+                    // only the top-level ws_<service> definition file, and allowing the
+                    // load code to handle loading only the minimal set of required includes
+                    esdlDef->addDefinitionsFromFile( serviceDef->queryFilename() );
+                }
+                else
+                {
+                    throw( MakeStringException(0, "ESDL definition file source %s is empty", optSource.get()) );
+                }
+
+            }
+            else
+            {
+                throw( MakeStringException(0, "ESDL definition file source %s is not a file", optSource.get()) );
+            }
+        }
+        else
+        {
+            throw( MakeStringException(0, "ESDL definition file source %s does not exist", optSource.get()) );
+        }
+    }
+
+    virtual void outputToFile()
+    {
+        if (!optOutDirPath.isEmpty())
+        {
+            StringBuffer filename;
+            generateOutputFileName(filename);
+            saveAsFile(optOutDirPath.get(), filename, outputBuffer.str(), NULL);
+        }
+    }
+
+    virtual StringBuffer & generateOutputFileName( StringBuffer &filename)
+    {
+        filename.appendf("%s", optService.get());
+        filename.append(outfileext);
+
+        return filename.toLowerCase();
+    }
+
+    void saveAsFile(const char * dir, StringBuffer &outname, const char *text, const char *ext="")
+    {
+        StringBuffer path(dir);
+
+        if( outname.length()>0 && path.charAt(path.length()) != PATHSEPCHAR &&  outname.charAt(0) != PATHSEPCHAR)
+        {
+            path.append(PATHSEPCHAR);
+            path.append(outname);
+        }
+
+        if( ext && *ext )
+        {
+            path.append(ext);
+        }
+
+        Owned<IFile> file = createIFile(path.str());
+        Owned<IFileIO> io;
+        io.setown(file->open(IFOcreaterw));
+
+        DBGLOG("Writing to file %s", file->queryFilename());
+
+        if (io.get())
+            io->write(0, strlen(text), text);
+        else
+            DBGLOG("File %s can't be created", file->queryFilename());
+    }
+
+    void setFlag( unsigned f ) { optFlags |= f; }
+    void unsetFlag( unsigned f ) { optFlags &= ~f; }
+
+
+public:
+    StringAttr optService;
+    StringAttr optXsltPath;
+    StringAttr optMethod;
+    StringAttr optOptional;
+    bool optEnforceOptional;
+    StringAttr optPreprocessOutputDir;
+    bool optRawOutput;
+    StringAttr optVersionStr;
+    double optVersion;
+    unsigned int optXformTimes;
+    unsigned optFlags;
+    bool optNoCollapse;
+
+protected:
+    Owned<IFile> serviceDef;
+    StringBuffer outputBuffer;
+    StringBuffer fullxsltpath;
+    Owned<IProperties> opts;
+    Owned<IProperties> params;
+    StringBuffer outfileext;
+};
+
+
 /*
 class Esdl2JavaCmd : public EsdlConvertCmd
 {
@@ -875,8 +1231,8 @@ IEsdlCommand *createCoreEsdlCommand(const char *cmdname)
         return new Esdl2XSDCmd();
     if (strieq(cmdname, "ECL"))
         return new Esdl2EclCmd();
-    //if (strieq(cmdname, "JAVA"))
-       //return new Esdl2JavaCmd();
+    if (strieq(cmdname, "JAVA"))
+       return new Esdl2JavaCmd();
     if (strieq(cmdname, "WSDL"))
         return new Esdl2WSDLCmd();
     if (strieq(cmdname, "PUBLISH"))

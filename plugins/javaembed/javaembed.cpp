@@ -352,6 +352,7 @@ protected:
     bool inDataSet;
 };
 
+
 class JavaObjectXmlWriter : public CInterface
 {
 public:
@@ -363,12 +364,90 @@ public:
     ~JavaObjectXmlWriter()
     {
     }
+
+    const char *esdl2JavaSig(const char *esdlType)
+    {
+        EsdlBasicElementType t = esdl.translateSimpleType(esdlType);
+        switch (t)
+        {
+        case ESDLT_INT16:
+        case ESDLT_UINT16:
+            return "Ljava/lang/Short;";
+        case ESDLT_INT32:
+        case ESDLT_UINT32:
+            //return "Ljava/lang/Integer;";
+        case ESDLT_INT64:
+        case ESDLT_UINT64:
+            return "Ljava/math/BigInteger;";
+        case ESDLT_BOOL:
+            return "Ljava/lang/Boolean;";
+        case ESDLT_FLOAT:
+            return "Ljava/lang/Float;";
+        case ESDLT_DOUBLE:
+            return "Ljava/lang/Double;";
+        case ESDLT_INT8:
+        case ESDLT_UINT8:
+        case ESDLT_BYTE:
+        case ESDLT_UBYTE:
+            return "Ljava/lang/Byte;";
+        case ESDLT_STRING:
+            return "Ljava/lang/String;";
+        case ESDLT_UNKOWN:
+        case ESDLT_STRUCT:
+        case ESDLT_REQUEST:
+        case ESDLT_RESPONSE:
+        case ESDLT_COMPLEX:
+        default:
+            return NULL;
+        }
+    }
+
     void write()
     {
         IEsdlDefStruct *reqStruct = esdl.queryStruct(reqType);
         const char *name = reqStruct->queryName();
-        writer.outputBeginNested(name, true);
-        writer.outputEndNested(name);
+        writer.outputBeginNested("Response", true);
+        writer.outputBeginNested("Results", true);
+        writer.outputBeginNested("Result", true);
+        writer.outputBeginDataset(name, true);
+        writer.outputBeginArray("Row");
+        writer.outputBeginNested("Row", true);
+        jclass objClass = JNIenv->FindClass("java/lang/Object");
+
+        if (objClass)
+        {
+            jmethodID objToString = JNIenv->GetMethodID(objClass, "toString", "()Ljava/lang/String;");
+            if (objToString)
+            {
+                Owned<IEsdlDefObjectIterator> children = reqStruct->getChildren();
+                ForEach (*children)
+                {
+                    IEsdlDefObject &child = children->query();
+                    if (child.getEsdlType()==EsdlTypeElement)
+                    {
+                        const char *fieldname = child.queryName();
+                        const char *javaSig = esdl2JavaSig(child.queryProp("type"));
+                        jfieldID fieldId = JNIenv->GetFieldID(Class, fieldname, javaSig); //tbd cache this
+                        if (!fieldId)
+                            continue;
+                        jobject fieldObj = (jobject) JNIenv->GetObjectField(obj, fieldId);
+                        if (!fieldObj)
+                            continue;
+                        jstring fieldStr = (jstring) JNIenv->CallObjectMethod(fieldObj, objToString);
+                        const char *text = JNIenv->GetStringUTFChars(fieldStr, NULL);
+                        if (!text)
+                            continue;
+                        writer.outputCString(text, child.queryName());
+                    }
+                }
+            }
+        }
+        writer.outputEndNested("Row");
+        writer.outputEndArray("Row");
+        writer.outputEndDataset(name);
+        writer.outputEndNested("Result");
+        writer.outputEndNested("Results");
+        writer.outputEndNested("Response");
     }
 
     void checkException()
@@ -873,6 +952,8 @@ public:
         }
         virtual void outputUtf8(unsigned len, const char *field, const char *fieldname)
         {
+
+            processString(rtlUtf8Length(strlen(field), field), field, fieldname);
         }
         virtual void outputBeginArray(const char *fieldname)
         {
