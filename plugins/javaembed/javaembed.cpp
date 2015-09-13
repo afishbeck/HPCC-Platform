@@ -30,6 +30,8 @@
 #include "build-config.h"
 #include "roxiemem.hpp"
 #include "nbcd.hpp"
+#include "thorxmlwrite.hpp"
+#include "esdl_def.hpp"
 
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
@@ -277,7 +279,7 @@ protected:
         row = (jobject) stack.popGet();
         Class = (jclass) stack.popGet();
     }
-    jfieldID getFieldId(const RtlFieldInfo * field, const char *sig, const char *expected)
+    jfieldID getFieldId(const char *name, const char *sig, const char *expected, StringBuffer *className=NULL)
     {
         // MORE - if we are going to stream a dataset we really should be caching these somehow
         JNIenv->ExceptionClear();
@@ -306,6 +308,20 @@ protected:
             jobject reflectedField = JNIenv->CallObjectMethod(Class, getDeclaredField, fieldName);
             checkException();
             fieldId = JNIenv->FromReflectedField(reflectedField);
+            if (className)
+            {
+                jclass fieldClass =JNIenv->GetObjectClass(reflectedField);
+                checkException();
+                jmethodID getFieldType = JNIenv->GetMethodID(fieldClass, "getType", "()Ljava/lang/Class;" );
+                checkException();
+                jclass fieldType = (jclass)JNIenv->CallObjectMethod(reflectedField, getFieldType);
+                checkException();
+                jmethodID getFieldTypeName = JNIenv->GetStaticMethodID(fieldClass, "getTypeName", "(Ljava/lang/Class;)Ljava/lang/String;" );
+                checkException();
+                jstring fieldDescr = (jstring)JNIenv->CallStaticObjectMethod(fieldClass, getFieldTypeName, fieldType);
+                checkException();
+                className->append(JNIenv->GetStringUTFChars(fieldDescr, NULL));
+            }
         }
         if (!fieldId && expected)
             throw MakeStringException(0, "javaembed: Unable to retrieve field %s of type %s", field->name->getAtomNamePtr(), expected);
@@ -1044,6 +1060,862 @@ protected:
     jmethodID constructor;
 };
 
+class JavaObjectXmlWriter : public CInterface
+{
+public:
+    JavaObjectXmlWriter(JNIEnv *_JNIenv, jobject _obj, const char *_reqType, IEsdlDefinition &_esdl, IXmlWriter &_writer)
+    : JNIenv(_JNIenv), obj(_obj), writer(_writer), esdl(_esdl), reqType(_reqType)
+    {
+        Class = (jclass) JNIenv->NewGlobalRef(JNIenv->GetObjectClass(obj));
+    }
+    ~JavaObjectXmlWriter()
+    {
+    }
+
+    const char *esdl2JavaSig(const char *esdlType)
+    {
+        EsdlBasicElementType t = esdl.translateSimpleType(esdlType);
+        switch (t)
+        {
+        case ESDLT_INT16:
+        case ESDLT_UINT16:
+            return "Ljava/lang/Short;";
+        case ESDLT_INT32:
+        case ESDLT_UINT32:
+            //return "Ljava/lang/Integer;";
+        case ESDLT_INT64:
+        case ESDLT_UINT64:
+            return "Ljava/math/BigInteger;";
+        case ESDLT_BOOL:
+            return "Ljava/lang/Boolean;";
+        case ESDLT_FLOAT:
+            return "Ljava/lang/Float;";
+        case ESDLT_DOUBLE:
+            return "Ljava/lang/Double;";
+        case ESDLT_INT8:
+        case ESDLT_UINT8:
+        case ESDLT_BYTE:
+        case ESDLT_UBYTE:
+            return "Ljava/lang/Byte;";
+        case ESDLT_STRING:
+            return "Ljava/lang/String;";
+        case ESDLT_UNKOWN:
+        case ESDLT_STRUCT:
+        case ESDLT_REQUEST:
+        case ESDLT_RESPONSE:
+        case ESDLT_COMPLEX:
+        default:
+            return NULL;
+        }
+    }
+
+    void write()
+    {
+        IEsdlDefStruct *reqStruct = esdl.queryStruct(reqType);
+        const char *name = reqStruct->queryName();
+        writer.outputBeginNested("Response", true);
+        writer.outputBeginNested("Results", true);
+        writer.outputBeginNested("Result", true);
+        writer.outputBeginDataset(name, true);
+        writer.outputBeginArray("Row");
+        writer.outputBeginNested("Row", true);
+        jclass objClass = JNIenv->FindClass("java/lang/Object");
+
+        if (objClass)
+        {
+            jmethodID objToString = JNIenv->GetMethodID(objClass, "toString", "()Ljava/lang/String;");
+            if (objToString)
+            {
+                Owned<IEsdlDefObjectIterator> children = reqStruct->getChildren();
+                ForEach (*children)
+                {
+                    IEsdlDefObject &child = children->query();
+                    if (child.getEsdlType()==EsdlTypeElement)
+                    {
+                        const char *fieldname = child.queryName();
+                        const char *javaSig = esdl2JavaSig(child.queryProp("type"));
+                        jfieldID fieldId = JNIenv->GetFieldID(Class, fieldname, javaSig); //tbd cache this
+                        if (!fieldId)
+                            continue;
+                        jobject fieldObj = (jobject) JNIenv->GetObjectField(obj, fieldId);
+                        if (!fieldObj)
+                            continue;
+                        jstring fieldStr = (jstring) JNIenv->CallObjectMethod(fieldObj, objToString);
+                        const char *text = JNIenv->GetStringUTFChars(fieldStr, NULL);
+                        if (!text)
+                            continue;
+                        writer.outputCString(text, child.queryName());
+                    }
+                }
+            }
+        }
+        writer.outputEndNested("Row");
+        writer.outputEndArray("Row");
+        writer.outputEndDataset(name);
+        writer.outputEndNested("Result");
+        writer.outputEndNested("Results");
+        writer.outputEndNested("Response");
+    }
+
+    void checkException()
+    {
+        javaembed::checkException(JNIenv);
+    }
+
+    JNIEnv *JNIenv;
+    jclass Class;
+    jobject obj;
+
+    IXmlWriter &writer;
+    IEsdlDefinition &esdl;
+    StringAttr reqType;
+};
+
+//-------------------------------------------
+
+// A JavaXmlBuilder object is used to construct a Java object using an IXmlWriter
+/*
+interface IFieldProcessor : public IInterface
+{
+public:
+    virtual void processString(unsigned len, const char *value, const RtlFieldInfo * field) = 0;
+    virtual void processBool(bool value, const RtlFieldInfo * field) = 0;
+    virtual void processData(unsigned len, const void *value, const RtlFieldInfo * field) = 0;
+    virtual void processInt(__int64 value, const RtlFieldInfo * field) = 0;
+    virtual void processUInt(unsigned __int64 value, const RtlFieldInfo * field) = 0;
+    virtual void processReal(double value, const RtlFieldInfo * field) = 0;
+    virtual void processDecimal(const void *value, unsigned digits, unsigned precision, const RtlFieldInfo * field) = 0;
+    virtual void processUDecimal(const void *value, unsigned digits, unsigned precision, const RtlFieldInfo * field) = 0;
+    virtual void processUnicode(unsigned len, const UChar *value, const RtlFieldInfo * field) = 0;
+    virtual void processQString(unsigned len, const char *value, const RtlFieldInfo * field) = 0;
+    virtual void processUtf8(unsigned len, const char *value, const RtlFieldInfo * field) = 0;
+    inline  void processCString(const char *value, const RtlFieldInfo * field) { processString((size32_t)strlen(value), value, field); }
+
+//The following are used process the structured fields
+    virtual bool processBeginSet(const RtlFieldInfo * field, unsigned elements, bool isAll, const byte *data) = 0;
+    virtual bool processBeginDataset(const RtlFieldInfo * field, unsigned rows) = 0;
+    virtual bool processBeginRow(const RtlFieldInfo * field) = 0;           // either in a dataset, or nested
+    virtual void processEndSet(const RtlFieldInfo * field) = 0;
+    virtual void processEndDataset(const RtlFieldInfo * field) = 0;
+    virtual void processEndRow(const RtlFieldInfo * field) = 0;
+};
+ */
+class JavaXmlBuilder : public JavaObjectAccessor, implements IXmlWriterExt
+{
+public:
+    IMPLEMENT_IINTERFACE;
+    JavaXmlBuilder(JNIEnv *_JNIenv, const RtlFieldInfo *_outerRow, const char *className)
+    : JavaObjectAccessor(_JNIenv, _outerRow)
+    {
+        JNIenv->ExceptionClear();
+        jclass classDescr = JNIenv->FindClass(className);
+        Class = (jclass) JNIenv->NewGlobalRef(classDescr);  // MORE - should use the custom classloader, once that fix is merged
+        checkException();
+        setConstructor();
+    }
+    void initWriter()
+    {
+        row = JNIenv->NewObject(Class, constructor);
+    }
+    IXmlWriterExt & clear()
+    {
+        UNIMPLEMENTED;
+    }
+    virtual size32_t length() const
+    {
+        return 0;
+    }
+    virtual const char *str() const
+    {
+        UNIMPLEMENTED;
+    }
+    virtual void rewindTo(unsigned int prevlen)
+    {
+    }
+    virtual void outputNumericString(const char *field, const char *fieldname)
+    {
+        processString(rtlUtf8Length(strlen(field), field), field, fieldname);
+    }
+
+    virtual void outputString(unsigned size, const char *text, const char *fieldname)
+    {
+        unsigned numchars = rtlUtf8Length(size, text);
+        //jfieldID fieldId = getFieldId(fieldname, "Ljava/lang/String;", "String");
+        StringBuffer className;
+        jfieldID fieldId = getFieldId(fieldname, NULL, NULL, &className);
+        size32_t numchars16;
+        rtlDataAttr unicode16;
+        rtlStrToUnicodeX(numchars16, unicode16.refustr(), numchars, text);
+        jstring value = JNIenv->NewString(unicode16.getustr(), numchars16);
+        checkException();
+        if (inSet)
+            JNIenv->SetObjectArrayElement((jobjectArray) row, idx, value);
+        else
+            JNIenv->SetObjectField(row, fieldId, value);
+        JNIenv->DeleteLocalRef(value);
+        checkException();
+    }
+    virtual void outputBool(bool value, const char *fieldname)
+    {
+        jfieldID fieldId = getFieldId(fieldname, "Z", "boolean");
+        JNIenv->SetBooleanField(row, fieldId, value);
+        checkException();
+    }
+    virtual void outputData(unsigned len, const void *value, const char *fieldname)
+    {
+        jfieldID fieldId = getFieldId(fieldname, "[B", "data");
+        jbyteArray javaData = JNIenv->NewByteArray(len);
+        JNIenv->SetByteArrayRegion(javaData, 0, len, (jbyte *) value);
+        checkException();
+        if (inSet)
+            JNIenv->SetObjectArrayElement((jobjectArray) row, idx, javaData);
+        else
+            JNIenv->SetObjectField(row, fieldId, javaData);
+        checkException();
+    }
+    virtual void outputQuoted(const char *text)
+    {
+    }
+    virtual void outputDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname)
+    {
+    }
+    virtual void outputUDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname)
+    {
+    }
+    virtual void outputUnicode(unsigned len, const UChar *field, const char *fieldname)
+    {
+    }
+    virtual void outputQString(unsigned len, const char *field, const char *fieldname)
+    {
+    }
+    virtual void outputBeginDataset(const char *dsname, bool nestChildren)
+    {
+    }
+    virtual void outputEndDataset(const char *dsname)
+    {
+    }
+    virtual void outputBeginNested(const char *fieldname, bool nestChildren)
+    {
+    }
+    virtual void outputEndNested(const char *fieldname)
+    {
+    }
+    virtual void outputSetAll()
+    {
+    }
+    virtual void outputUtf8(unsigned len, const char *field, const char *fieldname)
+    {
+        outputString(len, field, fieldname);
+    }
+    virtual void outputBeginArray(const char *fieldname)
+    {
+    }
+    virtual void outputEndArray(const char *fieldname)
+    {
+    }
+    virtual void outputInlineXml(const char *text)
+    {
+    }
+    virtual void outputXmlns(const char *name, const char *uri)
+    {
+    }
+    virtual void outputUInt(unsigned __int64 field, unsigned size, const char *fieldname)
+    {
+        outputInt((__int64)field, size, fieldname);
+    }
+    virtual void outputInt(__int64 field, unsigned size, const char *fieldname)
+    {
+        jfieldID fieldId = getFieldId(fieldname, "Ljava/math/BigInteger;", "__int64");
+        if (fieldId)
+        {
+           jclass bigIntClass = JNIenv->FindClass("java/math/BigInteger");
+           jmethodID bigIntConstructor = JNIenv->GetMethodID(bigIntClass, "<init>", "(Ljava/lang/String;)V");
+
+           StringBuffer s;
+           s.append(field);
+           jobject value = JNIenv->NewObject(bigIntClass, bigIntConstructor, JNIenv->NewStringUTF(s.str()));
+           JNIenv->SetObjectField(row, fieldId, value);
+        }
+    }
+    virtual void outputReal(double field, const char *fieldname)
+    {
+       jfieldID fieldId = getFieldId(fieldname, "Ljava/lang/Double;", "double");
+       jclass doubleClass = JNIenv->FindClass("java/lang/Double");
+       jmethodID initMethod = JNIenv->GetMethodID(doubleClass, "<init>", "(D)V;");
+       jobject value = JNIenv->NewObject(doubleClass, initMethod, field);
+       JNIenv->SetObjectField(row, fieldId, value);
+    }
+    inline jobject getObject()
+    {
+        return row;
+    }
+protected:
+    void setConstructor()
+    {
+        constructor = JNIenv->GetMethodID(Class, "<init>", "()V");
+        if (!constructor)
+        {
+            JNIenv->ExceptionClear();
+            jmethodID getNameMethod = JNIenv->GetMethodID(JNIenv->GetObjectClass(Class), "getName", "()Ljava/lang/String;" );
+            checkException();
+            jstring name = (jstring) JNIenv->CallObjectMethod(Class, getNameMethod);
+            checkException();
+            const char *nameText = JNIenv->GetStringUTFChars(name, NULL);
+            VStringBuffer message("javaembed: no suitable constructor for field %s", nameText);
+            JNIenv->ReleaseStringUTFChars(name, nameText);
+            rtlFail(0, message.str());
+        }
+    }
+    jmethodID constructor;
+};
+
+/*
+interface IXmlWriter : public IInterface
+{
+public:
+    virtual void outputQuoted(const char *text) = 0;
+    virtual void outputString(unsigned len, const char *field, const char *fieldname) = 0;
+    virtual void outputBool(bool field, const char *fieldname) = 0;
+    virtual void outputData(unsigned len, const void *field, const char *fieldname) = 0;
+    virtual void outputInt(__int64 field, unsigned size, const char *fieldname) = 0;
+    virtual void outputUInt(unsigned __int64 field, unsigned size, const char *fieldname) = 0;
+    virtual void outputReal(double field, const char *fieldname) = 0;
+    virtual void outputDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname) = 0;
+    virtual void outputUDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname) = 0;
+    virtual void outputUnicode(unsigned len, const UChar *field, const char *fieldname) = 0;
+    virtual void outputQString(unsigned len, const char *field, const char *fieldname) = 0;
+    virtual void outputBeginDataset(const char *dsname, bool nestChildren) = 0;
+    virtual void outputEndDataset(const char *dsname) = 0;
+    virtual void outputBeginNested(const char *fieldname, bool nestChildren) = 0;
+    virtual void outputEndNested(const char *fieldname) = 0;
+    virtual void outputSetAll() = 0;
+    virtual void outputUtf8(unsigned len, const char *field, const char *fieldname) = 0;
+    virtual void outputBeginArray(const char *fieldname) = 0;
+    virtual void outputEndArray(const char *fieldname) = 0;
+    virtual void outputInlineXml(const char *text) = 0; //for appending raw xml content
+    virtual void outputXmlns(const char *name, const char *uri) = 0;
+    inline void outputCString(const char *field, const char *fieldname) { outputString((size32_t)strlen(field), field, fieldname); }
+};
+
+interface IXmlWriterExt : extends IXmlWriter
+{
+    virtual IXmlWriterExt & clear() = 0;
+    virtual size32_t length() const = 0;
+    virtual const char *str() const = 0;
+    virtual void rewindTo(unsigned int prevlen) = 0;
+    virtual void outputNumericString(const char *field, const char *fieldname) = 0;
+};
+
+class JavaObjectXmlWriter : public JavaObjectBuilder, implements IXmlWriterExt
+{
+public:
+    JavaObjectXmlWriter(JNIEnv *_JNIenv, const RtlFieldInfo *_outerRow, const char *className)
+    : JavaObjectBuilder(_JNIenv, _outerRow, className)
+    {
+    }
+    void initWriter()
+    {
+        row = JNIenv->NewObject(Class, constructor);
+    }
+    IXmlWriterExt & clear()
+    {
+        UNIMPLEMENTED;
+    }
+    virtual size32_t length() const
+    {
+        return 0;
+    }
+    virtual const char *str() const
+    {
+        UNIMPLEMENTED;
+    }
+    virtual void rewindTo(unsigned int prevlen)
+    {
+    }
+    virtual void outputNumericString(const char *field, const char *fieldname)
+    {
+        processString(rtlUtf8Length(strlen(field), field), field, fieldname);
+    }
+
+    virtual void processString(unsigned numchars, const char *text, const char *fieldname)
+    {
+        //jfieldID fieldId = getFieldId(fieldname, "Ljava/lang/String;", "String");
+        StringBuffer className;
+        jfieldID fieldId = getFieldId(fieldname, NULL, NULL, &className);
+        size32_t numchars16;
+        rtlDataAttr unicode16;
+        rtlStrToUnicodeX(numchars16, unicode16.refustr(), numchars, text);
+        jstring value = JNIenv->NewString(unicode16.getustr(), numchars16);
+        checkException();
+        if (inSet)
+            JNIenv->SetObjectArrayElement((jobjectArray) row, idx, value);
+        else
+            JNIenv->SetObjectField(row, fieldId, value);
+        JNIenv->DeleteLocalRef(value);
+        checkException();
+    }
+    virtual void outputString(unsigned size, const char *field, const char *fieldname)
+    {
+        processString(rtlUtf8Length(size, field), field, fieldname);
+    }
+    virtual void processString(unsigned numchars, const char *text, const RtlFieldInfo * field)
+    {
+        if (field->isFixedSize() && field->size(NULL, NULL)==1 && !inSet)  // SET OF STRING1 is not mapped to array of char...
+        {
+            // See if there's a char field
+            jfieldID charFieldId = getFieldId(field, "C", NULL);
+            if (charFieldId)
+            {
+                assertex(numchars==1);
+                jchar c;
+                rtlStrToUnicode(1, &c, 1, text);
+                JNIenv->SetCharField(row, charFieldId, c);
+                checkException();
+                return;
+            }
+        }
+        jfieldID fieldId = getFieldId(field, "Ljava/lang/String;", "String");
+        size32_t numchars16;
+        rtlDataAttr unicode16;
+        rtlStrToUnicodeX(numchars16, unicode16.refustr(), numchars, text);
+        jstring value = JNIenv->NewString(unicode16.getustr(), numchars16);
+        checkException();
+        if (inSet)
+            JNIenv->SetObjectArrayElement((jobjectArray) row, idx, value);
+        else
+            JNIenv->SetObjectField(row, fieldId, value);
+        JNIenv->DeleteLocalRef(value);
+        checkException();
+    }
+    virtual void outputBool(bool value, const char *fieldname)
+    {
+        jfieldID fieldId = getFieldId(fieldname, "Z", "boolean");
+        JNIenv->SetBooleanField(row, fieldId, value);
+        checkException();
+    }
+    virtual void processBool(bool value, const RtlFieldInfo * field)
+    {
+        outputBool(value, field->name->getAtomNamePtr());
+    }
+    virtual void outputData(unsigned len, const void *value, const char *fieldname)
+    {
+        jfieldID fieldId = getFieldId(fieldname, "[B", "data");
+        jbyteArray javaData = JNIenv->NewByteArray(len);
+        JNIenv->SetByteArrayRegion(javaData, 0, len, (jbyte *) value);
+        checkException();
+        if (inSet)
+            JNIenv->SetObjectArrayElement((jobjectArray) row, idx, javaData);
+        else
+            JNIenv->SetObjectField(row, fieldId, javaData);
+        checkException();
+    }
+    virtual void processData(unsigned len, const void *value, const RtlFieldInfo * field)
+    {
+        outputData(len, value, field->name->getAtomNamePtr());
+    }
+        virtual void outputQuoted(const char *text)
+        {
+        }
+        virtual void outputDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname)
+        {
+        }
+        virtual void outputUDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname)
+        {
+        }
+        virtual void outputUnicode(unsigned len, const UChar *field, const char *fieldname)
+        {
+        }
+        virtual void outputQString(unsigned len, const char *field, const char *fieldname)
+        {
+        }
+        virtual void outputBeginDataset(const char *dsname, bool nestChildren)
+        {
+        }
+        virtual void outputEndDataset(const char *dsname)
+        {
+        }
+        virtual void outputBeginNested(const char *fieldname, bool nestChildren)
+        {
+        }
+        virtual void outputEndNested(const char *fieldname)
+        {
+        }
+        virtual void outputSetAll()
+        {
+        }
+        virtual void outputUtf8(unsigned len, const char *field, const char *fieldname)
+        {
+
+            processString(rtlUtf8Length(strlen(field), field), field, fieldname);
+        }
+        virtual void outputBeginArray(const char *fieldname)
+        {
+        }
+        virtual void outputEndArray(const char *fieldname)
+        {
+        }
+        virtual void outputInlineXml(const char *text)
+        {
+        }
+        virtual void outputXmlns(const char *name, const char *uri)
+        {
+        }
+
+    virtual void processInt(__int64 value, const char *fieldname, unsigned size)
+    {
+        jfieldID fieldId;
+        switch (size)
+        {
+        case 1:
+            fieldId = getFieldId(fieldname, "B", "byte");
+            JNIenv->SetByteField(row, fieldId, value);
+            break;
+        case 2:
+            fieldId = getFieldId(fieldname, "S", "short");
+            JNIenv->SetShortField(row, fieldId, value);
+            break;
+        case 4:
+            fieldId = getFieldId(fieldname, "I", "int");
+            JNIenv->SetIntField(row, fieldId, value);
+            break;
+        case 8:
+            fieldId = getFieldId(fieldname, "J", "long");
+            JNIenv->SetLongField(row, fieldId, value);
+            break;
+        default:
+            UNSUPPORTED("non-standard integer sizes");
+            break;
+        }
+        checkException();
+    }
+    virtual void outputUInt(unsigned __int64 field, unsigned size, const char *fieldname)
+    {
+        outputInt((__int64)field, size, fieldname);
+    }
+    virtual void outputInt(__int64 field, unsigned size, const char *fieldname)
+    {
+        if (!nullableFields)
+            processInt(field, fieldname, 8);
+        else
+        {
+           jfieldID fieldId = getFieldId(fieldname, "Ljava/math/BigInteger;", "__int64");
+           if (fieldId)
+           {
+               jclass bigIntClass = JNIenv->FindClass("java/math/BigInteger");
+               jmethodID bigIntConstructor = JNIenv->GetMethodID(bigIntClass, "<init>", "(Ljava/lang/String;)V");
+
+               StringBuffer s;
+               s.append(field);
+               jobject value = JNIenv->NewObject(bigIntClass, bigIntConstructor, JNIenv->NewStringUTF(s.str()));
+               JNIenv->SetObjectField(row, fieldId, value);
+           }
+        }
+    }
+    virtual void processInt(__int64 value, const RtlFieldInfo * field)
+    {
+        processInt(value, field->name->getAtomNamePtr(), field->size(NULL, NULL));
+    }
+    virtual void processUInt(unsigned __int64 value, const RtlFieldInfo * field)
+    {
+        UNSUPPORTED("unsigned fields");  // No unsigned types in Java
+    }
+    virtual void processReal(double value, const char *fieldname, unsigned size)
+    {
+        jfieldID fieldId;
+        switch (size)
+        {
+        case 4:
+            fieldId = getFieldId(fieldname, "F", "float");
+            JNIenv->SetFloatField(row, fieldId, (float) value);
+            break;
+        case 8:
+            fieldId = getFieldId(fieldname, "D", "double");
+            JNIenv->SetDoubleField(row, fieldId, value);
+            break;
+        default:
+            throwUnexpected();
+        }
+        checkException();
+    }
+    virtual void outputReal(double field, const char *fieldname)
+    {
+        if (!nullableFields)
+            processReal(field, fieldname, 8);
+        else
+        {
+           jfieldID fieldId = getFieldId(fieldname, "Ljava/lang/Double;", "double");
+           jclass doubleClass = JNIenv->FindClass("java/lang/Double");
+           jmethodID initMethod = JNIenv->GetMethodID(doubleClass, "<init>", "(D)V;");
+           jobject value = JNIenv->NewObject(doubleClass, initMethod, field);
+           JNIenv->SetObjectField(row, fieldId, value);
+        }
+    }
+    virtual void processReal(double value, const RtlFieldInfo * field)
+    {
+        processReal(value, field->name->getAtomNamePtr(), field->size(NULL, NULL));
+    }
+    virtual void processDecimal(const void *value, unsigned digits, unsigned precision, const RtlFieldInfo * field)
+    {
+        // we could map to doubles, but probably better to let the ECL programmer do that themselves
+        UNSUPPORTED("DECIMAL fields");
+    }
+    virtual void processUDecimal(const void *value, unsigned digits, unsigned precision, const RtlFieldInfo * field)
+    {
+        UNSUPPORTED("UDECIMAL fields");
+    }
+    virtual void processUnicode(unsigned numchars, const UChar *text, const RtlFieldInfo * field)
+    {
+        jfieldID fieldId = getFieldId(field, "Ljava/lang/String;", "String");
+        jstring value = JNIenv->NewString(text, numchars);
+        checkException();
+        if (inSet)
+            JNIenv->SetObjectArrayElement((jobjectArray) row, idx, value);
+        else
+            JNIenv->SetObjectField(row, fieldId, value);
+        JNIenv->DeleteLocalRef(value);
+        checkException();
+    }
+    virtual void processQString(unsigned len, const char *value, const RtlFieldInfo * field)
+    {
+        size32_t charCount;
+        rtlDataAttr text;
+        rtlQStrToStrX(charCount, text.refstr(), len, value);
+        processString(charCount, text.getstr(), field);
+    }
+    virtual void processUtf8(unsigned numchars, const char *text, const RtlFieldInfo * field)
+    {
+        jfieldID fieldId = getFieldId(field, "Ljava/lang/String;", "String");
+        size32_t numchars16;
+        rtlDataAttr unicode16;
+        rtlUtf8ToUnicodeX(numchars16, unicode16.refustr(), numchars, text);
+        jstring value = JNIenv->NewString(unicode16.getustr(), numchars16);
+        checkException();
+        if (inSet)
+            JNIenv->SetObjectArrayElement((jobjectArray) row, idx, value);
+        else
+            JNIenv->SetObjectField(row, fieldId, value);
+        JNIenv->DeleteLocalRef(value);
+        checkException();
+    }
+
+    virtual bool processBeginSet(const RtlFieldInfo * field, unsigned numElems, bool isAll, const byte *data)
+    {
+        push();
+        idx = 0;
+        limit = numElems;
+        const char *javaTypeSignature = NULL;
+        bool processElements = false;
+        // row needs to be created as an array of <whatever>
+        if (isAll)
+            UNSUPPORTED("ALL sets");
+        const RtlTypeInfo *childType = field->type->queryChildType();
+        jobject newRow;
+        switch(childType->fieldType & RFTMkind)
+        {
+        case type_boolean:
+            newRow = JNIenv->NewBooleanArray(numElems);
+            JNIenv->SetBooleanArrayRegion((jbooleanArray) newRow, 0, numElems, (jboolean *) data);
+            javaTypeSignature = "[Z";
+            break;
+        case type_int:
+            if (childType->fieldType & RFTMunsigned)
+                UNSUPPORTED("unsigned integers");
+            switch (childType->length)
+            {
+            case 1:
+                newRow = JNIenv->NewByteArray(numElems);
+                JNIenv->SetByteArrayRegion((jbyteArray) newRow, 0, numElems, (jbyte *) data);
+                javaTypeSignature = "[B";
+                break;
+            case 2:
+                newRow = JNIenv->NewShortArray(numElems);
+                JNIenv->SetShortArrayRegion((jshortArray) newRow, 0, numElems, (jshort *) data);
+                javaTypeSignature = "[S";
+                break;
+            case 4:
+                newRow = JNIenv->NewIntArray(numElems);
+                JNIenv->SetIntArrayRegion((jintArray) newRow, 0, numElems, (jint *) data);
+                javaTypeSignature = "[I";
+                break;
+            case 8:
+                newRow = JNIenv->NewLongArray(numElems);
+                JNIenv->SetLongArrayRegion((jlongArray) newRow, 0, numElems, (jlong *) data);
+                javaTypeSignature = "[J";
+                break;
+            default:
+                UNSUPPORTED("non-standard integer sizes");
+                break;
+            }
+            break;
+        case type_real:
+            switch (childType->length)
+            {
+            case 4:
+                newRow = JNIenv->NewFloatArray(numElems);
+                JNIenv->SetFloatArrayRegion((jfloatArray) newRow, 0, numElems, (float *) data);
+                javaTypeSignature = "[F";
+                break;
+            case 8:
+                newRow = JNIenv->NewDoubleArray(numElems);
+                JNIenv->SetDoubleArrayRegion((jdoubleArray) newRow, 0, numElems, (double *) data);
+                javaTypeSignature = "[D";
+                break;
+            default:
+                throwUnexpected();
+                break;
+            }
+            break;
+        case type_string:
+        case type_varstring:
+        case type_unicode:
+        case type_utf8:
+            newRow = JNIenv->NewObjectArray(numElems, JNIenv->FindClass("java/lang/String"), NULL);
+            javaTypeSignature = "[Ljava/lang/String;";
+            processElements = true;
+            break;
+        case type_data:
+            newRow = JNIenv->NewObjectArray(numElems, JNIenv->FindClass("[B"), NULL);
+            javaTypeSignature = "[[B";
+            processElements = true;
+            break;
+        default:
+            throwUnexpected();
+        }
+        checkException();
+        jfieldID fieldId = getFieldId(field, javaTypeSignature, "Array");
+        JNIenv->SetObjectField(row, fieldId, newRow);
+        row = newRow;
+        inSet = true;
+        return processElements;
+    }
+    virtual bool processBeginDataset(const RtlFieldInfo * field, unsigned numRows)
+    {
+        push();
+        idxStack.append(idx);
+        idx = 0;
+        inDataSet = true;
+        // Create an empty array
+        jfieldID childId = getFieldId( field, NULL, "RECORD");
+        jobject newRow = NULL;
+        if (numRows)
+        {
+            jclass arrayClass = getClassForChild(childId);
+            jmethodID isArrayMethod = JNIenv->GetMethodID(JNIenv->GetObjectClass(arrayClass), "isArray", "()Z" );
+            checkException();
+            if (!JNIenv->CallBooleanMethod(arrayClass, isArrayMethod))
+            {
+                JNIenv->ExceptionClear();
+                VStringBuffer message("javaembed: Array expected for field %s", field->name->getAtomNamePtr());
+                rtlFail(0, message.str());
+            }
+            // Set up constructor etc for the child rows, so we don't do it per row
+            jmethodID getTypeMethod = JNIenv->GetMethodID(JNIenv->GetObjectClass(arrayClass), "getComponentType", "()Ljava/lang/Class;" );
+            checkException();
+            Class = (jclass) JNIenv->CallObjectMethod(arrayClass, getTypeMethod);
+            checkException();
+            setConstructor();
+            // Now we need to create the array
+            newRow = JNIenv->NewObjectArray(numRows, Class, NULL);
+            checkException();
+        }
+        JNIenv->SetObjectField(row, childId, newRow);
+        checkException();
+        row = newRow;
+
+        return true;
+    }
+    virtual bool processBeginRow(const RtlFieldInfo * field)
+    {
+        if (field == outerRow)
+            row = JNIenv->NewObject(Class, constructor);
+        else
+        {
+            push();
+            stack.append(constructor);
+            // Now we have to create the child object
+            jobject newRow = NULL;
+            if (inDataSet)
+            {
+                newRow = JNIenv->NewObject(Class, constructor);
+                checkException();
+                JNIenv->SetObjectArrayElement((jobjectArray) row, idx++, newRow);
+            }
+            else
+            {
+                // All this is done once per dataset in the nested dataset case. But for embedded record case we have to do it here
+                jfieldID childId = getFieldId( field, NULL, "RECORD");
+                Class = getClassForChild(childId);
+                setConstructor();
+                newRow = JNIenv->NewObject(Class, constructor);
+                checkException();
+                JNIenv->SetObjectField(row, childId, newRow);
+            }
+            row = newRow;
+        }
+        checkException();
+        return true;
+    }
+    virtual void processEndSet(const RtlFieldInfo * field)
+    {
+        JNIenv->DeleteLocalRef(row);
+        pop();
+        inSet = false;
+    }
+    virtual void processEndDataset(const RtlFieldInfo * field)
+    {
+        inDataSet = false;
+        idx = idxStack.popGet();
+        pop();
+    }
+    virtual void processEndRow(const RtlFieldInfo * field)
+    {
+        if (field != outerRow)
+        {
+            constructor = (jmethodID) stack.popGet();
+            JNIenv->DeleteLocalRef(row);
+            pop();
+        }
+    }
+    inline jobject getObject()
+    {
+        return row;
+    }
+protected:
+    jclass getClassForChild(jfieldID childId)
+    {
+        jobject reflectedField = JNIenv->ToReflectedField(Class, childId, false);
+        checkException();
+        jclass fieldClass =JNIenv->GetObjectClass(reflectedField);
+        checkException();
+        jmethodID getTypeMethod = JNIenv->GetMethodID(fieldClass, "getType", "()Ljava/lang/Class;" );
+        checkException();
+        jclass result = (jclass) JNIenv->CallObjectMethod(reflectedField, getTypeMethod);
+        checkException();
+        JNIenv->DeleteLocalRef(reflectedField);
+        JNIenv->DeleteLocalRef(fieldClass);
+        return result;
+
+    }
+    void setConstructor()
+    {
+        constructor = JNIenv->GetMethodID(Class, "<init>", "()V");
+        if (!constructor)
+        {
+            JNIenv->ExceptionClear();
+            jmethodID getNameMethod = JNIenv->GetMethodID(JNIenv->GetObjectClass(Class), "getName", "()Ljava/lang/String;" );
+            checkException();
+            jstring name = (jstring) JNIenv->CallObjectMethod(Class, getNameMethod);
+            checkException();
+            const char *nameText = JNIenv->GetStringUTFChars(name, NULL);
+            VStringBuffer message("javaembed: no suitable constructor for field %s", nameText);
+            JNIenv->ReleaseStringUTFChars(name, nameText);
+            rtlFail(0, message.str());
+        }
+    }
+    jmethodID constructor;
+    bool nullableFields;
+};
+*/
 //----------------------------------------------------------------------
 
 // Wrap an IRowStream into a Java Iterator
@@ -1152,6 +2024,49 @@ protected:
     Linked<IEngineRowAllocator> resultAllocator;
     jobject iterator;;
 };
+
+
+inline void extractFunctionInfo(const char *text, StringBuffer &classname, StringBuffer &methodname, StringBuffer &fullSig, StringBuffer &javaSig, StringBuffer &retType)
+{
+    // Name should be in the form class.method:signature
+    const char *funcname = strrchr(text, '.');
+    if (!funcname)
+        throw MakeStringException(MSGAUD_user, 0, "javaembed: Invalid import name %s - Expected classname.methodname:signature", text);
+    const char *signature = strchr(funcname, ':');
+    if (!signature)
+        throw MakeStringException(MSGAUD_user, 0, "javaembed: Invalid import name %s - Expected classname.methodname:signature", text);
+    classname.append(funcname-text, text);
+    funcname++;  // skip the '.'
+    methodname.append(signature-funcname, funcname);
+    signature++; // skip the ':'
+    // We need to patch up the provided signature - any instances of <classname; need to be replaced by Ljava.utils.iterator
+    fullSig.set(signature);
+    const char *finger = signature;
+    while (*finger)
+    {
+        if (*finger == '<')
+        {
+            // If there is a corresponding >, assume it's the 'extended' form and just strip out the bit from < to >
+            const char *close = strchr(finger, '>');
+            if (close)
+                finger = close;
+            else
+            {
+                javaSig.append("Ljava/util/Iterator;");
+                finger = strchr(finger, ';');
+                if (!finger)
+                    throw MakeStringException(MSGAUD_user, 0, "javaembed: Invalid java function signature %s", signature);
+            }
+        }
+        else
+            javaSig.append(*finger);
+        finger++;
+    }
+    const char *returnSig = strrchr(signature, ')');
+    assertex(returnSig);  // Otherwise how did Java accept it??
+    returnSig++;
+    retType.set(returnSig);
+}
 
 
 //-------------------------------------------
@@ -1292,11 +2207,12 @@ public:
         }
     }
 
-    inline void importFunction(size32_t lenChars, const char *utf, const char *options)
+    inline void importFunction(size32_t lenChars, const char *utf, const char *options, jobject instance)
     {
         size32_t bytes = rtlUtf8Size(lenChars, utf);
         StringBuffer text(bytes, utf);
         setThreadClassLoader(options);
+
         if (!prevtext || strcmp(text, prevtext) != 0)
         {
             prevtext.clear();
@@ -1347,7 +2263,10 @@ public:
 
             if (!javaClass)
                 throw MakeStringException(MSGAUD_user, 0, "javaembed: Failed to resolve class name %s", classname.str());
-            javaMethodID = JNIenv->GetStaticMethodID(javaClass, methodname, javaSignature);
+            if (instance)
+                javaMethodID = JNIenv->GetMethodID(javaClass, methodname, javaSignature);
+            else
+                javaMethodID = JNIenv->GetStaticMethodID(javaClass, methodname, javaSignature);
             if (!javaMethodID)
                 throw MakeStringException(MSGAUD_user, 0, "javaembed: Failed to resolve method name %s with signature %s", methodname.str(), signature);
             const char *returnSig = strrchr(signature, ')');
@@ -1357,6 +2276,27 @@ public:
             argsig.set(signature);
             prevtext.set(text);
         }
+    }
+    inline void callFunction(jvalue &result, const jvalue * args, jobject instance)
+    {
+        JNIenv->ExceptionClear();
+        switch (returnType.get()[0])
+        {
+        case 'C': result.c = JNIenv->CallCharMethodA(instance, javaMethodID, args); break;
+        case 'Z': result.z = JNIenv->CallBooleanMethodA(instance, javaMethodID, args); break;
+        case 'J': result.j = JNIenv->CallLongMethodA(instance, javaMethodID, args); break;
+        case 'F': result.f = JNIenv->CallFloatMethodA(instance, javaMethodID, args); break;
+        case 'D': result.d = JNIenv->CallDoubleMethodA(instance, javaMethodID, args); break;
+        case 'I': result.i = JNIenv->CallIntMethodA(instance, javaMethodID, args); break;
+        case 'S': result.s = JNIenv->CallShortMethodA(instance, javaMethodID, args); break;
+        case 'B': result.s = JNIenv->CallByteMethodA(instance, javaMethodID, args); break;
+
+        case '[':
+        case 'L': result.l = JNIenv->CallObjectMethodA(instance, javaMethodID, args); break;
+
+        default: throwUnexpected();
+        }
+        checkException();
     }
     inline void callFunction(jvalue &result, const jvalue * args)
     {
@@ -1684,6 +2624,11 @@ public:
         JavaRowBuilder javaRowBuilder(JNIenv, &dummyField, result);
         return typeInfo->build(builder, 0, &dummyField, javaRowBuilder);
     }
+    void writeObjectResult(jobject result, IEsdlDefinition *esdl, const char *name, IXmlWriter *writer)
+    {
+        JavaObjectXmlWriter x(JNIenv, result, name, *esdl, *writer);
+        x.write();
+    }
 
 private:
     StringAttr returnType;
@@ -1700,8 +2645,8 @@ private:
 class JavaEmbedImportContext : public CInterfaceOf<IEmbedFunctionContext>
 {
 public:
-    JavaEmbedImportContext(JavaThreadContext *_sharedCtx, const char *options)
-    : sharedCtx(_sharedCtx)
+    JavaEmbedImportContext(JavaThreadContext *_sharedCtx, jobject _instance, const char *options)
+    : sharedCtx(_sharedCtx), instance(_instance)
     {
         argcount = 0;
         argsig = NULL;
@@ -2134,6 +3079,29 @@ public:
         v.l = javaBuilder.getObject();
         addArg(v);
     }
+    virtual IInterface *bindParamWriter(const char *name)
+    {
+        if (*argsig != 'L')  // should tell us the type of the object we need to create to pass in
+            typeError("OBJECT");
+        // Class name is from the char after the L up to the first ;
+        const char *tail = strchr(argsig, ';');
+        if (!tail)
+            typeError("OBJECT");
+        StringAttr className(argsig+1, tail - (argsig+1));
+        argsig = tail+1;
+        Owned<JavaObjectBuilder> writer = new JavaObjectBuilder(sharedCtx->JNIenv, NULL, className);
+        writer->initWriter();
+        return (IXmlWriter*)writer.getClear();
+    }
+    virtual void paramWriterCommit(IInterface *writer)
+    {
+        Owned<JavaObjectBuilder> javaWriter = dynamic_cast<JavaObjectBuilder*>(writer);
+        if (!javaWriter)
+            throw MakeStringException(0, "javaembed: Invalid object writer for %s", sharedCtx->querySignature());
+        jvalue v;
+        v.l = javaWriter->getObject();
+        addArg(v);
+    }
     virtual void bindDatasetParam(const char *name, IOutputMetaData & metaVal, IRowStream * val)
     {
         jvalue v;
@@ -2212,10 +3180,13 @@ public:
         }
         addArg(v);
     }
-
+    virtual void writeResult(IInterface *esdl, const char *type, IInterface *writer)
+    {
+        return sharedCtx->writeObjectResult(result.l, dynamic_cast<IEsdlDefinition*>(esdl), type, dynamic_cast<IXmlWriter*>(writer));
+    }
     virtual void importFunction(size32_t lenChars, const char *utf)
     {
-        sharedCtx->importFunction(lenChars, utf, classpath);
+        sharedCtx->importFunction(lenChars, utf, classpath, instance);
         argsig = sharedCtx->querySignature();
         assertex(*argsig == '(');
         argsig++;
@@ -2224,7 +3195,10 @@ public:
     {
         if (*argsig != ')')
             throw MakeStringException(0, "javaembed: Too few ECL parameters passed for Java signature %s", sharedCtx->querySignature());
-        sharedCtx->callFunction(result, args);
+        if (instance)
+            sharedCtx->callFunction(result, args, instance);
+        else
+            sharedCtx->callFunction(result, args);
     }
 
     virtual void compileEmbeddedScript(size32_t lenChars, const char *script)
@@ -2236,6 +3210,7 @@ protected:
     jvalue result;
     StringAttr classpath;
     IArrayOf<ECLDatasetIterator> iterators;   // to make sure they get freed
+    jobject instance; //instance of service object to call methods on
 private:
 
     void typeError(const char *ECLtype) __attribute__((noreturn))
@@ -2313,6 +3288,88 @@ static JNIEnv *queryJNIEnv()
     return queryContext()->JNIenv;
 }
 
+class JavaEmbedServiceContext : public CInterfaceOf<IEmbedServiceContext>
+{
+public:
+    JavaEmbedServiceContext(JavaThreadContext *_sharedCtx, const char *service, const char *_options)
+    : sharedCtx(_sharedCtx), Class(0), options(_options), className(service)
+    {
+        StringArray opts;
+        opts.appendList(options, ",");
+        ForEachItemIn(idx, opts)
+        {
+            const char *opt = opts.item(idx);
+            const char *val = strchr(opt, '=');
+            if (val)
+            {
+                StringBuffer optName(val-opt, opt);
+                val++;
+                if (stricmp(optName, "classpath")==0)
+                    classpath.set(val);
+                else
+                    throw MakeStringException(0, "javaembed: Unknown option %s", optName.str());
+            }
+        }
+
+        // Create a new frame for local references and increase the capacity
+        // of those references to 64 (default is 16)
+        sharedCtx->JNIenv->PushLocalFrame(64);
+    }
+    ~JavaEmbedServiceContext()
+    {
+        sharedCtx->JNIenv->DeleteGlobalRef(object);
+        sharedCtx->JNIenv->DeleteGlobalRef(Class);
+        // Pop local reference frame; explicitly frees all local
+        // references made during that frame's lifetime
+        sharedCtx->JNIenv->PopLocalFrame(NULL);
+    }
+    void init()
+    {
+        jobject classLoader = sharedCtx->getThreadClassLoader();
+        checkException();
+        jmethodID loadClassMethod = sharedCtx->JNIenv->GetMethodID(sharedCtx->JNIenv->GetObjectClass(classLoader), "loadClass","(Ljava/lang/String;)Ljava/lang/Class;");
+        checkException();
+        jstring methodString = sharedCtx->JNIenv->NewStringUTF(className);
+        checkException();
+        Class = (jclass) sharedCtx->JNIenv->NewGlobalRef(sharedCtx->JNIenv->CallObjectMethod(classLoader, loadClassMethod, methodString));
+        checkException();
+
+        jmethodID constructor = sharedCtx->JNIenv->GetMethodID(Class, "<init>", "()V");
+        checkException();
+        object = sharedCtx->JNIenv->NewGlobalRef(sharedCtx->JNIenv->NewObject(Class, constructor));
+        checkException();
+    }
+    virtual bool checkFunctionExists(const char *function)
+    {
+        StringBuffer classname;
+        StringBuffer methodname;
+        StringBuffer javaSig;
+        StringBuffer fullSig;
+        StringBuffer retType;
+        extractFunctionInfo(function, classname, methodname, fullSig, javaSig, retType);
+
+        return (sharedCtx->JNIenv->GetMethodID(Class, methodname, javaSig)!=0);
+    }
+    virtual IEmbedFunctionContext *createFunctionContext(const char *function)
+    {
+        Owned<JavaEmbedImportContext> fctx = new JavaEmbedImportContext(queryContext(), object, options);
+        fctx->importFunction(rtlUtf8Length(strlen(function), function), function);
+        return fctx.getClear();
+    }
+    void checkException()
+    {
+        javaembed::checkException(sharedCtx->JNIenv);
+    }
+
+protected:
+    JavaThreadContext *sharedCtx;
+    StringBuffer className;
+    jclass Class;
+    jobject object;
+    StringAttr classpath;
+    StringAttr options;
+};
+
 class JavaEmbedContext : public CInterfaceOf<IEmbedContext>
 {
 public:
@@ -2323,7 +3380,13 @@ public:
     virtual IEmbedFunctionContext *createFunctionContextEx(ICodeContext * ctx, unsigned flags, const char *options)
     {
         assertex(flags & EFimport);
-        return new JavaEmbedImportContext(queryContext(), options);
+        return new JavaEmbedImportContext(queryContext(), NULL, options);
+    }
+    virtual IEmbedServiceContext *createServiceContext(const char *service, unsigned flags, const char *options)
+    {
+        Owned<JavaEmbedServiceContext> serviceContext = new JavaEmbedServiceContext(queryContext(), service, options);
+        serviceContext->init();
+        return serviceContext.getClear();
     }
 };
 
