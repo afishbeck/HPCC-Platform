@@ -530,7 +530,7 @@ public:
     {
         UNSUPPORTED("SET parameters");
     }
-    virtual IInterface *bindParamWriter(const char *name)
+    virtual IInterface *bindParamWriter(IInterface *esdl, const char *esdltype, const char *name)
     {
         return NULL;
     }

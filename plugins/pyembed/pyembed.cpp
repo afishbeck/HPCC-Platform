@@ -1492,7 +1492,7 @@ public:
     ~Python27EmbedScriptContext()
     {
     }
-    virtual IInterface *bindParamWriter(const char *name)
+    virtual IInterface *bindParamWriter(IInterface *esdl, const char *esdltype, const char *name)
     {
         return NULL;
     }
@@ -1545,7 +1545,7 @@ public:
     ~Python27EmbedImportContext()
     {
     }
-    virtual IInterface *bindParamWriter(const char *name)
+    virtual IInterface *bindParamWriter(IInterface *esdl, const char *esdltype, const char *name)
     {
         return NULL;
     }

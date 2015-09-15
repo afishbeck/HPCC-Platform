@@ -411,14 +411,14 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
             if (!javactx)
                 throw makeWsException(ERR_ESDL_BINDING_BADREQUEST, WSERR_SERVER, "ESDL", "Java method %s could not be loaded from class %s in esdl method %s", tgtcfg->queryProp("@javamethod"), javaScopedClass, mthName);
 
-             IXmlWriterExt *writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter("context"));
+             IXmlWriterExt *writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter(m_esdl, NULL, "context"));
              if (writer)
              {
                 writer->outputCString("johndoe", "username");
                 javactx->paramWriterCommit(writer);
              }
 
-             writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter("request"));
+             writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter(m_esdl, mthdef.queryRequestType(), "request"));
              m_pEsdlTransformer->process(context, EsdlRequestMode, srvdef.queryName(), mthdef.queryName(), *req, writer, ESDLREQ_FLAGS, NULL);
              javactx->paramWriterCommit(writer);
 

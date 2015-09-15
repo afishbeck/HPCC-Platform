@@ -815,7 +815,7 @@ interface IEmbedFunctionContext : extends IInterface
     virtual void bindFloatParam(const char *name, float val) = 0;
     virtual void bindSignedSizeParam(const char *name, int size, __int64 val) = 0;
     virtual void bindUnsignedSizeParam(const char *name, int size, unsigned __int64 val) = 0;
-    virtual IInterface *bindParamWriter(const char *name)=0;
+    virtual IInterface *bindParamWriter(IInterface *esdl, const char *esdltype, const char *name)=0;
     virtual void paramWriterCommit(IInterface *writer)=0;
     virtual void writeResult(IInterface *esdl, const char *name, IInterface *writer)=0;
 };
