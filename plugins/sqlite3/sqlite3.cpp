@@ -530,14 +530,14 @@ public:
     {
         UNSUPPORTED("SET parameters");
     }
-    virtual IInterface *bindParamWriter(IInterface *esdl, const char *esdltype, const char *name)
+    virtual IInterface *bindParamWriter(IInterface *esdl, const char *esdlservice, const char *esdltype, const char *name)
     {
         return NULL;
     }
     virtual void paramWriterCommit(IInterface *writer)
     {
     }
-    virtual void writeResult(IInterface *esdl, const char *name, IInterface *writer)
+    virtual void writeResult(IInterface *esdl, const char *esdlservice, const char *esdltype, IInterface *writer)
     {
     }
 

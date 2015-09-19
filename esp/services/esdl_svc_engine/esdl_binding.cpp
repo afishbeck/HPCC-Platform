@@ -411,21 +411,20 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
             if (!javactx)
                 throw makeWsException(ERR_ESDL_BINDING_BADREQUEST, WSERR_SERVER, "ESDL", "Java method %s could not be loaded from class %s in esdl method %s", tgtcfg->queryProp("@javamethod"), javaScopedClass, mthName);
 
-             IXmlWriterExt *writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter(m_esdl, NULL, "context"));
+            Owned<IXmlWriterExt> writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter(m_esdl, javaPackage, "EsdlContext", "context"));
              if (writer)
              {
                 writer->outputCString("johndoe", "username");
                 javactx->paramWriterCommit(writer);
              }
 
-             writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter(m_esdl, mthdef.queryRequestType(), "request"));
-             m_pEsdlTransformer->process(context, EsdlRequestMode, srvdef.queryName(), mthdef.queryName(), *req, writer, ESDLREQ_FLAGS, NULL);
+             writer.setown(dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter(m_esdl, javaPackage, mthdef.queryRequestType(), "request")));
+             m_pEsdlTransformer->process(context, EsdlRequestMode, srvdef.queryName(), mthdef.queryName(), *req, writer, 0, NULL);
              javactx->paramWriterCommit(writer);
-
              javactx->callFunction();
 
              Owned<IXmlWriterExt> javaRespWriter = createIXmlWriterExt(0, 0, NULL, WTStandard);
-             javactx->writeResult(m_esdl, mthdef.queryResponseType(), javaRespWriter);
+             javactx->writeResult(m_esdl, srvdef.queryName(), mthdef.queryResponseType(), javaRespWriter);
              origResp.set(javaRespWriter->str());
 
              Owned<IXmlWriterExt> finalRespWriter = createIXmlWriterExt(0, 0, NULL, (flags & ESDL_BINDING_RESPONSE_JSON) ? WTJSON : WTStandard);

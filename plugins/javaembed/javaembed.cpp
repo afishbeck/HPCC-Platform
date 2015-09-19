@@ -337,9 +337,9 @@ protected:
     {
         return getFieldId(field->name->getAtomNamePtr(), sig, expected, NULL);
     }
-    void checkException(bool fail)
+    void checkException()
     {
-        javaembed::checkException(JNIenv, fail);
+        javaembed::checkException(JNIenv);
     }
 
     JNIEnv *JNIenv;
@@ -1295,15 +1295,65 @@ const char *esdl2JavaFullClassName(IEsdlDefinition &esdl, const char *esdlType)
 class JavaObjectXmlWriter : public CInterface
 {
 public:
-    JavaObjectXmlWriter(JNIEnv *_JNIenv, jobject _obj, const char *_reqType, IEsdlDefinition &_esdl, IXmlWriter &_writer)
-    : JNIenv(_JNIenv), obj(_obj), writer(_writer), esdl(_esdl), reqType(_reqType)
+    JavaObjectXmlWriter(JNIEnv *_JNIenv, jobject _obj, const char *_reqType, IEsdlDefinition &_esdl, const char *_esdlService, IXmlWriter &_writer)
+    : JNIenv(_JNIenv), obj(_obj), writer(_writer), esdl(_esdl), esdlService(_esdlService), reqType(_reqType)
     {
         Class = (jclass) JNIenv->NewGlobalRef(JNIenv->GetObjectClass(obj));
+        langObjectClass = (jclass) JNIenv->NewGlobalRef(JNIenv->FindClass("java/lang/Object"));
+        objToString = JNIenv->GetMethodID(langObjectClass, "toString", "()Ljava/lang/String;");
     }
     ~JavaObjectXmlWriter()
     {
     }
 
+    void writeSimpleType(jclass parentClass, jobject parentObject, IEsdlDefObject &defObject)
+    {
+        const char *fieldname = defObject.queryName();
+        const char *javaSig = esdl2JavaSig(esdl, defObject.queryProp("type"));
+        jfieldID fieldId = JNIenv->GetFieldID(parentClass, fieldname, javaSig); //tbd cache this
+        if (!fieldId)
+            return;
+        jobject fieldObj = (jobject) JNIenv->GetObjectField(parentObject, fieldId);
+        if (!fieldObj)
+            return;
+        jstring fieldStr = (jstring) JNIenv->CallObjectMethod(fieldObj, objToString);
+        const char *text = JNIenv->GetStringUTFChars(fieldStr, NULL);
+        if (!text)
+            return;
+        writer.outputCString(text, defObject.queryName());
+    }
+    void writeComplexType(jclass parentClass, jobject parentObject, IEsdlDefObject &defObject)
+    {
+        IEsdlDefStruct *defStruct = esdl.queryStruct(defObject.queryProp("complex_type"));
+        if (!defStruct)
+            return;
+        const char *fieldname = defObject.queryName();
+        VStringBuffer javaSig("L%s/%s;", esdlService.str(), defObject.queryProp("complex_type"));
+        jfieldID fieldId = JNIenv->GetFieldID(parentClass, fieldname, javaSig); //tbd cache this
+        if (!fieldId)
+            return;
+        jobject fieldObj = (jobject) JNIenv->GetObjectField(parentObject, fieldId);
+        if (!fieldObj)
+            return;
+        writer.outputBeginNested(fieldname, true);
+        writeChildren(JNIenv->GetObjectClass(fieldObj), fieldObj, defStruct);
+        writer.outputEndNested(fieldname);
+    }
+    void writeChildren(jclass javaClass, jobject javaObject, IEsdlDefStruct *defStruct)
+    {
+        Owned<IEsdlDefObjectIterator> children = defStruct->getChildren();
+        ForEach (*children)
+        {
+            IEsdlDefObject &child = children->query();
+            if (child.getEsdlType()==EsdlTypeElement)
+            {
+                if (child.hasProp("type"))
+                    writeSimpleType(javaClass, javaObject, child);
+                else if (child.hasProp("complex_type"))
+                    writeComplexType(javaClass, javaObject, child);
+            }
+        }
+    }
     void write()
     {
         IEsdlDefStruct *reqStruct = esdl.queryStruct(reqType);
@@ -1314,36 +1364,7 @@ public:
         writer.outputBeginDataset(name, true);
         writer.outputBeginArray("Row");
         writer.outputBeginNested("Row", true);
-        jclass objClass = JNIenv->FindClass("java/lang/Object");
-
-        if (objClass)
-        {
-            jmethodID objToString = JNIenv->GetMethodID(objClass, "toString", "()Ljava/lang/String;");
-            if (objToString)
-            {
-                Owned<IEsdlDefObjectIterator> children = reqStruct->getChildren();
-                ForEach (*children)
-                {
-                    IEsdlDefObject &child = children->query();
-                    if (child.getEsdlType()==EsdlTypeElement)
-                    {
-                        const char *fieldname = child.queryName();
-                        const char *javaSig = esdl2JavaSig(esdl, child.queryProp("type"));
-                        jfieldID fieldId = JNIenv->GetFieldID(Class, fieldname, javaSig); //tbd cache this
-                        if (!fieldId)
-                            continue;
-                        jobject fieldObj = (jobject) JNIenv->GetObjectField(obj, fieldId);
-                        if (!fieldObj)
-                            continue;
-                        jstring fieldStr = (jstring) JNIenv->CallObjectMethod(fieldObj, objToString);
-                        const char *text = JNIenv->GetStringUTFChars(fieldStr, NULL);
-                        if (!text)
-                            continue;
-                        writer.outputCString(text, child.queryName());
-                    }
-                }
-            }
-        }
+        writeChildren(Class, obj, reqStruct);
         writer.outputEndNested("Row");
         writer.outputEndArray("Row");
         writer.outputEndDataset(name);
@@ -1360,10 +1381,12 @@ public:
     JNIEnv *JNIenv;
     jclass Class;
     jobject obj;
-
+    jclass langObjectClass;
+    jmethodID objToString;
     IXmlWriter &writer;
     IEsdlDefinition &esdl;
     StringAttr reqType;
+    StringAttr esdlService;
 };
 
 //-------------------------------------------
@@ -1921,9 +1944,9 @@ public:
         JavaRowBuilder javaRowBuilder(JNIenv, &dummyField, result);
         return typeInfo->build(builder, 0, &dummyField, javaRowBuilder);
     }
-    void writeObjectResult(jobject result, IEsdlDefinition *esdl, const char *name, IXmlWriter *writer)
+    void writeObjectResult(jobject result, IEsdlDefinition *esdl, const char *esdlservice, const char *name, IXmlWriter *writer)
     {
-        JavaObjectXmlWriter x(JNIenv, result, name, *esdl, *writer);
+        JavaObjectXmlWriter x(JNIenv, result, name, *esdl, esdlservice, *writer);
         x.write();
     }
 
@@ -1942,11 +1965,8 @@ public:
     JavaXmlBuilder(JNIEnv *_JNIenv, IEsdlDefinition *esdl_, const char *esdlservice, const char *esdltype_)
     : JNIenv(_JNIenv), esdl(esdl_), javaPackage(esdlservice), esdlType(esdltype_)
     {
-        if (esdl && esdltype)
+        if (esdl && esdlType.length())
         {
-            IEsdlDefObject *defObj = esdl->queryObj(esdlType);
-            if (defObj)
-                defStack.append(new DefStackEntry(".", defObj));
         }
     }
     ~JavaXmlBuilder()
@@ -1959,8 +1979,6 @@ public:
 
     void initWriter()
     {
-        if (!defStack.length())
-            throw MakeStringException(0, "Error finding ESDL definition for %s", esdltype);
     }
     IXmlWriterExt & clear()
     {
@@ -1979,27 +1997,33 @@ public:
     }
     inline IEsdlDefStruct *queryCurrentEsdlStruct()
     {
-        if (!defStack.length() || !defStack.tos()->type)
+        if (!defStack.length() || !defStack.tos().type)
             return NULL;
-        return dynamic_cast<IEsdlDefStruct*>(defStack.tos()->type);
+        return dynamic_cast<IEsdlDefStruct*>(defStack.tos().type.get());
     }
-    inline jobject getJavaObject()
+    inline jobject getObject()
     {
         if (!defStack.length())
             return 0;
-        return  defStack.tos()->obj;
+        return  defStack.item(0).obj;
     }
-    inline jclass getJavaClass()
+    inline jobject getCurJavaObject()
     {
         if (!defStack.length())
             return 0;
-        return  defStack.tos()->Class;
+        return  defStack.tos().obj;
     }
-    inline jclass getJavaConstructor()
+    inline jclass getCurJavaClass()
     {
         if (!defStack.length())
             return 0;
-        return  defStack.tos()->constructor;
+        return  defStack.tos().Class;
+    }
+    inline jmethodID getCurJavaConstructor()
+    {
+        if (!defStack.length())
+            return 0;
+        return  defStack.tos().constructor;
     }
     virtual void outputString(unsigned size, const char *text, const char *fieldname)
     {
@@ -2007,13 +2031,13 @@ public:
         if (!defStruct)
             return;
         IEsdlDefObject *defField = defStruct->queryChild(fieldname);
-        if (!V)
+        if (!defField)
             return;
-        const char *defType = V->queryProp("type");
+        const char *defType = defField->queryProp("type");
         if (!defType)
             return;
         const char *javaSig = esdl2JavaSig(*esdl, defType);
-        jfieldID fieldId = JNIenv->GetFieldID(getJavaClass(), fieldname, javaSig); //tbd cache this
+        jfieldID fieldId = JNIenv->GetFieldID(getCurJavaClass(), fieldname, javaSig); //tbd cache this
         if (!fieldId)
             return;
 
@@ -2025,7 +2049,7 @@ public:
         jobject value = JNIenv->NewObject(typeClass, typeStringConstructor, strvalue);
         JNIenv->DeleteLocalRef(strvalue);
         checkException();
-        JNIenv->SetObjectField(getJavaObject(), fieldId, value);
+        JNIenv->SetObjectField(getCurJavaObject(), fieldId, value);
         JNIenv->DeleteLocalRef(value);
         checkException();
     }
@@ -2041,88 +2065,120 @@ public:
     {
         outputString(value ? "true" : "false", fieldname);
     }
-    virtual void outputData(unsigned len, const void *value, const char *fieldname)
+    virtual void outputUInt(unsigned __int64 field, unsigned size, const char *fieldname)
     {
+        StringBuffer value;
+        value.append(field);
+        outputString(value.length(), value, fieldname);
     }
-    virtual void outputQuoted(const char *text)
+    virtual void outputInt(__int64 field, unsigned size, const char *fieldname)
     {
+        StringBuffer value;
+        value.append(field);
+        outputString(value.length(), value, fieldname);
+    }
+    virtual void outputReal(double field, const char *fieldname)
+    {
+        StringBuffer value;
+        value.append(field);
+        outputString(value.length(), value, fieldname);
     }
     virtual void outputDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname)
     {
+        Decimal d;
+        d.setDecimal(size, precision, field);
+        outputString(d.getCString(), fieldname);
     }
     virtual void outputUDecimal(const void *field, unsigned size, unsigned precision, const char *fieldname)
     {
-    }
-    virtual void outputUnicode(unsigned len, const UChar *field, const char *fieldname)
-    {
+        Decimal d;
+        d.setUDecimal(size, precision, field);
+        outputString(d.getCString(), fieldname);
     }
     virtual void outputQString(unsigned len, const char *field, const char *fieldname)
     {
+        MemoryAttr tempBuffer;
+        char * temp;
+        if (len <= 100)
+            temp = (char *)alloca(len);
+        else
+            temp = (char *)tempBuffer.allocate(len);
+        rtlQStrToStr(len, temp, len, field);
+        outputString(len, temp, fieldname);
     }
-    virtual void outputBeginDataset(const char *dsname, bool nestChildren)
+    virtual void outputUnicode(unsigned len, const UChar *field, const char *fieldname)
+    {
+        char * buff = 0;
+        unsigned bufflen = 0;
+        rtlUnicodeToCodepageX(bufflen, buff, len, field, "utf-8");
+        outputString(bufflen, buff, fieldname);
+        rtlFree(buff);
+    }
+    virtual void outputUtf8(unsigned len, const char *field, const char *fieldname)
+    {
+        outputString(len, field, fieldname);
+    }
+
+    virtual void outputData(unsigned len, const void *value, const char *fieldname)
+    {
+    }
+    virtual void outputQuoted(const char *text) //would have to let beginNested represent simple types with content set using this?
+    {
+    }
+    virtual void outputBeginDataset(const char *dsname, bool nestChildren) //not used by ESDL engine
     {
     }
     virtual void outputEndDataset(const char *dsname)
     {
     }
-    inline bool checkIsNestableChild(IEsdlDefObject *child)
+    inline IEsdlDefObject *queryChildStructDefObj(IEsdlDefObject *child)
     {
         if (child)
         {
             switch (child->getEsdlType())
             {
             case EsdlTypeArray: //adf: special handling later?
-            case EsdlTypeStruct:
-            case EsdlTypeRequest:
-            case EsdlTypeResponse:
-                return true;
+            case EsdlTypeElement:
+            {
+                const char *structType = child->queryProp("complex_type");
+                if (structType)
+                    return esdl->queryObj(structType);
+
+            }
             default:
                 break;
             }
         }
-        return false;
+        return NULL;
     }
     virtual void outputBeginNested(const char *fieldname, bool nestChildren)
     {
+        IEsdlDefStruct *defStruct = NULL;
+        IEsdlDefObject *defField = NULL;
+        IEsdlDefObject *defType = NULL;
         if (!defStack.length())
-            throw MakeStringException(0, "Error nesting field %s, ESDL definition not set", fieldname); //adf: not sure yet if this should be a graceful ignore
-        IEsdlDefStruct *cur = dynamic_cast<IEsdlDefStruct*>(&defStack.tos());
-        if (cur)
         {
-            IEsdlDefObject *child = cur->queryChild(fieldname);
-            if (checkIsNestableChild(child))
+            defType = esdl->queryObj(fieldname);
+        }
+        else
+        {
+            defStruct = queryCurrentEsdlStruct();
+            if (defStruct)
             {
-                defStack.append(new DefStackEntry(fieldname, child));
-                const char *defTypeName = child->queryProp("type");
-                if (!defTypeName)
-                    return;
-                const char *javaSig = esdl2JavaSig(*esdl, defTypeName);
-                jfieldID fieldId = JNIenv->GetFieldID(Class, fieldname, javaSig); //tbd cache this
-                if (!fieldId)
-                    return;
-                const char *javaClassName = esdl2JavaFullClassName(*esdl, defTypeName);
-                jclass typeClass = JNIenv->FindClass(javaClassName);
-                jmethodID typeStringConstructor = JNIenv->GetMethodID(typeClass, "<init>", "(Ljava/lang/String;)V"); //All types currently used for ESDL mapping have string constructors
-
-                checkException();
-                JNIenv->SetObjectField(getJavaObject(), fieldId, value);
-                JNIenv->DeleteLocalRef(value);
-                checkException();
+                defField = defStruct->queryChild(fieldname);
+                if (defField)
+                    defType = queryChildStructDefObj(defField);
             }
         }
+        pushDefStackEntry(JNIenv, getCurJavaClass(), getCurJavaObject(), javaPackage, fieldname, defType);
     }
     virtual void outputEndNested(const char *fieldname)
     {
-        if (defStack.length() && streq(fieldname, defStack.tos()->name))
+        if (defStack.length() && streq(fieldname, defStack.tos().name))
             defStack.pop(true);
-        pop();
     }
     virtual void outputSetAll()
     {
-    }
-    virtual void outputUtf8(unsigned len, const char *field, const char *fieldname)
-    {
-        outputString(len, field, fieldname);
     }
     virtual void outputBeginArray(const char *fieldname)
     {
@@ -2136,58 +2192,69 @@ public:
     virtual void outputXmlns(const char *name, const char *uri)
     {
     }
-    virtual void outputUInt(unsigned __int64 field, unsigned size, const char *fieldname)
-    {
-        outputInt((__int64)field, size, fieldname);
-    }
-    virtual void outputInt(__int64 field, unsigned size, const char *fieldname)
-    {
-        jfieldID fieldId = getFieldId(fieldname, "Ljava/math/BigInteger;", "__int64");
-        if (fieldId)
-        {
-           jclass bigIntClass = JNIenv->FindClass("java/math/BigInteger");
-           jmethodID bigIntConstructor = JNIenv->GetMethodID(bigIntClass, "<init>", "(Ljava/lang/String;)V");
 
-           StringBuffer s;
-           s.append(field);
-           jobject value = JNIenv->NewObject(bigIntClass, bigIntConstructor, JNIenv->NewStringUTF(s.str()));
-           JNIenv->SetObjectField(row, fieldId, value);
-        }
-    }
-    virtual void outputReal(double field, const char *fieldname)
-    {
-       jfieldID fieldId = getFieldId(fieldname, "Ljava/lang/Double;", "double");
-       jclass doubleClass = JNIenv->FindClass("java/lang/Double");
-       jmethodID initMethod = JNIenv->GetMethodID(doubleClass, "<init>", "(D)V;");
-       jobject value = JNIenv->NewObject(doubleClass, initMethod, field);
-       JNIenv->SetObjectField(row, fieldId, value);
-    }
-protected:
+public:
     JNIEnv *JNIenv;
     StringAttr javaPackage;
     StringAttr esdlType;
     Linked<IEsdlDefinition> esdl;
-    class DefStackEntry
+    class DefStackEntry : public CInterface, implements IInterface
     {
     public:
+        IMPLEMENT_IINTERFACE;
         DefStackEntry(const char *fieldname, IEsdlDefObject *defObj) : name(fieldname), type(defObj)
         {
-            JNIenv->ExceptionClear();
-            VStringBuffer javaClassName("%s/%s", javaPackage.str(), defObj->queryName());
-            jclass classDescr = JNIenv->FindClass(javaClassName);
-            Class = (jclass) JNIenv->NewGlobalRef(classDescr);
-            constructor = JNIenv->GetMethodID(Class, "<init>", "()V");
-            obj = JNIenv->NewObject(Class, constructor);
-            javaembed::checkException(JNIenv, false);
         }
-        ~DefStackEntry(){}
+        ~DefStackEntry()
+        {
+
+        }
+        void setClass(jclass localClass)
+        {
+        }
+        void setObject(jobject localObject)
+        {
+        }
+    public:
         StringAttr name;
         Linked<IEsdlDefObject> type;
         jclass Class;
         jmethodID constructor;
+        jfieldID fieldId;
         jobject obj;
     };
-    PointerArrayOf<DefStackEntry> defStack;
+
+    void pushDefStackEntry(JNIEnv *JNIenv, jclass parentClass, jobject parentObject, const char *package, const char *fieldname, IEsdlDefObject *defObj)
+    {
+        Owned<DefStackEntry> entry = new DefStackEntry(fieldname, defObj);
+        JNIenv->ExceptionClear();
+        if (defObj)
+        {
+            VStringBuffer javaClassName("%s/%s", package, defObj->queryName());
+            jclass localClass = JNIenv->FindClass(javaClassName);
+            if (localClass)
+            {
+                entry->Class = (jclass) JNIenv->NewGlobalRef(localClass);
+                entry->constructor = JNIenv->GetMethodID(entry->Class, "<init>", "()V");
+                jobject localObj = JNIenv->NewObject(entry->Class, entry->constructor);
+                javaembed::checkException(JNIenv, false);
+                if (localObj)
+                {
+                    entry->obj = JNIenv->NewGlobalRef(localObj);
+                    if (parentClass)
+                    {
+                        VStringBuffer javaSig("L%s;", javaClassName.str());
+                        entry->fieldId = JNIenv->GetFieldID(parentClass, fieldname, javaSig);
+                        if (parentObject && entry->fieldId)
+                            JNIenv->SetObjectField(parentObject, entry->fieldId, entry->obj);
+                    }
+                }
+            }
+        }
+        defStack.append(*entry.getClear());
+    }
+
+    IArrayOf<DefStackEntry> defStack;
 };
 
 // Each call to a Java function will use a new JavaEmbedScriptContext object
@@ -2630,7 +2697,7 @@ public:
         v.l = javaBuilder.getObject();
         addArg(v);
     }
-    virtual IInterface *bindParamWriter(IInterface *esdl, const char *esdltype, const char *name)
+    virtual IInterface *bindParamWriter(IInterface *esdl, const char *esdlservice, const char *esdltype, const char *name)
     {
         if (*argsig != 'L')  // should tell us the type of the object we need to create to pass in
             typeError("OBJECT");
@@ -2640,13 +2707,13 @@ public:
             typeError("OBJECT");
         StringAttr className(argsig+1, tail - (argsig+1));
         argsig = tail+1;
-        Owned<JavaXmlBuilder> writer = new JavaXmlBuilder(sharedCtx->JNIenv, className, dynamic_cast<IEsdlDefinition*>(esdl), esdltype);
+        Owned<JavaXmlBuilder> writer = new JavaXmlBuilder(sharedCtx->JNIenv, dynamic_cast<IEsdlDefinition*>(esdl), esdlservice, esdltype);
         writer->initWriter();
         return (IXmlWriter*)writer.getClear();
     }
     virtual void paramWriterCommit(IInterface *writer)
     {
-        Owned<JavaObjectBuilder> javaWriter = dynamic_cast<JavaObjectBuilder*>(writer);
+        JavaXmlBuilder *javaWriter = dynamic_cast<JavaXmlBuilder*>(writer);
         if (!javaWriter)
             throw MakeStringException(0, "javaembed: Invalid object writer for %s", sharedCtx->querySignature());
         jvalue v;
@@ -2731,9 +2798,9 @@ public:
         }
         addArg(v);
     }
-    virtual void writeResult(IInterface *esdl, const char *type, IInterface *writer)
+    virtual void writeResult(IInterface *esdl, const char *esdlservice, const char *esdltype, IInterface *writer)
     {
-        return sharedCtx->writeObjectResult(result.l, dynamic_cast<IEsdlDefinition*>(esdl), type, dynamic_cast<IXmlWriter*>(writer));
+        return sharedCtx->writeObjectResult(result.l, dynamic_cast<IEsdlDefinition*>(esdl), esdlservice, esdltype, dynamic_cast<IXmlWriter*>(writer));
     }
     virtual void importFunction(size32_t lenChars, const char *utf)
     {

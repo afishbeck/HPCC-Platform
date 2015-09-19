@@ -1,4 +1,4 @@
  <Methods>
-    <Method name="EchoPersonInfo" querytype="java" javamethod="EsdlExample.EsdlExampleServiceDummy.EchoPersonInfo"/>
+    <Method name="EchoPersonInfo" querytype="java" javamethod="EsdlExample.EsdlExampleService.EchoPersonInfo"/>
 </Methods>
 

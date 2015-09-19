@@ -17,6 +17,13 @@
 
 ////////////////////////////////////////////////////////////
 
+ESPenum AddressType : string
+{
+    HOME("Home"),
+    WORK("Work"),
+    HOTEL("Hotel")
+};
+
 ESPStruct NameInfo
 {
     string First("Joe");
@@ -25,6 +32,7 @@ ESPStruct NameInfo
 
 ESPStruct AddressInfo
 {
+    ESPenum AddressType type("Home");
     string Line1;
     string Line2;
     string City;
@@ -35,13 +43,13 @@ ESPStruct AddressInfo
 ESPrequest EchoPersonInfoRequest
 {
      ESPstruct NameInfo Name;
-     ESPstruct AddressInfo Address;
+     ESParray<ESPstruct AddressInfo> Addresses;
 };
 
 ESPresponse EchoPersonInfoResponse
 {
      ESPstruct NameInfo Name;
-     ESPstruct AddressInfo Address;
+     ESParray<ESPstruct AddressInfo> Addresses;
 };
 
 ESPservice [version("0.01")] EsdlExample
