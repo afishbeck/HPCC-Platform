@@ -43,13 +43,14 @@ ESPStruct AddressInfo
 ESPrequest EchoPersonInfoRequest
 {
      ESPstruct NameInfo Name;
-     ESParray<ESPstruct AddressInfo> Addresses;
+     ESParray<ESPstruct AddressInfo, Address> Addresses;
 };
 
 ESPresponse EchoPersonInfoResponse
 {
+     int count(0);
      ESPstruct NameInfo Name;
-     ESParray<ESPstruct AddressInfo> Addresses;
+     ESParray<ESPstruct AddressInfo, Address> Addresses;
 };
 
 ESPservice [version("0.01")] EsdlExample

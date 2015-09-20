@@ -91,13 +91,11 @@ class <xsl:value-of select="@name"/><xsl:if test="@base_type"> extends <xsl:valu
 </xsl:text>
     </xsl:template>
 
-    <xsl:template match="EsdlElement|EsdlEnum">
-        <xsl:variable name="enum_type" select="@enum_type"/>
+    <xsl:template match="EsdlElement">
         <xsl:variable name="primitive">
 	        <xsl:call-template name="outputJavaPrimitive">
 	           <xsl:with-param name="typename">
 			<xsl:choose>
-			    <xsl:when test="@enum_type"><xsl:value-of select="@enum_type"/></xsl:when>
 			    <xsl:when test="@type"><xsl:value-of select="@type"/></xsl:when>
 			    <xsl:when test="@complex_type"><xsl:value-of select="@complex_type"/></xsl:when>
 			</xsl:choose>
@@ -106,7 +104,6 @@ class <xsl:value-of select="@name"/><xsl:if test="@base_type"> extends <xsl:valu
         </xsl:variable>
         <xsl:variable name="useQuotes">
           <xsl:choose>
-            <xsl:when test="@enum_type"><xsl:value-of select="esxdl/EsdlEnumType[@name=$enum_type]/@base_type='string'"/></xsl:when>
             <xsl:when test="$primitive='String'"><xsl:value-of select="true()"/></xsl:when>
             <xsl:otherwise><xsl:value-of select="false()"/></xsl:otherwise>
           </xsl:choose>
@@ -137,6 +134,26 @@ class <xsl:value-of select="@name"/><xsl:if test="@base_type"> extends <xsl:valu
 </xsl:text>
     </xsl:template>
 
+    <xsl:template match="EsdlEnum">
+        <xsl:variable name="enum_type" select="@enum_type"/>
+        <xsl:variable name="primitive">
+	        <xsl:call-template name="outputJavaPrimitive">
+	           <xsl:with-param name="typename">
+                     <xsl:value-of select="@enum_type"/>
+	           </xsl:with-param>
+	        </xsl:call-template>
+        </xsl:variable>
+        <xsl:text>    public </xsl:text>
+	<xsl:value-of select="$primitive"/>
+        <xsl:text> </xsl:text>
+        <xsl:value-of select="@name"/>
+            <xsl:if test="@default">
+                <xsl:text> = </xsl:text><xsl:value-of select="$primitive"/>.fromString<xsl:text>(</xsl:text>"<xsl:value-of select="@default"/>")
+            </xsl:if>
+        <xsl:text>;
+</xsl:text>
+    </xsl:template>
+
     <xsl:template match="EsdlService">
 public abstract class <xsl:value-of select="@name"/>ServiceBase
 {
@@ -146,8 +163,9 @@ public abstract class <xsl:value-of select="@name"/>ServiceBase
 }
     </xsl:template>
 
-    <xsl:template name="EsdlEnumString">
-    public enum <xsl:value-of select="@name"/><xsl:text> {
+    <xsl:template match="EsdlEnumType">
+      <xsl:if test="EsdlEnumItem">
+    enum <xsl:value-of select="@name"/><xsl:text> {
 </xsl:text>
         <xsl:for-each select="EsdlEnumItem">
           <xsl:text>        </xsl:text><xsl:value-of select="@name"/><xsl:text> </xsl:text>("<xsl:value-of select="@enum"/><xsl:text>")</xsl:text>
@@ -164,7 +182,7 @@ public abstract class <xsl:value-of select="@name"/>ServiceBase
         </xsl:for-each>
             private final String name;       
 
-            private Modes(String s) {
+            private<xsl:text> </xsl:text><xsl:value-of select="@name"/>(String s) {
                 name = s;
             }
 
@@ -175,27 +193,19 @@ public abstract class <xsl:value-of select="@name"/>ServiceBase
             public String toString() {
                return this.name;
             }
+            public static<xsl:text> </xsl:text><xsl:value-of select="@name"/> fromString(String text)
+            {
+              if (text != null)
+              {
+                  for (<xsl:value-of select="@name"/> val :<xsl:text> </xsl:text><xsl:value-of select="@name"/>.values()) {
+                    if (text.equalsIgnoreCase(val.toString())) {
+                      return val;
+                    }
+                  }
+               }
+             return null;
+            }        
         }
-    </xsl:template>
-
-    <xsl:template name="EsdlEnumOther">
-    public enum <xsl:value-of select="@name"/><xsl:text> </xsl:text>{
-        <xsl:for-each select="EsdlEnumItem">
-          <xsl:value-of select="@name"/><xsl:if test="position() != last()"><xsl:text>, </xsl:text></xsl:if>
-        </xsl:for-each>
-        };
-
-    </xsl:template>
-    <xsl:template match="EsdlEnumType">
-      <xsl:if test="EsdlEnumItem">
-        <xsl:choose>
-          <xsl:when test="@base_type='string'">
-            <xsl:call-template name="EsdlEnumString"/>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:call-template name="EsdlEnumOther"/>
-          </xsl:otherwise>
-        </xsl:choose>
       </xsl:if>
     </xsl:template>
 </xsl:stylesheet>

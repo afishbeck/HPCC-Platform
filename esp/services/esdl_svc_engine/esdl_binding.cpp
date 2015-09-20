@@ -414,7 +414,8 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
             Owned<IXmlWriterExt> writer = dynamic_cast<IXmlWriterExt *>(javactx->bindParamWriter(m_esdl, javaPackage, "EsdlContext", "context"));
              if (writer)
              {
-                writer->outputCString("johndoe", "username");
+                if (context.queryUserId())
+                    writer->outputCString(context.queryUserId(), "username");
                 javactx->paramWriterCommit(writer);
              }
 
