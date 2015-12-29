@@ -19754,24 +19754,13 @@ public:
         if (!meta.queryOriginal()) // this is a bit of a hack - don't know why no meta on an output....
             meta.set(input->queryOutputMeta());
         Owned<IOutputRowSerializer> rowSerializer;
-        Owned<IXmlWriter> writer;
+        Owned<IXmlWriter> xmlwriter;
+        bool appendRaw = false;
+        IHpccProtocol *protocol = serverContext->queryProtocol();
         if ((int) sequence >= 0)
         {
-            response = serverContext->queryResult(sequence);
-            if (response)
-            {
-                const IProperties *xmlns = serverContext->queryXmlns(sequence);
-                response->startDataset("Dataset", helper.queryName(), sequence, (helper.getFlags() & POFextend) != 0, xmlns);
-                if (response->mlFmt==MarkupFmt_XML || response->mlFmt==MarkupFmt_JSON)
-                {
-                    unsigned int writeFlags = serverContext->getXmlFlags();
-                    if (response->mlFmt==MarkupFmt_JSON)
-                        writeFlags |= XWFnoindent;
-                    writer.setown(createIXmlWriterExt(writeFlags, 1, response, (response->mlFmt==MarkupFmt_JSON) ? WTJSON : WTStandard));
-                    writer->outputBeginArray(DEFAULTXMLROWTAG);
-                }
-            }
-
+            if (protocol)
+                xmlwriter.setown(protocol->startDataset(helper.queryName(), sequence, "Dataset", appendRaw, serverContext->getXmlFlags(), (helper.getFlags() & POFextend) != 0, serverContext->queryXmlns(sequence)));  //xmlwriter only returned if needed
         }
         size32_t outputLimitBytes = 0;
         IConstWorkUnit *workunit = serverContext->queryWorkUnit();
@@ -19833,31 +19822,30 @@ public:
                 CThorDemoRowSerializer serializerTarget(result);
                 rowSerializer->serialize(serializerTarget, (const byte *) row);
             }
-            if (response)
+            if ((int) sequence >= 0)
             {
-                if (response->isRaw)
+                if (appendRaw)
                 {
                     // MORE - should be able to serialize straight to the response...
                     MemoryBuffer rowbuff;
                     CThorDemoRowSerializer serializerTarget(rowbuff);
                     rowSerializer->serialize(serializerTarget, (const byte *) row);
-                    response->append(rowbuff.length(), rowbuff.toByteArray());
+                    protocol->appendRawRow(sequence, rowbuff.length(), rowbuff.toByteArray());
                 }
-                else if (writer)
+                else if (xmlwriter)
                 {
-                    writer->outputBeginNested(DEFAULTXMLROWTAG, false);
-                    helper.serializeXml((byte *) row, *writer);
-                    writer->outputEndNested(DEFAULTXMLROWTAG);
+                    xmlwriter->outputBeginNested(DEFAULTXMLROWTAG, false);
+                    helper.serializeXml((byte *) row, *xmlwriter);
+                    xmlwriter->outputEndNested(DEFAULTXMLROWTAG);
+                    protocol->finalizeXmlRow(sequence);
                 }
                 else
                 {
                     SimpleOutputWriter x;
                     helper.serializeXml((byte *) row, x);
                     x.newline();
-                    response->append(x.str());
+                    protocol->appendSimpleRow(sequence, x.str());
                 }
-                response->incrementRowCount();
-                response->flush(false);
             }
             ReleaseRoxieRow(row);
             if (outputLimitBytes && result.length() > outputLimitBytes)
@@ -19873,8 +19861,8 @@ public:
                 throw MakeStringExceptionDirect(0, errMsg.str());
             }
         }
-        if (writer)
-            writer->outputEndArray(DEFAULTXMLROWTAG);
+        if (xmlwriter)
+            xmlwriter->outputEndArray(DEFAULTXMLROWTAG);
         if (saveInContext)
             serverContext->appendResultDeserialized(storedName, sequence, builder.getcount(), builder.linkrows(), (helper.getFlags() & POFextend) != 0, LINK(meta.queryOriginal()));
         if (workunit)
