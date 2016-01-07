@@ -409,7 +409,7 @@ public:
         CascadeMergeType mergeType=CascadeMergeNone;
         if (strstr(name, "querystats"))
             mergeType=CascadeMergeStats;
-        else if (strstr(name, ":queries"))
+        else if (strstr(name, "queries"))
             mergeType=CascadeMergeQueries;
         Owned<IPropertyTree> mergedReply;
         if (mergeType!=CascadeMergeNone)
@@ -1479,7 +1479,7 @@ public:
         const char *name = msg->queryName();
         IContextLogger &logctx = *msgctx->queryLogContext();
 
-        if (streq(name, "lock"))
+        if (strieq(name, "control:lock"))
         {
             if (logctx.queryTraceLevel() > 8)
                 logctx.CTXLOG("Got lock request %s", xmltext);
@@ -1489,7 +1489,7 @@ public:
                 logctx.CTXLOG("lock reply %s", reply.str());
             unknownQueryStats.noteComplete();
         }
-        else if (strieq(name, "childlock"))
+        else if (strieq(name, "control:childlock"))
         {
             if (logctx.queryTraceLevel() > 8)
                 logctx.CTXLOG("Got childlock request %s", xmltext);
@@ -1501,7 +1501,7 @@ public:
         else
         {
             bool doControlQuery = true;
-            if (strieq(name, "aclupdate"))
+            if (strieq(name, "control:aclupdate"))
             {
                 IPropertyTree *aclTree = msg->queryPropTree("ACL");
                 if (aclTree)
@@ -1525,7 +1525,7 @@ public:
                     }
                 }
             }
-            else if (strieq(name, "queryaclinfo"))
+            else if (strieq(name, "control:queryaclinfo"))
             {
                 reply.append("<Endpoint ep='");
                 ep.getUrlStr(reply);

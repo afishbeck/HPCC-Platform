@@ -71,9 +71,9 @@ interface IHpccProtocolScalarResult : extends IInterface
 {
 };
 
-interface IHpccProtocol : extends IInterface
+interface IHpccProtocolResultsWriter : extends IInterface
 {
-    virtual IXmlWriter *startDataset(const char *name, unsigned sequence, const char *elementName, bool &appendRawData, unsigned xmlFlags, bool _extend, const IProperties *xmlns) = 0;
+    virtual IXmlWriter *addDataset(const char *name, unsigned sequence, const char *elementName, bool &appendRawData, unsigned xmlFlags, bool _extend, const IProperties *xmlns) = 0;
     virtual void finalizeXmlRow(unsigned sequence) = 0;
 
     virtual void appendRawRow(unsigned sequence, unsigned len, const char *data) = 0;
@@ -91,6 +91,15 @@ interface IHpccProtocol : extends IInterface
     virtual void setResultUnicode(const char *name, unsigned sequence, int len, UChar const * str) = 0;
     virtual void setResultVarString(const char * name, unsigned sequence, const char * value) = 0;
     virtual void setResultVarUnicode(const char * name, unsigned sequence, UChar const * value) = 0;
+};
+
+interface IHpccProtocolResponse : extends IInterface
+{
+    virtual IHpccProtocolResults *getHpccResultsSection() = 0;
+
+    virtual void *appendContent(TextMarkupFormat mlFmt, const char *content, const char *name=NULL) = 0; //will be transformed
+    virtual IXmlWriter *writeAppendContent(const char *name = NULL) = 0;
+
     virtual void finalize(unsigned seqNo) = 0; //adf not native (raw or xml)
 
     virtual bool checkConnection() = 0;
@@ -101,9 +110,7 @@ interface IHpccProtocol : extends IInterface
     //native protocol "post processing":
     virtual void flush() = 0;
     virtual void appendProbeGraph(const char *xml) = 0;
-
 };
-
 
 
 interface IHpccProtocolMsgSink : extends IInterface
@@ -114,7 +121,7 @@ interface IHpccProtocolMsgSink : extends IInterface
     virtual void checkAccess(IpAddress &peer, const char *queryName, const char *queryText, bool isBlind) = 0;
     virtual void queryAccessInfo(StringBuffer &info) = 0;
 
-    virtual void query(IHpccProtocolMsgContext *msgctx, IPropertyTree *msg, IHpccProtocol *protocol, unsigned flags, PTreeReaderOptions xmlReadFlags, const char *querySetName, unsigned idx, unsigned &memused, unsigned &slaveReplyLen) = 0;
+    virtual void query(IHpccProtocolMsgContext *msgctx, IPropertyTree *msg, IHpccProtocolResponse *protocol, unsigned flags, PTreeReaderOptions xmlReadFlags, const char *querySetName, unsigned idx, unsigned &memused, unsigned &slaveReplyLen) = 0;
     virtual void control(IHpccProtocolMsgContext *msgctx, IPropertyTree *msg, const char *logtext, StringBuffer &reply) = 0;
     virtual void debug(IHpccProtocolMsgContext *msgctx, const char *uid, IPropertyTree *msg, const char *logtext, IXmlWriter &out) = 0;
 

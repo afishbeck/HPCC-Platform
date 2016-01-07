@@ -375,7 +375,7 @@ protected:
 
 //================================================================================================================
 
-class CRoxieNativeProtocolWriter : public CInterface, implements IHpccProtocol
+class CHpccNativeResultsWriter : public CInterface, implements IHpccProtocolResultsWriter
 {
 protected:
     SafeSocket *client;
@@ -387,30 +387,17 @@ protected:
     Owned<FlushingStringBuffer> probe;
     TextMarkupFormat mlFmt;
     PTreeReaderOptions xmlReadFlags;
+    bool isBlocked;
     bool isRaw;
     bool isHTTP;
-    bool isBlocked;
     bool trim;
     bool failed;
 
-
 public:
     IMPLEMENT_IINTERFACE;
-    CRoxieNativeProtocolWriter(const char *queryname, SafeSocket *_client, bool _isBlocked, TextMarkupFormat _mlFmt, bool _isRaw, bool _isHTTP, const IContextLogger &_logctx, PTreeReaderOptions _xmlReadFlags) :
-        queryName(queryname), client(_client), isBlocked(_isBlocked), mlFmt(_mlFmt), isRaw(_isRaw), isHTTP(_isHTTP), logctx(_logctx), xmlReadFlags(_xmlReadFlags)
+    CHpccNativeResultsWriter(const char *queryname, SafeSocket *_client, bool _isBlocked, TextMarkupFormat _mlFmt, bool _isRaw, bool _isHTTP, const IContextLogger &_logctx, PTreeReaderOptions _xmlReadFlags) :
+        client(_client), queryName(queryname), logctx(_logctx), mlFmt(_mlFmt), xmlReadFlags(_xmlReadFlags), isBlocked(_isBlocked), isRaw(_isRaw), isHTTP(_isHTTP), isHpccResult(false)
     {
-    }
-    virtual bool checkConnection()
-    {
-        return client->checkConnection();
-    }
-    virtual void sendHeartBeat()
-    {
-        client->sendHeartBeat(logctx);
-    }
-    virtual SafeSocket *querySafeSocket()
-    {
-        return client;
     }
     virtual FlushingStringBuffer *queryResult(unsigned sequence)
     {
@@ -688,12 +675,28 @@ public:
 
 };
 
-class CRoxieXmlProtocolWriter : public CRoxieNativeProtocolWriter
+class CHpccXmlResultsWriter : public CHpccNativeResultsWriter
 {
 public:
-    CRoxieXmlProtocolWriter(const char *queryname, SafeSocket *_client, bool _isBlocked, TextMarkupFormat _mlFmt, bool _isRaw, bool _isHTTP, const IContextLogger &_logctx, PTreeReaderOptions _xmlReadFlags) :
-        CRoxieNativeProtocolWriter(queryname, _client, _isBlocked, _mlFmt, _isRaw, _isHTTP, _logctx, _xmlReadFlags)
+    CHpccXmlResultsWriter(const char *queryname, SafeSocket *_client, bool _isHTTP, const IContextLogger &_logctx, PTreeReaderOptions _xmlReadFlags) :
+        CHpccNativeResultsWriter(queryname, _client, false, MarkupFmt_XML, false, _isHTTP, _logctx, _xmlReadFlags)
     {
+    }
+
+    virtual void addContent(TextMarkupFormat fmt, const char *content, const char *name)
+    {
+        StringBuffer xml;
+        if (!content || !*content)
+            return;
+        if (fmt==MarkupFmt_JSON)
+        {
+            Owned<IPropertyTree> convertPT = createPTreeFromXMLString(content);
+            if (name && *name)
+                appendXMLOpenTag(xml, name);
+            toXML(convertPT, xml, 0, 0);
+            if (name && *name)
+                appendXMLCloseTag(xml, name);
+        }
     }
 
     virtual void finalize(unsigned seqNo)
@@ -733,11 +736,11 @@ public:
     }
 };
 
-class CRoxieJsonProtocolWriter : public CRoxieNativeProtocolWriter
+class CHpccJsonResultsWriter : public CHpccNativeResultsWriter
 {
 public:
-    CRoxieJsonProtocolWriter(const char *queryname, SafeSocket *_client, bool _isBlocked, TextMarkupFormat _mlFmt, bool _isRaw, bool _isHTTP, const IContextLogger &_logctx, PTreeReaderOptions _xmlReadFlags) :
-        CRoxieNativeProtocolWriter(queryname, _client, _isBlocked, _mlFmt, _isRaw, _isHTTP, _logctx, _xmlReadFlags)
+    CHpccJsonResultsWriter(const char *queryname, SafeSocket *_client, const IContextLogger &_logctx, PTreeReaderOptions _xmlReadFlags) :
+        CHpccNativeResultsWriter(queryname, _client, false, MarkupFmt_JSON, false, true, _logctx, _xmlReadFlags)
     {
     }
 
@@ -752,44 +755,351 @@ public:
         CriticalBlock b1(client->queryCrit());
 
         StringBuffer responseHead, responseTail;
-        appendfJSONName(responseHead, "%sResponse", queryName.get()).append(" {");
-        appendJSONValue(responseHead, "sequence", seqNo);
         appendJSONName(responseHead, "Results").append(" {");
-
         unsigned len = responseHead.length();
         client->write(responseHead.detach(), len, true);
 
         bool needDelimiter = false;
         ForEachItemIn(seq, resultMap)
+        FlushingStringBuffer *result = resultMap.item(seq);
+        if (result)
         {
-            FlushingStringBuffer *result = resultMap.item(seq);
-            if (result)
-            {
-                result->flush(true);
-                for(;;)
-                {
-                    size32_t length;
-                    void *payload = result->getPayload(length);
-                    if (!length)
-                        break;
-                    if (needDelimiter)
-                    {
-                        StringAttr s(","); //write() will take ownership of buffer
-                        size32_t len = s.length();
-                        client->write((void *)s.detach(), len, true);
-                        needDelimiter=false;
-                    }
-                    client->write(payload, length, true);
-                }
-                needDelimiter=true;
-            }
+           result->flush(true);
+           for(;;)
+           {
+               size32_t length;
+               void *payload = result->getPayload(length);
+               if (!length)
+                   break;
+               if (needDelimiter)
+               {
+                   StringAttr s(","); //write() will take ownership of buffer
+                   size32_t len = s.length();
+                   client->write((void *)s.detach(), len, true);
+                   needDelimiter=false;
+               }
+               client->write(payload, length, true);
+           }
+           needDelimiter=true;
         }
 
-        responseTail.append("}}");
+        responseTail.append("}");
+        len = responseTail.length();
+        client->write(responseTail.detach(), len, true);
+    }
+
+};
+
+class CHpccProtocolResponse : public CInterface, implements IHpccProtocolResponse
+{
+protected:
+    SafeSocket *client;
+    StringAttr queryName;
+    const IContextLogger &logctx;
+    TextMarkupFormat mlFmt;
+    PTreeReaderOptions xmlReadFlags;
+    Owned<CHpccNativeResultsWriter> results; //hpcc results section
+    IPointerArrayOf<FlushingStringBuffer> contentsMap; //other sections
+    CriticalSection contentsCrit;
+    bool isBlocked;
+    bool isRaw;
+    bool isHTTP;
+    bool trim;
+    bool failed;
+
+public:
+    IMPLEMENT_IINTERFACE;
+    CHpccProtocolResponse(const char *queryname, SafeSocket *_client, bool _isBlocked, TextMarkupFormat _mlFmt, bool _isRaw, bool _isHTTP, const IContextLogger &_logctx, PTreeReaderOptions _xmlReadFlags) :
+        client(_client), queryName(queryname), logctx(_logctx), mlFmt(_mlFmt), xmlReadFlags(_xmlReadFlags), isBlocked(_isBlocked), isRaw(_isRaw), isHTTP(_isHTTP)
+    {
+    }
+
+    virtual FlushingStringBuffer *queryAppendContentBuffer()
+    {
+        CriticalBlock procedure(contentsCrit);
+        FlushingStringBuffer *content;
+        if (mlFmt==MarkupFmt_JSON)
+            content = new FlushingJsonBuffer(client, isBlocked, isHTTP, logctx);
+        else
+            content = new FlushingStringBuffer(client, isBlocked, mlFmt, isRaw, isHTTP, logctx);
+        content->isSoap = isHTTP;
+        content->trim = trim;
+        content->queryName.set(queryName);
+        contentsMap.append(content);
+        return content;
+    }
+
+    virtual IHpccProtocolResults *getHpccResultsSection()
+    {
+        if (!results)
+            results.setown(new CHpccNativeResultsWriter(queryName, client, isBlocked, mlFmt, isRaw, isHTTP, logctx, xmlReadFlags);
+        return results;
+    }
+
+    virtual void *appendContent(TextMarkupFormat mlFmt, const char *content, const char *name=NULL)
+    {
+        throwUnexpected();
+    }
+    virtual IXmlWriter *writeAppendContent(const char *name = NULL)
+    {
+        throwUnexpected();
+    }
+    virtual void finalize(unsigned seqNo)
+    {
+        if (results)
+            results->flush();
+    }
+    virtual bool checkConnection()
+    {
+        return client->checkConnection();
+    }
+    virtual void sendHeartBeat()
+    {
+        client->sendHeartBeat(logctx);
+    }
+    virtual SafeSocket *querySafeSocket()
+    {
+        return client;
+    }
+    virtual void flush()
+    {
+        if (results)
+            results->flush();
+    }
+    virtual void appendProbeGraph(const char *xml)
+    {
+        if (results)
+            results->appendProbeGraph(xml);
+    }
+};
+
+class CHpccJsonResponse : public CHpccProtocolResponse
+{
+public:
+    CHpccJsonResponse(const char *queryname, SafeSocket *_client, bool _isBlocked, TextMarkupFormat _mlFmt, bool _isRaw, bool _isHTTP, const IContextLogger &_logctx, PTreeReaderOptions _xmlReadFlags) :
+        CHpccProtocolResponse(queryname, _client, _isBlocked, _mlFmt, _isRaw, _isHTTP, _logctx, _xmlReadFlags);
+    {
+    }
+
+    virtual IHpccProtocolResults *getHpccResultsSection()
+    {
+        if (!results)
+            results.setown(new CHpccJsonResultsWriter(queryName, client, isBlocked, mlFmt, isRaw, isHTTP, logctx, xmlReadFlags);
+        return results;
+    }
+
+
+    virtual void appendContent(TextMarkupFormat mlFmt, const char *content, const char *name=NULL)
+    {
+        if (mlFmt!=MarkupFmt_XML && mlFmt!=MarkupFmt_JSON)
+            return;
+        StringBuffer json;
+        if (mlFmt==MarkupFmt_XML)
+        {
+            Owned<IPropertyTree> convertPT = createPTreeFromXMLString(content);
+            toJSON(convertPT, json, 0, 0);
+            content = json.str();
+        }
+        FlushingStringBuffer *content = queryAppendContentBuffer();
+        StringBuffer tag;
+        if (name && *name)
+            appendJSONName(tag, name);
+        content->append(tag);
+        content->append(content);
+    }
+    virtual IXmlWriter *writeAppendContent(const char *name = NULL)
+    {
+        FlushingStringBuffer *content = queryAppendContentBuffer();
+        if (name && *name)
+        {
+            StringBuffer tag;
+            appendJSONName(tag, name);
+            content->append(tag);
+        }
+        Owned<IXmlWriter> xmlwriter = createIXmlWriterExt(XWFnoindent, 1, content, WTJSON);
+        return xmlwriter.getClear();
+    }
+    virtual void outputContent()
+    {
+        CriticalBlock b1(client->queryCrit());
+
+        bool needDelimiter = false;
+        ForEachItemIn(seq, contentsMap)
+        {
+            FlushingStringBuffer *content = contentsMap.item(seq);
+            if (content)
+            {
+               content->flush(true);
+               for(;;)
+               {
+                   size32_t length;
+                   void *payload = content->getPayload(length);
+                   if (!length)
+                       break;
+                   if (needDelimiter)
+                   {
+                       StringAttr s(","); //write() will take ownership of buffer
+                       size32_t len = s.length();
+                       client->write((void *)s.detach(), len, true);
+                       needDelimiter=false;
+                   }
+                   client->write(payload, length, true);
+               }
+               needDelimiter=true;
+            }
+        }
+    }
+    virtual void finalize(unsigned seqNo)
+    {
+        CriticalBlock b(contentsCrit);
+
+        StringBuffer responseHead, responseTail;
+        appendfJSONName(responseHead, "%sResponse", queryName.get()).append(" {");
+        appendJSONValue(responseHead, "sequence", seqNo);
+        unsigned len = responseHead.length();
+        client->write(responseHead.detach(), len, true);
+
+        outputContent();
+        if (results)
+            results->finalize(seqNo);
+
+        responseTail.append("}");
         len = responseTail.length();
         client->write(responseTail.detach(), len, true);
     }
 };
+
+class CHpccXmlResponse : public CHpccProtocolResponse
+{
+public:
+    CHpccXmlResponse(const char *queryname, SafeSocket *_client, bool _isBlocked, TextMarkupFormat _mlFmt, bool _isRaw, bool _isHTTP, const IContextLogger &_logctx, PTreeReaderOptions _xmlReadFlags) :
+        CHpccProtocolResponse(queryname, _client, _isBlocked, _mlFmt, _isRaw, _isHTTP, _logctx, _xmlReadFlags);
+    {
+    }
+
+    virtual IHpccProtocolResults *getHpccResultsSection()
+    {
+        if (!results)
+            results.setown(new CHpccXmlResultsWriter(queryName, client, isBlocked, mlFmt, isRaw, isHTTP, logctx, xmlReadFlags);
+        return results;
+    }
+
+    virtual void appendContent(TextMarkupFormat mlFmt, const char *content, const char *name=NULL)
+    {
+        if (mlFmt!=MarkupFmt_XML && mlFmt!=MarkupFmt_JSON)
+            return;
+        StringBuffer xml;
+        if (mlFmt==MarkupFmt_JSON)
+        {
+            Owned<IPropertyTree> convertPT = createPTreeFromJSONString(content);
+            toXML(convertPT, xml, 0, 0);
+            content = xml.str();
+        }
+        FlushingStringBuffer *content = queryAppendContentBuffer();
+        if (name && *name)
+        {
+            StringBuffer tag;
+            appendXMLOpeningTag(tag, name);
+            content->append(tag);
+            appendXMLClosingTag(tag.clear(), name);
+            content->setTail(tag);
+        }
+        content->append(content);
+    }
+    virtual IXmlWriter *writeAppendContent(const char *name = NULL)
+    {
+        FlushingStringBuffer *content = queryAppendContentBuffer();
+        StringBuffer tag;
+        if (name && *name)
+        {
+            appendXMLOpenTag(tag, name);
+            content->append(tag);
+            appendXMLCloseTag(tag.clear(), name);
+            content->setTail(tag);
+        }
+        Owned<IXmlWriter> xmlwriter = createIXmlWriterExt(0, 1, content, WTXML);
+        return xmlwriter.getClear();
+    }
+    virtual void outputContent()
+    {
+        CriticalBlock b1(client->queryCrit());
+
+        bool needDelimiter = false;
+        ForEachItemIn(seq, contentsMap)
+        {
+            FlushingStringBuffer *content = contentsMap.item(seq);
+            if (content)
+            {
+               content->flush(true);
+               for(;;)
+               {
+                   size32_t length;
+                   void *payload = content->getPayload(length);
+                   if (!length)
+                       break;
+                   if (needDelimiter)
+                   {
+                       StringAttr s(","); //write() will take ownership of buffer
+                       size32_t len = s.length();
+                       client->write((void *)s.detach(), len, true);
+                       needDelimiter=false;
+                   }
+                   client->write(payload, length, true);
+               }
+               needDelimiter=true;
+            }
+        }
+    }
+    virtual void finalize(unsigned seqNo)
+    {
+        CriticalBlock b(contentsCrit);
+
+        StringBuffer responseHead, responseTail;
+        appendfJSONName(responseHead, "%sResponse", queryName.get()).append(" {");
+        appendJSONValue(responseHead, "sequence", seqNo);
+        unsigned len = responseHead.length();
+        client->write(responseHead.detach(), len, true);
+
+        outputContent();
+        if (results)
+            results->finalize(seqNo);
+
+        responseTail.append("}");
+        len = responseTail.length();
+        client->write(responseTail.detach(), len, true);
+    }
+    virtual bool checkConnection()
+    {
+        return client->checkConnection();
+    }
+    virtual void sendHeartBeat()
+    {
+        client->sendHeartBeat(logctx);
+    }
+    virtual SafeSocket *querySafeSocket()
+    {
+        return client;
+    }
+    virtual void flush()
+    {
+        if (results)
+            results->flush();
+    }
+    virtual void appendProbeGraph(const char *xml)
+    {
+        if (results)
+            results->appendProbeGraph(xml);
+    }
+};
+
+IHpccProtocol *createProtocolResponse(const char *queryname, SafeSocket *client, HttpHelper &httpHelper, const IContextLogger &logctx, unsigned protocolFlags, PTreeReaderOptions xmlReadFlags)
+{
+    if (protocolFlags & HPCC_PROTOCOL_NATIVE_RAW)
+        return new CRoxieNativeProtocolWriter(queryname, client, (protocolFlags & HPCC_PROTOCOL_BLOCKED), MarkupFmt_Unknown, true, false, logctx, xmlReadFlags);
+    else if (httpHelper.queryContentFormat()==MarkupFmt_JSON)
+        return new CRoxieJsonProtocolWriter(queryname, client, logctx, xmlReadFlags);
+    return new CRoxieXmlProtocolWriter(queryname, client, httpHelper.isHttp(), logctx, xmlReadFlags);
+}
 
 class CHttpRequestAsyncFor : public CInterface, public CAsyncFor
 {
@@ -819,11 +1129,6 @@ public:
 
     IMPLEMENT_IINTERFACE;
 
-    virtual IXmlWriter *updateXmlResult(const char *name, unsigned sequence, const char *elementName, bool _extend = false, const IProperties *xmlns=NULL)
-    {
-        return NULL;
-    }
-
     void onException(IException *E)
     {
         //if (!logctx.isBlind())
@@ -840,12 +1145,7 @@ public:
         try
         {
             IPropertyTree &request = requestArray.item(idx);
-            Owned<CRoxieNativeProtocolWriter> protocol;
-            if (httpHelper.queryContentFormat()==MarkupFmt_JSON)
-                protocol.setown(new CRoxieJsonProtocolWriter(request.queryName(), &client, false, MarkupFmt_JSON, false, httpHelper.isHttp(), logctx, xmlReadFlags));
-            else
-                protocol.setown(new CRoxieXmlProtocolWriter(request.queryName(), &client, false, httpHelper.queryContentFormat(), false, httpHelper.isHttp(), logctx, xmlReadFlags));
-
+            Owned<IHpccProtocol> protocol = createProtocolWriter(request.queryName(), &client, httpHelper, logctx, flags, xmlReadFlags);
             sink->query(msgctx, &request, protocol, flags, xmlReadFlags, querySetName, idx, memused, slaveReplyLen);
         }
         catch (WorkflowException * E)
@@ -1017,7 +1317,7 @@ private:
         }
     }
 
-    void sanitizeQuery(Owned<IPropertyTree> &queryPT, StringAttr &queryName, StringBuffer &saniText, HttpHelper &httpHelper, const char *&uid, bool &isRequest, bool &isRequestArray, bool &isBlind, bool &isDebug)
+    void skipProtocolRoot(Owned<IPropertyTree> &queryPT, HttpHelper &httpHelper, StringAttr &queryName, bool &isRequest, bool &isRequestArray)
     {
         if (queryPT)
         {
@@ -1074,6 +1374,14 @@ private:
                     queryPT->renameProp("/", queryName.get());  // reset the name of the tree
                 }
             }
+        }
+    }
+
+    void sanitizeQuery(Owned<IPropertyTree> &queryPT, StringAttr &queryName, StringBuffer &saniText, HttpHelper &httpHelper, const char *&uid, bool &isRequest, bool &isRequestArray, bool &isBlind, bool &isDebug)
+    {
+        if (queryPT)
+        {
+            skipProtocolRoot(queryPT, httpHelper, queryName, isRequest, isRequestArray);
 
             // convert to XML with attribute values in single quotes - makes replaying queries easier
             uid = queryPT->queryProp("@uid");
@@ -1145,6 +1453,10 @@ readAnother:
         TextMarkupFormat mlFmt = isHTTP ? httpHelper.queryContentFormat() : MarkupFmt_XML;
 
         bool failed = false;
+        bool isRequest = false;
+        bool isRequestArray = false;
+        bool isBlind = false;
+        bool isDebug = false;
         unsigned protocolFlags = 0;
 
         Owned<IPropertyTree> queryPT;
@@ -1169,6 +1481,9 @@ readAnother:
         {
             if (streq(queryPrefix.str(), "control"))
             {
+                if (httpHelper.isHttp())
+                    client->setHttpMode(queryName, false, httpHelper);
+
                 bool aclupdate = strieq(queryName, "aclupdate"); //ugly
                 byte iptFlags = aclupdate ? ipt_caseInsensitive : 0;
 
@@ -1177,11 +1492,18 @@ readAnother:
                 else
                     queryPT.setown(createPTreeFromXMLString(rawText.str(), iptFlags, (PTreeReaderOptions)(ptr_ignoreWhiteSpace|ptr_ignoreNameSpaces)));
 
-                FlushingStringBuffer response(client, false, MarkupFmt_XML, false, false, logctx);
+                IPropertyTree *root = queryPT;
+                skipProtocolRoot(queryPT, httpHelper, queryName, isRequest, isRequestArray);
+                VStringBuffer fullname("control:%s", queryName.str()); //just easier to keep for debugging and internal checking
+                queryPT->renameProp("/", fullname);
+                if (root!=queryPT) //rebuild native xml message with namespace for cascade:
+                    toXML(queryPT, rawText.clear(), 0, 0);
+
+                FlushingStringBuffer response(client, false, MarkupFmt_XML, false, httpHelper.isHttp(), logctx);
                 response.startDataset("Control", NULL, (unsigned) -1);
 
                 StringBuffer reply;
-                sink->control(msgctx, queryPT, rawText.str(), reply);
+                sink->control(msgctx, queryPT, sanitizedText, reply);
                 if (mlFmt==MarkupFmt_JSON)
                 {
                     Owned<IPropertyTree> convertPT = createPTreeFromXMLString(reply.str());
@@ -1207,11 +1529,6 @@ readAnother:
                     logctx.CTXLOG("ERROR: Invalid XML received from %s:%d - %s", peerStr.str(), pool->queryPort(), rawText.str());
                     throw;
                 }
-
-                bool isRequest = false;
-                bool isRequestArray = false;
-                bool isBlind = false;
-                bool isDebug = false;
 
                 sanitizeQuery(queryPT, queryName, sanitizedText, httpHelper, uid, isRequest, isRequestArray, isBlind, isDebug);
                 pool->checkAccess(peer, queryName, sanitizedText, isBlind);
@@ -1361,18 +1678,11 @@ readAnother:
                         }
                         else
                         {
-                            Owned<CRoxieNativeProtocolWriter> writer;
-                            if (protocolFlags & HPCC_PROTOCOL_NATIVE_RAW)
-                                writer.setown(new CRoxieNativeProtocolWriter(queryPT->queryName(), client, false, mlFmt, false, true, logctx, xmlReadFlags));
-                            else if (mlFmt==MarkupFmt_JSON)
-                                writer.setown(new CRoxieJsonProtocolWriter(queryPT->queryName(), client, false, mlFmt, false, true, logctx, xmlReadFlags));
-                            else
-                                writer.setown(new CRoxieXmlProtocolWriter(queryPT->queryName(), client, false, mlFmt, false, true, logctx, xmlReadFlags));  //adf raw!
-
                             unsigned replyLen = 0;
                             client->write(&replyLen, sizeof(replyLen));
 
-                            sink->query(msgctx, queryPT, writer, protocolFlags, xmlReadFlags, querySetName, 0, memused, slavesReplyLen);
+                            Owned<IHpccProtocol> protocol = createProtocolWriter(queryPT->queryName(), client, httpHelper, logctx, protocolFlags, xmlReadFlags);
+                            sink->query(msgctx, queryPT, protocol, protocolFlags, xmlReadFlags, querySetName, 0, memused, slavesReplyLen);
                         }
                     }
                     else
