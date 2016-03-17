@@ -1447,6 +1447,7 @@ readAnother:
                     client.clear();
                     return;
                 }
+                DBGLOG("client->readBlock('%s')", rawText.str());
             }
             if (continuationNeeded)
             {
