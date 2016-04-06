@@ -1708,6 +1708,8 @@ bool CSafeSocket::readBlock(StringBuffer &ret, unsigned timeout, HttpHelper *pHt
             char header[MAX_HTTP_HEADERSIZE + 1]; // allow room for \0
             sock->read(header, 1, MAX_HTTP_HEADERSIZE, bytesRead, timeout);
             header[bytesRead] = 0;
+            DBGLOG("F5Test POST %s", (const char *)header);
+
             char *payload = strstr(header, "\r\n\r\n");
             if (payload)
             {
@@ -1756,17 +1758,22 @@ bool CSafeSocket::readBlock(StringBuffer &ret, unsigned timeout, HttpHelper *pHt
                 char headerline[MAX_HTTP_GET_LINE + 1];
                 Owned<IBufferedSocket> linereader = createBufferedSocket(sock);
 
+                StringBuffer f5test;
                 int bytesread = readHttpHeaderLine(linereader, headerline, MAX_HTTP_GET_LINE);
+                f5test.append(headerline);
                 pHttpHelper->parseHTTPRequestLine(headerline);
 
                 bytesread = readHttpHeaderLine(linereader, headerline, MAX_HTTP_GET_LINE);
+                f5test.append(headerline);
                 while(bytesread >= 0 && *headerline && *headerline!='\r')
                 {
                     // capture authentication token
                     if (!strnicmp(headerline, "Authorization: Basic ", 21))
                         pHttpHelper->setAuthToken(headerline+21);
                     bytesread = readHttpHeaderLine(linereader, headerline, MAX_HTTP_GET_LINE);
+                    f5test.append(headerline);
                 }
+                DBGLOG("f5test GET %s", f5test.str());
 
                 pHttpHelper->checkTarget();
                 const char *query = pHttpHelper->queryQueryName();
@@ -1775,10 +1782,14 @@ bool CSafeSocket::readBlock(StringBuffer &ret, unsigned timeout, HttpHelper *pHt
                 return true;
         }
         else if (strnicmp((char *)&len, "STAT", 4) == 0)
+        {
+            DBGLOG("f5test STAT");
             isStatus = true;
+        }
         else
         {
             _WINREV(len);
+            DBGLOG("f5test len %x", len);
             if (len & 0x80000000)
             {
                 len ^= 0x80000000;
@@ -1796,11 +1807,12 @@ bool CSafeSocket::readBlock(StringBuffer &ret, unsigned timeout, HttpHelper *pHt
         {
             sock->read(buf + (len - left), left, left, bytesRead, timeout);
         }
-
+        DBGLOG("f5test read %s", ret.str());
         return len != 0;
     }
     catch (IException *E)
     {
+        DBGLOG(E, "f5 exception");
         if (pHttpHelper)
             checkSendHttpException(*pHttpHelper, E, NULL);
         heartbeat = false;
@@ -1808,6 +1820,7 @@ bool CSafeSocket::readBlock(StringBuffer &ret, unsigned timeout, HttpHelper *pHt
     }
     catch (...)
     {
+        DBGLOG("f5 unknown exception");
         heartbeat = false;
         throw;
     }
@@ -1857,6 +1870,7 @@ void CSafeSocket::sendSoapException(IException *E, const char *queryName)
 {
     try
     {
+        adaptiveRoot = false;
         if (!queryName)
             queryName = "Unknown"; // Exceptions when parsing query XML can leave queryName unset/unknowable....
 
@@ -1888,6 +1902,7 @@ void CSafeSocket::sendJsonException(IException *E, const char *queryName)
 {
     try
     {
+        adaptiveRoot = false;
         if (!queryName)
             queryName = "Unknown"; // Exceptions when parsing query XML can leave queryName unset/unknowable....
 
@@ -1962,7 +1977,9 @@ void CSafeSocket::flush()
 {
     if (httpMode)
     {
-        unsigned length = contentHead.length() + contentTail.length();
+        unsigned length = 0;
+        if (!adaptiveRoot)
+            length = contentHead.length() + contentTail.length();
         ForEachItemIn(idx, lengths)
             length += lengths.item(idx);
 
@@ -1977,10 +1994,13 @@ void CSafeSocket::flush()
             DBGLOG("Writing HTTP header length %d to HTTP socket", header.length());
         sock->write(header.str(), header.length());
         sent += header.length();
-        if (traceLevel > 5)
-            DBGLOG("Writing content head length %d to HTTP socket", contentHead.length());
-        sock->write(contentHead.str(), contentHead.length());
-        sent += contentHead.length();
+        if (!adaptiveRoot || mlResponseFmt != MarkupFmt_JSON)
+        {
+            if (traceLevel > 5)
+                DBGLOG("Writing content head length %d to HTTP socket", contentHead.length());
+            sock->write(contentHead.str(), contentHead.length());
+            sent += contentHead.length();
+        }
         ForEachItemIn(idx2, queued)
         {
             unsigned length = lengths.item(idx2);
@@ -1989,10 +2009,13 @@ void CSafeSocket::flush()
             sock->write(queued.item(idx2), length);
             sent += length;
         }
-        if (traceLevel > 5)
-            DBGLOG("Writing content tail length %d to HTTP socket", contentTail.length());
-        sock->write(contentTail.str(), contentTail.length());
-        sent += contentTail.length();
+        if (!adaptiveRoot || mlResponseFmt != MarkupFmt_JSON)
+        {
+            if (traceLevel > 5)
+                DBGLOG("Writing content tail length %d to HTTP socket", contentTail.length());
+            sock->write(contentTail.str(), contentTail.length());
+            sent += contentTail.length();
+        }
         if (traceLevel > 5)
             DBGLOG("Total written %d", sent);
     }
@@ -2292,7 +2315,7 @@ void *FlushingStringBuffer::getPayload(size32_t &length)
     return length ? s.detach() : NULL;
 }
 
-void FlushingStringBuffer::startDataset(const char *elementName, const char *resultName, unsigned sequence, bool _extend, const IProperties *xmlns)
+void FlushingStringBuffer::startDataset(const char *elementName, const char *resultName, unsigned sequence, bool _extend, const IProperties *xmlns, bool adaptive)
 {
     CriticalBlock b(crit);
     extend = _extend;
@@ -2303,35 +2326,38 @@ void FlushingStringBuffer::startDataset(const char *elementName, const char *res
         startBlock();
         if (!isBlocked)
         {
-            if (mlFmt==MarkupFmt_XML)
+            if (mlFmt==MarkupFmt_XML && elementName)
             {
                 s.append('<').append(elementName);
-                if (isSoap && (resultName || (sequence != (unsigned) -1)))
+                if (!adaptive)
                 {
-                    s.append(" xmlns=\'urn:hpccsystems:ecl:").appendLower(queryName.length(), queryName.str()).append(":result:");
-                    if (resultName && *resultName)
-                        s.appendLower(strlen(resultName), resultName).append('\'');
-                    else
-                        s.append("result_").append(sequence+1).append('\'');
-                    if (xmlns)
+                    if (isSoap && (resultName || (sequence != (unsigned) -1)))
                     {
-                        Owned<IPropertyIterator> it = const_cast<IProperties*>(xmlns)->getIterator(); //should fix IProperties to be const friendly
-                        ForEach(*it)
+                        s.append(" xmlns=\'urn:hpccsystems:ecl:").appendLower(queryName.length(), queryName.str()).append(":result:");
+                        if (resultName && *resultName)
+                            s.appendLower(strlen(resultName), resultName).append('\'');
+                        else
+                            s.append("result_").append(sequence+1).append('\'');
+                        if (xmlns)
                         {
-                            const char *name = it->getPropKey();
-                            s.append(' ');
-                            if (!streq(name, "xmlns"))
-                                s.append("xmlns:");
-                            s.append(name).append("='");
-                            encodeUtf8XML(const_cast<IProperties*>(xmlns)->queryProp(name), s);
-                            s.append("'");
+                            Owned<IPropertyIterator> it = const_cast<IProperties*>(xmlns)->getIterator(); //should fix IProperties to be const friendly
+                            ForEach(*it)
+                            {
+                                const char *name = it->getPropKey();
+                                s.append(' ');
+                                if (!streq(name, "xmlns"))
+                                    s.append("xmlns:");
+                                s.append(name).append("='");
+                                encodeUtf8XML(const_cast<IProperties*>(xmlns)->queryProp(name), s);
+                                s.append("'");
+                            }
                         }
                     }
+                    if (resultName && *resultName)
+                        s.appendf(" name='%s'",resultName);
+                    else if (sequence != (unsigned) -1)
+                        s.appendf(" name='Result %d'",sequence+1);
                 }
-                if (resultName && *resultName)
-                    s.appendf(" name='%s'",resultName);
-                else if (sequence != (unsigned) -1)
-                    s.appendf(" name='Result %d'",sequence+1);
                 s.append(">\n");
                 tail.clear().appendf("</%s>\n", elementName);
             }
@@ -2339,8 +2365,7 @@ void FlushingStringBuffer::startDataset(const char *elementName, const char *res
         isEmpty = false;
     }
 }
-
-void FlushingStringBuffer::startScalar(const char *resultName, unsigned sequence)
+void FlushingStringBuffer::startScalar(const char *resultName, unsigned sequence, bool simpleTag, const char *simpleName)
 {
     if (s.length())
         throw MakeStringException(0, "Attempt to output scalar ('%s',%d) multiple times", resultName ? resultName : "", (int)sequence);
@@ -2354,32 +2379,38 @@ void FlushingStringBuffer::startScalar(const char *resultName, unsigned sequence
     {
         if (mlFmt==MarkupFmt_XML)
         {
-            tail.clear();
-            s.append("<Dataset");
-            if (isSoap && (resultName || (sequence != (unsigned) -1)))
+            if (!simpleTag)
             {
-                s.append(" xmlns=\'urn:hpccsystems:ecl:").appendLower(queryName.length(), queryName.str()).append(":result:");
+                tail.clear();
+                s.append("<Dataset");
+                if (isSoap && (resultName || (sequence != (unsigned) -1)))
+                {
+                    s.append(" xmlns=\'urn:hpccsystems:ecl:").appendLower(queryName.length(), queryName.str()).append(":result:");
+                    if (resultName && *resultName)
+                        s.appendLower(strlen(resultName), resultName).append('\'');
+                    else
+                        s.append("result_").append(sequence+1).append('\'');
+                }
                 if (resultName && *resultName)
-                    s.appendLower(strlen(resultName), resultName).append('\'');
+                    s.appendf(" name='%s'>\n",resultName);
                 else
-                    s.append("result_").append(sequence+1).append('\'');
+                    s.appendf(" name='Result %d'>\n",sequence+1);
+                s.append(" <Row>");
             }
-            if (resultName && *resultName)
-                s.appendf(" name='%s'>\n",resultName);
-            else
-                s.appendf(" name='Result %d'>\n",sequence+1);
-            s.append(" <Row>");
-            if (resultName && *resultName)
+            if (!simpleName)
+                simpleName = resultName;
+            if (simpleName && *simpleName)
             {
-                s.appendf("<%s>", resultName);
-                tail.appendf("</%s>", resultName);
+                s.appendf("<%s>", simpleName);
+                tail.appendf("</%s>", simpleName);
             }
             else
             {
                 s.appendf("<Result_%d>", sequence+1);
                 tail.appendf("</Result_%d>", sequence+1);
             }
-            tail.appendf("</Row>\n</Dataset>\n");
+            if (!simpleTag)
+                tail.appendf("</Row>\n</Dataset>\n");
         }
         else if (!isRaw)
         {
@@ -2423,7 +2454,7 @@ void FlushingJsonBuffer::encodeData(const void *data, unsigned len)
     appendJSONDataValue(s, NULL, len, data);
 }
 
-void FlushingJsonBuffer::startDataset(const char *elementName, const char *resultName, unsigned sequence, bool _extend, const IProperties *xmlns)
+void FlushingJsonBuffer::startDataset(const char *elementName, const char *resultName, unsigned sequence, bool _extend, const IProperties *xmlns, bool adaptive)
 {
     CriticalBlock b(crit);
     extend = _extend;
@@ -2432,7 +2463,7 @@ void FlushingJsonBuffer::startDataset(const char *elementName, const char *resul
         name.clear().append(resultName ? resultName : elementName);
         sequenceNumber = 0;
         startBlock();
-        if (!isBlocked)
+        if (elementName && !isBlocked)
         {
             StringBuffer seqName;
             if (!resultName || !*resultName)
@@ -2444,7 +2475,7 @@ void FlushingJsonBuffer::startDataset(const char *elementName, const char *resul
     }
 }
 
-void FlushingJsonBuffer::startScalar(const char *resultName, unsigned sequence)
+void FlushingJsonBuffer::startScalar(const char *resultName, unsigned sequence, bool simpleTag, const char *simpleName)
 {
     if (s.length())
         throw MakeStringException(0, "Attempt to output scalar ('%s',%d) multiple times", resultName ? resultName : "", (int)sequence);
@@ -2456,28 +2487,34 @@ void FlushingJsonBuffer::startScalar(const char *resultName, unsigned sequence)
     startBlock();
     if (!isBlocked)
     {
-        StringBuffer seqName;
-        if (!resultName || !*resultName)
-            resultName = seqName.appendf("Result_%d", sequence+1).str();
-        appendJSONName(s, resultName).append('{');
-        appendJSONName(s, "Row").append("[{");
-        appendJSONName(s, resultName);
-        tail.set("}]}");
+        if (!simpleTag)
+        {
+            StringBuffer seqName;
+            if (!resultName || !*resultName)
+                resultName = seqName.appendf("Result_%d", sequence+1).str();
+            appendJSONName(s, resultName).append('{');
+            appendJSONName(s, "Row").append("[");
+        }
+        s.append('{');
+        appendJSONName(s, (simpleName && *simpleName) ? simpleName : resultName);
+        tail.set("}");
+        if (!simpleTag)
+            tail.append("]}");
     }
 }
 
-void FlushingJsonBuffer::setScalarInt(const char *resultName, unsigned sequence, __int64 value, unsigned size)
+void FlushingJsonBuffer::setScalarInt(const char *resultName, unsigned sequence, __int64 value, unsigned size, bool simpleTag, const char *simpleName)
 {
-    startScalar(resultName, sequence);
+    startScalar(resultName, sequence, simpleTag, simpleName);
     if (size < 7) //JavaScript only supports 53 significant bits
         s.append(value);
     else
         s.append('"').append(value).append('"');
 }
 
-void FlushingJsonBuffer::setScalarUInt(const char *resultName, unsigned sequence, unsigned __int64 value, unsigned size)
+void FlushingJsonBuffer::setScalarUInt(const char *resultName, unsigned sequence, unsigned __int64 value, unsigned size, bool simpleTag, const char *simpleName)
 {
-    startScalar(resultName, sequence);
+    startScalar(resultName, sequence, simpleTag, simpleName);
     if (size < 7) //JavaScript doesn't support unsigned, and only supports 53 significant bits
         s.append(value);
     else
