@@ -325,10 +325,14 @@ static bool getCurrentFolder(StringBuffer & path)
 
 static bool getComponentFilesRelPathFromBin(StringBuffer & path)
 {
-    if (getCurrentFolder(path))
+    StringBuffer s;
+    if (getCurrentFolder(s))
     {
-        path.appendf("%c%s%c%s", PATHSEPCHAR, HIGHER_DIR_RELATIVE,PATHSEPCHAR,COMPONENTS_DIR_NAME);
-        return true;
+        if (checkDirExists(s.appendf("%c%s%c%s", PATHSEPCHAR, HIGHER_DIR_RELATIVE,PATHSEPCHAR,COMPONENTS_DIR_NAME)))
+        {
+            path.set(s);
+            return true;
+        }
     }
 
     return false;

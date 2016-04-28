@@ -874,6 +874,10 @@ IEsdlCommand *createCoreEsdlCommand(const char *cmdname)
         return new EsdlListESDLDefCmd();
     if (strieq(cmdname, "LIST-BINDINGS"))
         return new EsdlListESDLBindingsCmd();
+    if (strieq(cmdname, "ECL-DIFF-GEN"))
+        return createEsdlDiffCommand(cmdname);
+    if (strieq(cmdname, "ECL-DIFF-TEMPLATE"))
+        return createEsdlDiffCommand(cmdname);
 
     return NULL;
 }

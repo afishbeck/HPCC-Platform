@@ -533,14 +533,22 @@ public:
         const char *xsd_type = getMetaString("xsd_type", NULL);
         if (xsd_type)
         {
+            const char *attr = "complex_type";
             if (*xsd_type=='\"')
                 xsd_type++;
             const char *finger = strchr(xsd_type, ':');
             if (finger)
+            {
                 xsd_type=finger+1;
+                if (!strncmp("ArrayOf", xsd_type, 7))
+                {
+                    attr = "type";
+                    xsd_type += 7;
+                }
+            }
             StringBuffer TypeName(xsd_type);
             TypeName.replace('\"', 0);
-            out.appendf(" complex_type='%s'", TypeName.str());
+            out.appendf(" %s='%s'", attr, TypeName.str());
         }
         else
         {
@@ -551,9 +559,23 @@ public:
         }
     }
 
+#define purecrap "tns:ArrayOf"
     void toString(StringBuffer & out)
     {
-        if (flags & PF_TEMPLATE && !strcmp(templ, "ESParray"))
+        const char *xsd_type = getMetaString("xsd_type", NULL);
+        if (xsd_type && *xsd_type=='\"')
+           xsd_type++;
+        unsigned pcl = strlen(purecrap);
+        if (xsd_type && !strncmp(purecrap, xsd_type, pcl))
+        {
+            out.appendf("\t\t<EsdlArray name='%s' ", name);
+            toStringXmlAttr(out);
+            for (MetaTagInfo *mtag=tags; mtag; mtag=mtag->next)
+            {
+                mtag->toStringXmlAttr(out);
+            }
+        }
+        else if (flags & PF_TEMPLATE && !strcmp(templ, "ESParray"))
         {
             out.appendf("\t\t<EsdlArray name='%s' ", name);
             toStringXmlAttr(out);
@@ -580,7 +602,7 @@ public:
         }
         else
         {
-            out.appendf("\t\t<EsdlElement name='%s'", name);
+            out.appendf("\t\t<EsdlElement name='%s' here='1'", name);
             toStringXmlAttr(out);
             for (MetaTagInfo *mtag=tags; mtag; mtag=mtag->next)
             {

@@ -166,7 +166,7 @@ void EsdlDefinitionHelper::toXML( IEsdlDefObjectIterator& objs, StringBuffer &xm
         }
 
         // Add the serialization of the current structure to the xml output StringBuffer
-        xml.append( curObjXml );
+        xml.append( curObjXml ).append('\n');
     }
 
     return;
