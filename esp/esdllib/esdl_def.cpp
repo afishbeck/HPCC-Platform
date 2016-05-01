@@ -1468,6 +1468,8 @@ IEsdlDefObjectIterator* EsdlDefinition::getDependencies( const char* service, St
         methodIter.setown(serviceDef->getMethods());
         for( methodIter->first(); methodIter->isValid(); methodIter->next() )
         {
+            if ((flags & DEPFLAG_ECL_ONLY) && methodIter->query().getPropInt("ecl_hide"))
+                continue;
             methodArray.append( methodIter->query() );
         }
     }
@@ -1477,11 +1479,10 @@ IEsdlDefObjectIterator* EsdlDefinition::getDependencies( const char* service, St
         {
             methodDef = serviceDef->queryMethodByName(methods.item(i));
 
-            if( NULL == methodDef )
-            {
+            if(!methodDef)
                 throw( MakeStringException(0, "ESDL Method Definition not found for %s in service %s", methods.item(i), service) );
-            }
-
+            if ((flags & DEPFLAG_ECL_ONLY) && methodDef->getPropInt("ecl_hide"))
+                continue;
             methodArray.append( *methodDef );
         }
     }
@@ -1558,6 +1559,8 @@ unsigned EsdlDefinition::walkChildrenDepthFirst( AddedObjs& foundByName, EsdlDef
             while( children->isValid() )
             {
                 IEsdlDefObject& child = children->query();
+                if ((flags & DEPFLAG_ECL_ONLY) && child.getPropInt("ecl_hide"))
+                    continue;
                 const char *childname = child.queryName();
                 EsdlDefTypeId childType = child.getEsdlType();
                 //DBGLOG("  %s<%s> child", StringBuffer(level*2, " ").str(), childname );
@@ -1588,7 +1591,7 @@ unsigned EsdlDefinition::walkChildrenDepthFirst( AddedObjs& foundByName, EsdlDef
                     }
 
                     // Should this element be included based on ESP version & optional tags?
-                    if( child.checkOptional(opts) && ( requestedVer==0.0 || child.checkVersion(requestedVer)) && (!(flags & DEPFLAG_ECL_ONLY) || !child.hasProp("ecl_hide")))
+                    if( child.checkOptional(opts) && ( requestedVer==0.0 || child.checkVersion(requestedVer)))
                     {
                         if( complexType != NULL )
                         {

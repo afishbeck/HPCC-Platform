@@ -647,6 +647,21 @@ public:
         XpathTrack &xt;
         bool expanded = false;
     };
+    const char *findInheritedAttribute(IPropertyTree &depTree, IPropertyTree *structType, const char *attr)
+    {
+        const char *s = structType->queryProp(attr);
+        if (s && *s)
+            return s;
+        const char *base_type = structType->queryProp("@base_type");
+        if (!base_type || !*base_type)
+            return NULL;
+
+        VStringBuffer xpath("EsdlStruct[@name='%s'][1]", base_type);
+        IPropertyTree *baseType = depTree.queryPropTree(xpath);
+        if (!baseType)
+            return NULL;
+        return findInheritedAttribute(depTree, baseType, attr);
+    }
     void expandDiffIds(IPropertyTree &depTree, IPropertyTree *st, IPropertyTree *mon, XpathTrack &xtrack, const char *name)
     {
         XTrackScope xscope(xtrack, name);
@@ -699,6 +714,8 @@ public:
                             const char *diff_id = mon->queryProp(xpath);
                             if (!diff_id || !*diff_id)
                                 diff_id = child.queryProp("@diff_id");
+                            if (!diff_id || !*diff_id)
+                                diff_id = findInheritedAttribute(depTree, childType, "@diff_id");
                             if (diff_id && *diff_id)
                             {
                                 StringArray idparts;
@@ -715,7 +732,10 @@ public:
                                 IPropertyTree *diffIdTree = createPTree("diff_id");
                                 diffIdTree->setProp("@name", idname);
                                 ForEachItemIn(i2, idparts)
-                                    diffIdTree->setProp("part", idparts.item(i2));
+                                {
+                                    StringBuffer s(idparts.item(i2));
+                                    diffIdTree->addProp("part", s.trim());
+                                }
 
                                 IPropertyTree *diffIdSection = child.queryPropTree("DiffIdSection");
                                 if (!diffIdSection)
