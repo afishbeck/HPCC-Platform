@@ -647,6 +647,7 @@ public:
         XpathTrack &xt;
         bool expanded = false;
     };
+
     const char *findInheritedAttribute(IPropertyTree &depTree, IPropertyTree *structType, const char *attr)
     {
         const char *s = structType->queryProp(attr);
@@ -662,9 +663,226 @@ public:
             return NULL;
         return findInheritedAttribute(depTree, baseType, attr);
     }
-    void expandDiffIds(IPropertyTree &depTree, IPropertyTree *st, IPropertyTree *mon, XpathTrack &xtrack, const char *name)
+
+    IPropertyTree *findInheritedXpath(IPropertyTree &depTree, IPropertyTree *structType, const char *path)
+    {
+        IPropertyTree *t= structType->queryPropTree(path);
+        if (t)
+            return t;
+        const char *base_type = structType->queryProp("@base_type");
+        if (!base_type || !*base_type)
+            return NULL;
+
+        VStringBuffer xpath("EsdlStruct[@name='%s'][1]", base_type);
+        IPropertyTree *baseType = depTree.queryPropTree(xpath);
+        if (!baseType)
+            return NULL;
+        return findInheritedXpath(depTree, baseType, path);
+    }
+
+    void addAllDiffIdElementsToMap(IPropertyTree &depTree, IPropertyTree *st, IPropertyTree *map)
+    {
+        const char *base_type = st->queryProp("@base_type");
+        if (base_type && *base_type)
+        {
+            VStringBuffer xpath("EsdlStruct[@name='%s'][1]", base_type);
+            IPropertyTree *baseType = depTree.queryPropTree(xpath);
+            if (baseType)
+                addAllDiffIdElementsToMap(depTree, baseType, map);
+        }
+        Owned<IPropertyTreeIterator> children = st->getElements("EsdlElement");
+        ForEach(*children)
+        {
+            IPropertyTree &child = children->query();
+            if (!child.hasProp("@complex_type"))
+            {
+                addDiffIdPartToMap(depTree, st, map, child.queryProp("@name"));
+            }
+            else
+            {
+                IPropertyTree *partMap = ensurePTree(map, child.queryProp("@name"));
+                VStringBuffer xpath("EsdlStruct[@name='%s']", child.queryProp("@complex_type"));
+                IPropertyTree *structType = depTree.queryPropTree(xpath);
+                if (!structType)
+                    map->setProp("@ftype", "str"); //ECL compiler will find the error
+                else
+                    addDiffIdPartToMap(depTree, structType, partMap, NULL);
+            }
+        }
+    }
+    void addDiffIdPartToMap(IPropertyTree &depTree, IPropertyTree *parent, IPropertyTree *map, const char *id)
+    {
+        StringBuffer part;
+        const char *finger = nullptr;
+        if (id && *id)
+        {
+            finger = strchr(id, '.');
+            if (finger)
+                part.append(finger-id, id);
+            else
+                part.append(id);
+            part.trim();
+        }
+        if (!part.length()) //short hand for compare the entire struct
+        {
+            addAllDiffIdElementsToMap(depTree, parent, map);
+        }
+        else
+        {
+            VStringBuffer xpath("EsdlElement[@name='%s']", part.str());
+            IPropertyTree *partElement = parent->queryPropTree(xpath);
+            if (!partElement)
+            {
+                StringBuffer idpath(id);
+                idpath.replace(' ','_').replace('.', '/');
+                IPropertyTree *partMap = ensurePTree(map, idpath.str());
+                partMap->setProp("@ftype", "string"); //let ecl compiler complain
+            }
+            else
+            {
+                IPropertyTree *partMap = ensurePTree(map, part.str());
+                if (!partElement->hasProp("@complex_type")) //simple or none
+                {
+                    EsdlBasicElementType et = esdlSimpleType(partElement->queryProp("@type"));
+                    switch (et)
+                    {
+                    case ESDLT_INT8:
+                    case ESDLT_INT16:
+                    case ESDLT_INT32:
+                    case ESDLT_INT64:
+                    case ESDLT_UINT8:
+                    case ESDLT_UINT16:
+                    case ESDLT_UINT32:
+                    case ESDLT_UINT64:
+                    case ESDLT_BYTE:
+                    case ESDLT_UBYTE:
+                        partMap->setProp("@ftype", "number");
+                        break;
+                    case ESDLT_BOOL:
+                        partMap->setProp("@ftype", "bool");
+                        break;
+                    case ESDLT_FLOAT:
+                    case ESDLT_DOUBLE:
+                        partMap->setProp("@ftype", "float");
+                        break;
+                    case ESDLT_UNKOWN:
+                    case ESDLT_STRING:
+                    default:
+                        partMap->setProp("@ftype", "string");
+                        break;
+                    }
+                }
+                else
+                {
+                    xpath.setf("EsdlStruct[@name='%s']", partElement->queryProp("@complex_type"));
+                    IPropertyTree *structType = depTree.queryPropTree(xpath);
+                    if (!structType)
+                    {
+                        partMap->setProp("@ftype", "str"); //ECL compiler will find the error
+                        return;
+                    }
+                    else
+                    {
+                        addDiffIdPartToMap(depTree, structType, partMap, finger ? finger+1 : NULL);
+                    }
+                }
+            }
+        }
+    }
+    IPropertyTree *createDiffIdTypeMap(IPropertyTree &depTree, IPropertyTree *parent, StringArray &idparts)
+    {
+        Owned<IPropertyTree> map = createPTree();
+        ForEachItemIn(i1, idparts)
+            addDiffIdPartToMap(depTree, parent, map, idparts.item(i1));
+        return map.getClear();
+    }
+    void flattenDiffIdTypeMap(IPropertyTree &map, StringArray &flat, XpathTrack &xtrack, const char *name)
     {
         XTrackScope xscope(xtrack, name);
+
+        Owned<IPropertyTreeIterator> children = map.getElements("*");
+        ForEach(*children)
+        {
+            IPropertyTree &child = children->query();
+            if (child.hasProp("@ftype"))
+            {
+                XTrackScope xscope(xtrack, child.queryName());
+                StringBuffer s(xtrack.str());
+                s.replace('/', '.');
+                VStringBuffer xml("<part ftype='%s' name='%s'/>", child.queryProp("@ftype"), s.str());
+                flat.append(xml);
+            }
+            else
+            {
+                flattenDiffIdTypeMap(child, flat, xtrack, child.queryName());
+            }
+        }
+    }
+    IPropertyTree *createDiffIdTree(IPropertyTree &depTree, IPropertyTree *parent, const char *diff_id, StringBuffer &idname)
+    {
+        StringArray idparts;
+        idparts.appendListUniq(diff_id, "+");
+        idparts.sortAscii(true);
+
+        Owned<IPropertyTree> map = createDiffIdTypeMap(depTree, parent, idparts);
+
+        ForEachItemIn(i1, idparts)
+        {
+            StringBuffer s(idparts.item(i1));
+            idname.append(s.trim());
+        }
+
+        Owned<IPropertyTree> diffIdTree = createPTree("diff_id");
+        diffIdTree->setProp("@name", idname.toLowerCase());
+        XpathTrack xt;
+        StringArray flat;
+        flattenDiffIdTypeMap(*map, flat, xt, nullptr);
+
+        ForEachItemIn(i2, flat)
+        {
+            diffIdTree->addPropTree("part", createPTreeFromXMLString(flat.item(i2)));
+        }
+        //diffIdTree->addPropTree("map", map.getClear());
+        return diffIdTree.getClear();
+    }
+    bool getMonFirstDiffAttributeBool(IPropertyTree *mon, XpathTrack &xtrack, const char *attribute, bool def)
+    {
+        VStringBuffer xpath("%s[%s]", xtrack.str(), attribute);
+        Owned<IPropertyTreeIterator> it = mon->getElements(xpath.str());
+        if (!it->first())
+            return def;
+        return it->query().getPropBool(attribute, def);
+    }
+    const char *queryMonFirstDiffAttribute(IPropertyTree *mon, XpathTrack &xtrack, const char *attribute)
+    {
+        VStringBuffer xpath("%s[%s]", xtrack.str(), attribute);
+        Owned<IPropertyTreeIterator> it = mon->getElements(xpath.str());
+        if (!it->first())
+            return nullptr;
+        return it->query().queryProp(attribute);
+    }
+
+    void setMonBasesPropBool(IPropertyTree &depTree, IPropertyTree *st, const char *attr, bool value)
+    {
+        const char *base_type = st->queryProp("@base_type");
+        if (base_type && *base_type)
+        {
+            VStringBuffer xpath("EsdlStruct[@name='%s'][1]", base_type);
+            IPropertyTree *baseType = depTree.queryPropTree(xpath);
+            if (baseType)
+            {
+                setMonBasesPropBool(depTree, baseType, attr, value);
+                baseType->setPropBool(attr, value);
+            }
+
+        }
+    }
+    bool expandDiffIds(IPropertyTree &depTree, IPropertyTree *st, IPropertyTree *mon, XpathTrack &xtrack, const char *name, bool monitored, bool inMonSection)
+    {
+        bool mon_child = false; //we have monitored descendants
+        XTrackScope xscope(xtrack, name);
+        if (monitored)
+            st->setPropBool("@diff_monitor", true);
 
         StringBuffer xpath;
         const char *base_type = st->queryProp("@base_type");
@@ -675,13 +893,28 @@ public:
             if (baseType)
             {
                 baseType->setPropBool("@_base", true);
-                expandDiffIds(depTree, baseType, mon, xtrack, NULL); //walk the type info
+                mon_child = expandDiffIds(depTree, baseType, mon, xtrack, NULL, monitored, inMonSection); //walk the type info
             }
         }
+
         Owned<IPropertyTreeIterator> children = st->getElements("*");
         ForEach(*children)
         {
+            bool childMonSection = inMonSection;
             IPropertyTree &child = children->query();
+            bool ecl_hide = child.getPropBool("@ecl_hide");
+            if (ecl_hide)
+                continue;
+            bool diff_monitor = child.getPropBool("@diff_monitor", monitored); //esdl-xml over rides parent
+
+            XTrackScope xscope(xtrack, child.queryProp("@name"));
+            diff_monitor = getMonFirstDiffAttributeBool(mon, xtrack, "@diff_monitor", diff_monitor);
+            if (diff_monitor && !childMonSection) //start of a monitored section
+            {
+                child.setProp("@diff_section", StringBuffer(xtrack.str()).replace('/', '_').str());
+                childMonSection = true;
+            }
+
             const char *childElementName =child.queryName();
             if (strieq(childElementName, "EsdlElement"))
             {
@@ -693,13 +926,18 @@ public:
                     if (childType)
                     {
                         childType->setPropBool("@_nested", true);
-                        expandDiffIds(depTree, childType, mon, xtrack, child.queryProp("@name")); //walk the type info
+                        bool mon_elem = expandDiffIds(depTree, childType, mon, xtrack, NULL, diff_monitor, childMonSection); //walk the type info
+                        if (!monitored && mon_elem)
+                        {
+                            child.setPropBool("@mon_child", true);
+                            if (!mon_child)
+                                mon_child = true;
+                        }
                     }
                 }
             }
             else
             {
-
                 if (strieq(childElementName, "EsdlArray"))
                 {
                     const char *item_type = child.queryProp("@type");
@@ -709,33 +947,16 @@ public:
                         IPropertyTree *childType = depTree.queryPropTree(xpath);
                         if (childType)
                         {
-                            XTrackScope xscope(xtrack, child.queryProp("@name"));
-                            xpath.setf("%s/@diff_id", xtrack.str());
-                            const char *diff_id = mon->queryProp(xpath);
+                            const char *diff_id = queryMonFirstDiffAttribute(mon, xtrack, "@diff_id");
                             if (!diff_id || !*diff_id)
                                 diff_id = child.queryProp("@diff_id");
                             if (!diff_id || !*diff_id)
                                 diff_id = findInheritedAttribute(depTree, childType, "@diff_id");
                             if (diff_id && *diff_id)
                             {
-                                StringArray idparts;
-                                idparts.appendListUniq(diff_id, "+");
-                                idparts.sortAscii(true);
                                 StringBuffer idname;
-                                ForEachItemIn(i1, idparts)
-                                {
-                                    StringBuffer s(idparts.item(i1));
-                                    idname.append(s.trim());
-                                }
+                                Owned<IPropertyTree> diffIdTree = createDiffIdTree(depTree, childType, diff_id, idname);
                                 xpath.setf("diff_id[@name='%s']", idname.toLowerCase().str());
-
-                                IPropertyTree *diffIdTree = createPTree("diff_id");
-                                diffIdTree->setProp("@name", idname);
-                                ForEachItemIn(i2, idparts)
-                                {
-                                    StringBuffer s(idparts.item(i2));
-                                    diffIdTree->addProp("part", s.trim());
-                                }
 
                                 IPropertyTree *diffIdSection = child.queryPropTree("DiffIdSection");
                                 if (!diffIdSection)
@@ -748,12 +969,28 @@ public:
                                 if (diffIdSection && !diffIdSection->hasProp(xpath))
                                     diffIdSection->addPropTree("diff_id", LINK(diffIdTree));
                             }
-                            expandDiffIds(depTree, childType, mon, xtrack, NULL); //walk the type info
+
+                            bool mon_elem = expandDiffIds(depTree, childType, mon, xtrack, child.queryProp("@item_tag"), diff_monitor, childMonSection); //walk the type info
+                            if (!monitored && mon_elem)
+                            {
+                                child.setPropBool("@mon_child", true);
+                                if (!mon_child)
+                                    mon_child = true;
+                            }
                         }
                     }
                 }
             }
         }
+        if (monitored)
+            return true;
+        if (mon_child)
+        {
+            setMonBasesPropBool(depTree, st, "@mon_child_base", true);
+            st->setPropBool("@mon_child", true);
+            return true;
+        }
+        return false;
     }
     virtual int processCMD()
     {
@@ -784,7 +1021,7 @@ public:
                         respTree = altTree;
                 }
                 XpathTrack xtrack;
-                expandDiffIds(*depTree, respTree, monitoringTemplate->queryPropTree(resp_type), xtrack, NULL);
+                expandDiffIds(*depTree, respTree, monitoringTemplate->queryPropTree(resp_type), xtrack, NULL, false, false);
             }
         }
 

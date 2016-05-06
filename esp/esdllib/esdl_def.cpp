@@ -1560,7 +1560,10 @@ unsigned EsdlDefinition::walkChildrenDepthFirst( AddedObjs& foundByName, EsdlDef
             {
                 IEsdlDefObject& child = children->query();
                 if ((flags & DEPFLAG_ECL_ONLY) && child.getPropInt("ecl_hide"))
+                {
+                    children->next();
                     continue;
+                }
                 const char *childname = child.queryName();
                 EsdlDefTypeId childType = child.getEsdlType();
                 //DBGLOG("  %s<%s> child", StringBuffer(level*2, " ").str(), childname );
