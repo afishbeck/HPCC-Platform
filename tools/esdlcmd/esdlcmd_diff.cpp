@@ -28,6 +28,59 @@
 #include "esdl-publish.cpp"
 #include "xsdparser.hpp"
 
+void removeEclHiddenStructs(IPropertyTree &depTree)
+{
+    Owned<IPropertyTreeIterator> it = depTree.getElements("*[@ecl_hide='1']");
+    ForEach(*it)
+        depTree.removeTree(&it->query());
+}
+void removeEclHiddenElements(IPropertyTree &depTree)
+{
+    Owned<IPropertyTreeIterator> it = depTree.getElements("*");
+    ForEach(*it)
+    {
+        StringArray names;
+        Owned<IPropertyTreeIterator> elements = it->query().getElements("*[@ecl_hide='1']");
+        ForEach(*elements)
+            names.append(elements->query().queryProp("@name"));
+        ForEachItemIn(i, names)
+        {
+            VStringBuffer xpath("*[@name='%s']", names.item(i));
+            it->query().removeProp(xpath);
+        }
+    }
+}
+
+void removeGetDataFromElements(IPropertyTree &depTree)
+{
+    Owned<IPropertyTreeIterator> it = depTree.getElements("*");
+    ForEach(*it)
+    {
+        StringArray names;
+        Owned<IPropertyTreeIterator> elements = it->query().getElements("*[@get_data_from]");
+        ForEach(*elements)
+            names.append(elements->query().queryProp("@name"));
+        ForEachItemIn(i, names)
+        {
+            VStringBuffer xpath("*[@name='%s']", names.item(i));
+            it->query().removeProp(xpath);
+        }
+    }
+}
+void removeEclHidden(IPropertyTree &depTree)
+{
+    removeEclHiddenStructs(depTree);
+    removeEclHiddenElements(depTree);
+    removeGetDataFromElements(depTree);
+}
+
+void removeEclHidden(StringBuffer &xml)
+{
+    Owned<IPropertyTree> depTree = createPTreeFromXMLString(xml);
+    removeEclHidden(*depTree);
+    toXML(depTree, xml.clear());
+}
+
 StringBuffer &getEsdlCmdComponentFilesPath(StringBuffer & path)
 {
     if (getComponentFilesRelPathFromBin(path))
@@ -124,7 +177,7 @@ public:
     virtual void doTransform(IEsdlDefObjectIterator& objs, StringBuffer &target, double version=0, IProperties *opts=NULL, const char *ns=NULL, unsigned flags=0 )
     {
         TimeSection ts("transforming via XSLT");
-        cmdHelper.defHelper->toXSD( objs, target, EsdlXslToXsd, 0, opts, nullptr, optFlags );
+        cmdHelper.defHelper->toXSD( objs, target, EsdlXslToXsd, 0, opts, nullptr, optFlags | DEPFLAG_ECL_ONLY);
     }
 
     virtual void loadTransform( StringBuffer &xsltpath, IProperties *params)
@@ -212,9 +265,9 @@ public:
                 parent.pop_back();
 
             if (itemType->isComplexType())
-                out.appendf("<%s diff:key=''>%s</%s>", tag,item.str(),tag);
+                out.appendf("<%s diff_match=''>%s</%s>", tag,item.str(),tag);
             else
-                out.appendf("<%s simple='true'>%s</%s>", tag,item.str(),tag);
+                out.appendf("<%s/>", tag);
         }
         else // simple type
         {
@@ -222,9 +275,101 @@ public:
         }
     }
 
+    void addMonitoringChildren(StringBuffer &xml, IPropertyTree *esdl, IPropertyTree *cur, unsigned indent)
+    {
+        const char *base_type = cur->queryProp("@base_type");
+        if (base_type && *base_type)
+        {
+            VStringBuffer xpath("EsdlStruct[@name='%s'][1]", base_type);
+            IPropertyTree *base = esdl->queryPropTree(xpath);
+            if (base)
+                addMonitoringChildren(xml, esdl, base, indent);
+        }
+        Owned<IPropertyTreeIterator> it = cur->getElements("*");
+        ForEach(*it)
+        {
+            IPropertyTree &item = it->query();
+            const char *elem = item.queryName();
+            const char *name = item.queryProp("@name");
+            if (streq(elem, "EsdlElement"))
+            {
+                const char *complex_type = item.queryProp("@complex_type");
+                if (complex_type && *complex_type)
+                {
+                    VStringBuffer xpath("EsdlStruct[@name='%s'][1]", complex_type);
+                    IPropertyTree *st = esdl->queryPropTree(xpath);
+                    if (!st)
+                        xml.pad(indent).appendf("<%s type='%s'/>\n", name, complex_type);
+                    else
+                    {
+                        xml.pad(indent).appendf("<%s>\n", name);
+                        addMonitoringChildren(xml, esdl, st, indent+2);
+                        xml.pad(indent).appendf("</%s>\n", name);
+                    }
+                }
+                else
+                {
+                    xml.pad(indent).appendf("<%s type='%s'/>\n", name, item.queryProp("@type"));
+                }
+            }
+            else if (streq(elem, "EsdlArray"))
+            {
+                const char *item_name = item.queryProp("@item_name");
+                const char *type = item.queryProp("@type");
+                if (!type || !*type)
+                    type = "string";
+
+                VStringBuffer xpath("EsdlStruct[@name='%s'][1]", type);
+                IPropertyTree *st = esdl->queryPropTree(xpath);
+                if (!st)
+                {
+                    if (!item_name || !*item_name)
+                        item_name = "Item";
+                    xml.pad(indent).appendf("<%s>\n", name);
+                    xml.pad(indent+2).appendf("<%s type='%s'/>\n", item_name, type);
+                    xml.pad(indent).appendf("</%s>\n", name);
+                }
+                else
+                {
+                    if (!item_name || !*item_name)
+                        item_name = type;
+                    xml.pad(indent).appendf("<%s diff_match=''>\n", name);
+                    xml.pad(indent+2).appendf("<%s>\n", item_name);
+                    addMonitoringChildren(xml, esdl, st, indent+4);
+                    xml.pad(indent+2).appendf("</%s>\n", item_name);
+                    xml.pad(indent).appendf("</%s>\n", name);
+                }
+            }
+            else if (streq(elem, "EsdlEnumRef"))
+            {
+                xml.pad(indent).appendf("<%s type='enum'/>\n", name);
+            }
+            else
+            {
+                xml.pad(indent).appendf("<%s unimplemented='%s'/>\n", name, elem);
+            }
+
+        }
+    }
+
+    void createMonitoringTemplate(StringBuffer &xml, IPropertyTree *esdl, const char *method)
+    {
+        xml.append("<ResultMonitoringTemplate>\n");
+        VStringBuffer typeName("%sResponse", method);
+        xml.append("  <").append(typeName).append(">\n");
+        VStringBuffer xpath("*[@name='%s'][1]", typeName.str());
+        IPropertyTree *responseType = esdl->queryPropTree(xpath);
+        if (responseType)
+            addMonitoringChildren(xml, esdl, responseType, 4);
+        xml.append("  </").append(typeName).append(">\n");
+        xml.append("</ResultMonitoringTemplate>");
+    }
     void generateDiffTemplate(const char *serv, const char *method, const char * schemaxml)
     {
         VStringBuffer element("%sResponse", method);
+        VStringBuffer filename("generated_%s.xsd", method);
+        saveAsFile(".", filename, schemaxml);
+
 
         Owned<IXmlSchema> schema = createXmlSchema(schemaxml);
         if (!schema.get())
@@ -232,36 +377,36 @@ public:
         IXmlType* type = schema->queryTypeByName(element);
         if (!type)
             throw MakeStringException(-1,"Unknown type: %s", element.str());
-        StringBuffer xml("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ResultDiff>\n");
+        StringBuffer xml("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ResultMonitoringTemplate>\n");
         StringBuffer ns("xmlns=\"");
         generateNamespace(ns).append('\"');
 
         StringStack parent;
         genDiffTemplateXml(parent,type, xml, element, nullptr);
-        xml.append("\n</ResultDiff>");
+        xml.append("\n</ResultMonitoringTemplate>");
         Owned<IPropertyTree> pt = createPTreeFromXMLString(xml, ipt_ordered);
-        saveXML("difftemplate.xml", pt, 2);
+        VStringBuffer templatefile("diff_template_%s.xml", optMethod.str());
+        saveXML(templatefile, pt, 2);
     }
 
     virtual int processCMD()
     {
         loadServiceDef();
 
+        StringBuffer xml("<esdl>");
         Owned<IEsdlDefObjectIterator> structs = cmdHelper.esdlDef->getDependencies( optService.get(), optMethod.get(), ESDLOPTLIST_DELIMITER, 0, nullptr, optFlags );
+        cmdHelper.defHelper->toXML(*structs, xml, 0, NULL, 0);
+        xml.append("</esdl>");
 
-        if( optRawOutput )
-            outputRaw(*structs);
+        Owned<IPropertyTree> depTree = createPTreeFromXMLString(xml, ipt_ordered);
+        removeEclHidden(*depTree);
+        toXML(depTree, xml.clear());
 
-        if(optXsltPath.isEmpty())
-            throw( MakeStringException(0, "Path to /xslt/esxdl2xsd.xslt is empty, cannot perform transform.") );
-        createParams();
+        StringBuffer monTemplate;
+        createMonitoringTemplate(monTemplate, depTree, optMethod);
 
-        loadTransform( fullxsltpath, params);
-        StringBuffer xsd;
-        doTransform( *structs, xsd, 0, nullptr, nullptr, optFlags);
-        DBGLOG("\nXSD:\n%s\n\n", xsd.str());
-        generateDiffTemplate(optService, optMethod, xsd);
-
+        VStringBuffer templatefile("diff_template_%s.xml", optMethod.str());
+        saveAsFile(".", templatefile, monTemplate);
         return 0;
     }
 
@@ -1001,33 +1146,6 @@ public:
         return false;
     }
 
-    void removeEclHiddenStructs(IPropertyTree &depTree)
-    {
-        Owned<IPropertyTreeIterator> it = depTree.getElements("*[@ecl_hide='1']");
-        ForEach(*it)
-            depTree.removeTree(&it->query());
-    }
-    void removeEclHiddenElements(IPropertyTree &depTree)
-    {
-        Owned<IPropertyTreeIterator> it = depTree.getElements("*");
-        ForEach(*it)
-        {
-            StringArray names;
-            Owned<IPropertyTreeIterator> elements = it->query().getElements("*[@ecl_hide='1']");
-            ForEach(*elements)
-                names.append(elements->query().queryProp("@name"));
-            ForEachItemIn(i, names)
-            {
-                VStringBuffer xpath("*[@name='%s']", names.item(i));
-                it->query().removeProp(xpath);
-            }
-        }
-    }
-    void removeEclHidden(IPropertyTree &depTree)
-    {
-        removeEclHiddenStructs(depTree);
-        removeEclHiddenElements(depTree);
-    }
     virtual int processCMD()
     {
         cmdHelper.loadDefinition(optSource, optService, 0);
@@ -1064,7 +1182,7 @@ public:
 
         toXML(depTree, xml.clear()); //refresh changes
 
-        StringBuffer filename("generated.xml");
+        VStringBuffer filename("generated_%s.xml", optMethod.str());
         saveAsFile(".", filename, xml);
 
         return 0;
