@@ -92,7 +92,7 @@ StringBuffer &getEsdlCmdComponentFilesPath(StringBuffer & path)
 class EsdlDiffTemplateCmd : public EsdlHelperConvertCmd
 {
 public:
-    EsdlDiffTemplateCmd() : optRawOutput(false), optFlags(DEPFLAG_COLLAPSE|DEPFLAG_ARRAYOF){}
+    EsdlDiffTemplateCmd(){}
 
     virtual bool parseCommandLineOptions(ArgvIterator &iter)
     {
@@ -122,10 +122,6 @@ public:
             }
             else
             {
-                if (iter.matchOption(optXsltPath, ESDLOPT_XSLT_PATH))
-                    continue;
-                if (iter.matchOption(optPreprocessOutputDir, ESDLOPT_PREPROCESS_OUT))
-                    continue;
                 if (EsdlConvertCmd::parseCommandLineOption(iter))
                     continue;
                 if (EsdlConvertCmd::matchCommandLineOption(iter, true)!=EsdlCmdOptionMatch)
@@ -156,123 +152,19 @@ public:
             throw( MakeStringException(0, "A method name must be provided") );
         }
 
-        if (optXsltPath.isEmpty())
-        {
-            StringBuffer tmp;
-            if (getComponentFilesRelPathFromBin(tmp))
-                optXsltPath.set(tmp.str());
-            else
-                optXsltPath.set(COMPONENTFILES_DIR);
-        }
-
-        fullxsltpath.set(optXsltPath);
-        fullxsltpath.append("/xslt/esxdl2xsd.xslt");
-
-        if (!optPreprocessOutputDir.isEmpty())
-            optRawOutput = true;
-
         return true;
     }
 
     virtual void doTransform(IEsdlDefObjectIterator& objs, StringBuffer &target, double version=0, IProperties *opts=NULL, const char *ns=NULL, unsigned flags=0 )
     {
-        TimeSection ts("transforming via XSLT");
-        cmdHelper.defHelper->toXSD( objs, target, EsdlXslToXsd, 0, opts, nullptr, optFlags | DEPFLAG_ECL_ONLY);
     }
 
     virtual void loadTransform( StringBuffer &xsltpath, IProperties *params)
     {
-        TimeSection ts("loading XSLT");
-        cmdHelper.defHelper->loadTransform( xsltpath, params, EsdlXslToXsd );
     }
 
     virtual void setTransformParams(IProperties *params )
     {
-        cmdHelper.defHelper->setTransformParams(EsdlXslToXsd, params);
-    }
-
-    static IXmlSchema* createXmlSchema(const char* schema)
-    {
-        const char* name = SharedObjectPrefix "xmllib" SharedObjectExtension;
-        HINSTANCE xmllib = LoadSharedObject(name,true,false);
-        if (!LoadSucceeded(xmllib))
-            throw MakeStringException(-1,"load %s failed with code %d", name, GetSharedObjectError());
-        typedef IXmlSchema* (*XmlSchemaCreator)(const char*);
-        XmlSchemaCreator creator = (XmlSchemaCreator)GetSharedProcedure(xmllib, "createXmlSchemaFromString");
-        if (!creator)
-            throw MakeStringException(-1,"load XmlSchema factory failed: createXmlSchemaFromString()");
-
-        return creator(schema);
-    }
-
-    void genDiffTemplateXml(StringStack& parent, IXmlType* type, StringBuffer& out, const char* tag, const char* ns=NULL)
-    {
-        assertex(type!=NULL);
-
-        const char* typeName = type->queryName();
-
-        if (type->isComplexType())
-        {
-            if (typeName && std::find(parent.begin(),parent.end(),typeName) != parent.end())
-                return;
-
-            out.appendf("<%s", tag);
-            if (ns)
-                out.append(' ').append(ns);
-            for (unsigned i=0; i<type->getAttrCount(); i++)
-            {
-                IXmlAttribute* attr = type->queryAttr(i);
-                out.appendf(" %s='", attr->queryName());
-                out.append('\'');
-            }
-            out.append('>');
-            if (typeName)
-                parent.push_back(typeName);
-
-            int flds = type->getFieldCount();
-
-            switch (type->getSubType())
-            {
-            case SubType_Complex_SimpleContent:
-                assertex(flds==0);
-                break;
-
-            default:
-                for (int idx=0; idx<flds; idx++)
-                    genDiffTemplateXml(parent,type->queryFieldType(idx),out,type->queryFieldName(idx));
-                break;
-            }
-
-            if (typeName)
-                parent.pop_back();
-            out.appendf("</%s>",tag);
-        }
-        else if (type->isArray())
-        {
-            if (typeName && std::find(parent.begin(),parent.end(),typeName) != parent.end())
-                return; // recursive
-
-            const char* itemName = type->queryFieldName(0);
-            IXmlType*   itemType = type->queryFieldType(0);
-            if (!itemName || !itemType)
-                throw MakeStringException(-1,"*** Invalid array definition: tag=%s, itemName=%s", tag, itemName?itemName:"NULL");
-
-            StringBuffer item;
-            if (typeName)
-                parent.push_back(typeName);
-            genDiffTemplateXml(parent, itemType, item, itemName);
-            if (typeName)
-                parent.pop_back();
-
-            if (itemType->isComplexType())
-                out.appendf("<%s diff_match=''>%s</%s>", tag,item.str(),tag);
-            else
-                out.appendf("<%s/>", tag);
-        }
-        else // simple type
-        {
-            out.appendf("<%s/>", tag);
-        }
     }
 
     void addMonitoringChildren(StringBuffer &xml, IPropertyTree *esdl, IPropertyTree *cur, unsigned indent)
@@ -364,37 +256,13 @@ public:
         xml.append("  </").append(typeName).append(">\n");
         xml.append("</ResultMonitoringTemplate>");
     }
-    void generateDiffTemplate(const char *serv, const char *method, const char * schemaxml)
-    {
-        VStringBuffer element("%sResponse", method);
-        VStringBuffer filename("generated_%s.xsd", method);
-        saveAsFile(".", filename, schemaxml);
-
-
-        Owned<IXmlSchema> schema = createXmlSchema(schemaxml);
-        if (!schema.get())
-            throw MakeStringException(-1,"Unknown type: %s", element.str());
-        IXmlType* type = schema->queryTypeByName(element);
-        if (!type)
-            throw MakeStringException(-1,"Unknown type: %s", element.str());
-        StringBuffer xml("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ResultMonitoringTemplate>\n");
-        StringBuffer ns("xmlns=\"");
-        generateNamespace(ns).append('\"');
-
-        StringStack parent;
-        genDiffTemplateXml(parent,type, xml, element, nullptr);
-        xml.append("\n</ResultMonitoringTemplate>");
-        Owned<IPropertyTree> pt = createPTreeFromXMLString(xml, ipt_ordered);
-        VStringBuffer templatefile("diff_template_%s.xml", optMethod.str());
-        saveXML(templatefile, pt, 2);
-    }
 
     virtual int processCMD()
     {
         loadServiceDef();
 
         StringBuffer xml("<esdl>");
-        Owned<IEsdlDefObjectIterator> structs = cmdHelper.esdlDef->getDependencies( optService.get(), optMethod.get(), ESDLOPTLIST_DELIMITER, 0, nullptr, optFlags );
+        Owned<IEsdlDefObjectIterator> structs = cmdHelper.esdlDef->getDependencies( optService.get(), optMethod.get(), ESDLOPTLIST_DELIMITER, 0, nullptr, 0 );
         cmdHelper.defHelper->toXML(*structs, xml, 0, NULL, 0);
         xml.append("</esdl>");
 
@@ -432,58 +300,14 @@ public:
         EsdlConvertCmd::usage();
     }
 
-    virtual void outputRaw( IEsdlDefObjectIterator& obj)
-    {
-        if( optRawOutput )
-        {
-            StringBuffer xmlOut;
-            StringBuffer empty;
-
-            xmlOut.appendf( "<esxdl name=\"%s\">", optService.get());
-            cmdHelper.defHelper->toXML( obj, xmlOut, 0, nullptr, optFlags );
-            xmlOut.append("</esxdl>");
-
-            saveAsFile( optPreprocessOutputDir.get(), empty, xmlOut.str(), NULL );
-        }
-    }
-
-    void createParams()
-    {
-        params.set(createProperties());
-        generateNamespace(tns);
-        params->setProp( "tnsParam", tns );
-    }
-
     virtual void loadServiceDef()
     {
         cmdHelper.loadDefinition(optSource, optService, 0);
     }
 
-    virtual void outputToFile()
+    virtual StringBuffer & generateOutputFileNamex( StringBuffer &filename)
     {
-        if (!optOutDirPath.isEmpty())
-        {
-            StringBuffer filename;
-            generateOutputFileName(filename);
-            saveAsFile(optOutDirPath.get(), filename, outputBuffer.str(), NULL);
-        }
-    }
-
-    StringBuffer & generateNamespace(StringBuffer &ns)
-    {
-        ns.appendf("http://webservices.seisint.com/%s", optService.get());
-        return ns.toLowerCase();
-    }
-
-    virtual StringBuffer & generateOutputFileName( StringBuffer &filename)
-    {
-        filename.appendf("%s", optService.get());
-        if (!optMethod.isEmpty() && !strstr(optMethod.get(), ESDLOPTLIST_DELIMITER))
-            filename.append('-').append(optMethod.get());
-
-        filename.append(outfileext);
-
-        return filename.toLowerCase();
+        return filename;
     }
 
     void saveAsFile(const char * dir, StringBuffer &outname, const char *text, const char *ext="")
@@ -513,25 +337,9 @@ public:
             DBGLOG("File %s can't be created", file->queryFilename());
     }
 
-    void setFlag( unsigned f ) { optFlags |= f; }
-    void unsetFlag( unsigned f ) { optFlags &= ~f; }
-
-
 public:
     StringAttr optService;
-    StringAttr optXsltPath;
     StringAttr optMethod;
-    StringAttr optPreprocessOutputDir;
-    bool optRawOutput;
-    unsigned optFlags;
-
-protected:
-    Owned<IFile> serviceDef;
-    StringBuffer outputBuffer;
-    StringBuffer fullxsltpath;
-    Owned<IProperties> params;
-    StringBuffer tns;
-    StringBuffer outfileext;
 };
 
 class EsdlDiffGenCmd : public EsdlHelperConvertCmd
@@ -641,111 +449,6 @@ public:
     virtual void setTransformParams(IProperties *params )
     {
         cmdHelper.defHelper->setTransformParams(EsdlXslToXsd, params);
-    }
-
-    static IXmlSchema* createXmlSchema(const char* schema)
-    {
-        const char* name = SharedObjectPrefix "xmllib" SharedObjectExtension;
-        HINSTANCE xmllib = LoadSharedObject(name,true,false);
-        if (!LoadSucceeded(xmllib))
-            throw MakeStringException(-1,"load %s failed with code %d", name, GetSharedObjectError());
-        typedef IXmlSchema* (*XmlSchemaCreator)(const char*);
-        XmlSchemaCreator creator = (XmlSchemaCreator)GetSharedProcedure(xmllib, "createXmlSchemaFromString");
-        if (!creator)
-            throw MakeStringException(-1,"load XmlSchema factory failed: createXmlSchemaFromString()");
-
-        return creator(schema);
-    }
-
-    void genDiffTemplateXml(StringStack& parent, IXmlType* type, StringBuffer& out, const char* tag, const char* ns=NULL)
-    {
-        assertex(type!=NULL);
-
-        const char* typeName = type->queryName();
-
-        if (type->isComplexType())
-        {
-            if (typeName && std::find(parent.begin(),parent.end(),typeName) != parent.end())
-                return;
-
-            out.appendf("<%s", tag);
-            if (ns)
-                out.append(' ').append(ns);
-            for (unsigned i=0; i<type->getAttrCount(); i++)
-            {
-                IXmlAttribute* attr = type->queryAttr(i);
-                out.appendf(" %s='", attr->queryName());
-                out.append('\'');
-            }
-            out.append('>');
-            if (typeName)
-                parent.push_back(typeName);
-
-            int flds = type->getFieldCount();
-
-            switch (type->getSubType())
-            {
-            case SubType_Complex_SimpleContent:
-                assertex(flds==0);
-                break;
-
-            default:
-                for (int idx=0; idx<flds; idx++)
-                    genDiffTemplateXml(parent,type->queryFieldType(idx),out,type->queryFieldName(idx));
-                break;
-            }
-
-            if (typeName)
-                parent.pop_back();
-            out.appendf("</%s>",tag);
-        }
-        else if (type->isArray())
-        {
-            if (typeName && std::find(parent.begin(),parent.end(),typeName) != parent.end())
-                return; // recursive
-
-            const char* itemName = type->queryFieldName(0);
-            IXmlType*   itemType = type->queryFieldType(0);
-            if (!itemName || !itemType)
-                throw MakeStringException(-1,"*** Invalid array definition: tag=%s, itemName=%s", tag, itemName?itemName:"NULL");
-
-            StringBuffer item;
-            if (typeName)
-                parent.push_back(typeName);
-            genDiffTemplateXml(parent,itemType,item,itemName);
-            if (typeName)
-                parent.pop_back();
-
-            if (itemType->isComplexType())
-                out.appendf("<%s diff:key=''>%s</%s>", tag,item.str(),tag);
-            else
-                out.appendf("<%s simple='true'>%s</%s>", tag,item.str(),tag);
-        }
-        else // simple type
-        {
-            out.appendf("<%s/>", tag);
-        }
-    }
-
-    void generateDiffTemplate(const char *serv, const char *method, const char * schemaxml)
-    {
-        VStringBuffer element("%sResponse", method);
-
-        Owned<IXmlSchema> schema = createXmlSchema(schemaxml);
-        if (!schema.get())
-            throw MakeStringException(-1,"Unknown type: %s", element.str());
-        IXmlType* type = schema->queryTypeByName(element);
-        if (!type)
-            throw MakeStringException(-1,"Unknown type: %s", element.str());
-        StringBuffer xml("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ResultDiff>\n");
-        StringBuffer ns("xmlns=\"");
-        generateNamespace(ns).append('\"');
-
-        StringStack parent;
-        genDiffTemplateXml(parent,type, xml, element, nullptr);
-        xml.append("\n</ResultDiff>");
-        Owned<IPropertyTree> pt = createPTreeFromXMLString(xml, ipt_ordered);
-        saveXML("difftemplate.xml", pt, 2);
     }
 
     class XpathTrack
@@ -963,10 +666,10 @@ public:
             }
         }
     }
-    IPropertyTree *createDiffIdTree(IPropertyTree &depTree, IPropertyTree *parent, const char *diff_key, StringBuffer &idname)
+    IPropertyTree *createDiffIdTree(IPropertyTree &depTree, IPropertyTree *parent, const char *diff_match, StringBuffer &idname)
     {
         StringArray idparts;
-        idparts.appendListUniq(diff_key, "+");
+        idparts.appendListUniq(diff_match, "+");
         idparts.sortAscii(true);
 
         Owned<IPropertyTree> map = createDiffIdTypeMap(depTree, parent, idparts);
@@ -977,7 +680,7 @@ public:
             idname.append(s.trim());
         }
 
-        Owned<IPropertyTree> diffIdTree = createPTree("diff_key");
+        Owned<IPropertyTree> diffIdTree = createPTree("diff_match");
         diffIdTree->setProp("@name", idname.toLowerCase());
         XpathTrack xt;
         StringArray flat;
@@ -987,24 +690,27 @@ public:
         {
             diffIdTree->addPropTree("part", createPTreeFromXMLString(flat.item(i2)));
         }
-        //diffIdTree->addPropTree("map", map.getClear());
         return diffIdTree.getClear();
     }
-    bool getMonFirstDiffAttributeBool(IPropertyTree *mon, XpathTrack &xtrack, const char *attribute, bool def)
+    bool getMonFirstDiffAttributeBool(IPropertyTree *tmplate, XpathTrack &xtrack, const char *attribute, bool def)
     {
         VStringBuffer xpath("%s[%s]", xtrack.str(), attribute);
-        Owned<IPropertyTreeIterator> it = mon->getElements(xpath.str());
+        Owned<IPropertyTreeIterator> it = tmplate->getElements(xpath.str());
         if (!it->first())
             return def;
         return it->query().getPropBool(attribute, def);
     }
-    const char *queryMonFirstDiffAttribute(IPropertyTree *mon, XpathTrack &xtrack, const char *attribute)
+    const char *queryMonFirstDiffAttribute(IPropertyTree *tmplate, XpathTrack &xtrack, const char *attribute, const char *def)
     {
         VStringBuffer xpath("%s[%s]", xtrack.str(), attribute);
-        Owned<IPropertyTreeIterator> it = mon->getElements(xpath.str());
-        if (!it->first())
-            return nullptr;
-        return it->query().queryProp(attribute);
+        Owned<IPropertyTreeIterator> it = tmplate->getElements(xpath.str());
+        if (it->first())
+        {
+            const char *val = it->query().queryProp(attribute);
+            if (val && *val)
+                return val;
+        }
+        return def;
     }
 
     void setMonBasesPropBool(IPropertyTree &depTree, IPropertyTree *st, const char *attr, bool value)
@@ -1022,7 +728,65 @@ public:
 
         }
     }
-    bool expandDiffIds(IPropertyTree &depTree, IPropertyTree *st, IPropertyTree *mon, XpathTrack &xtrack, const char *name, bool monitored, bool inMonSection)
+
+    void addCtxDiffSelectors(IPropertyTree *ctx, IPropertyTree *ctxSelectors, IPropertyTree *stSelectors)
+    {
+        if (!stSelectors)
+            return;
+        Owned<IPropertyTreeIterator> selectors = stSelectors->getElements("selector");
+        ForEach(*selectors)
+        {
+            const char *name = selectors->query().queryProp(nullptr);
+            if (!name || !*name)
+                continue;
+            VStringBuffer xpath("selector[@name='%s']", name);
+            VStringBuffer flagName("_CheckSelector_%s", name);
+            ctx->setPropBool(flagName, ctxSelectors->hasProp(xpath));
+        }
+    }
+    void trimContext(IPropertyTree *origCtx, IPropertyTree &depTree, IPropertyTree *st)
+    {
+        if (st->hasProp("@base_type"))
+        {
+            IPropertyTree *baseType = nullptr;
+            VStringBuffer xpath("EsdlStruct[@name='%s']", st->queryProp("@base_type"));
+            baseType = depTree.queryPropTree(xpath);
+            if (baseType)
+                trimContext(origCtx, depTree, baseType);
+        }
+        Owned<IPropertyTreeIterator> children = st->getElements("*");
+        ForEach(*children)
+        {
+            IPropertyTree &child = children->query();
+            if (strieq(child.queryName(),"_diff_selectors"))
+            {
+                addCtxDiffSelectors(origCtx, origCtx->queryPropTree("_diff_selectors"), &child);
+                continue;
+            }
+            const char *name = child.queryProp("@name");
+            if (!child.getPropBool("@_mon") || !child.getPropBool("@_nomon")) //having both makes it context sensitive
+            {
+                VStringBuffer flagName("_CheckField_%s", name);
+                origCtx->removeProp(flagName);
+            }
+            IPropertyTree *childCtx = origCtx->queryPropTree(name);
+            if (!childCtx)
+                continue;
+            const char *typeName = nullptr;
+            if (child.hasProp("@complex_type"))
+                typeName = child.queryProp("@complex_type");
+            else if (strieq(child.queryName(), "EsdlArray"))
+                typeName = child.queryProp("@type");
+
+            IPropertyTree *complexType = nullptr;
+            VStringBuffer xpath("EsdlStruct[@name='%s']", typeName);
+            complexType = depTree.queryPropTree(xpath);
+            if (complexType)
+                trimContext(childCtx, depTree, complexType);
+        }
+
+    }
+    bool expandDiffTrees(IPropertyTree *ctxLocal, IPropertyTree &depTree, IPropertyTree *st, IPropertyTree *tmplate, XpathTrack &xtrack, const char *name, bool monitored, bool inMonSection, StringArray &allSelectors)
     {
         bool mon_child = false; //we have monitored descendants
         XTrackScope xscope(xtrack, name);
@@ -1038,7 +802,7 @@ public:
             if (baseType)
             {
                 baseType->setPropBool("@_base", true);
-                mon_child = expandDiffIds(depTree, baseType, mon, xtrack, NULL, monitored, inMonSection); //walk the type info
+                mon_child = expandDiffTrees(ctxLocal, depTree, baseType, tmplate, xtrack, NULL, monitored, inMonSection, allSelectors); //walk the type info
             }
         }
 
@@ -1046,25 +810,49 @@ public:
             Owned<IPropertyTreeIterator> children = st->getElements("*");
             ForEach(*children)
             {
-                bool childMonSection = inMonSection;
                 IPropertyTree &child = children->query();
+                const char *name = child.queryProp("@name");
+                if (!name || !*name)
+                    continue;
+                bool childMonSection = inMonSection;
                 bool ecl_hide = child.getPropBool("@ecl_hide");
                 if (ecl_hide)
                     continue;
-                bool diff_monitor = child.getPropBool("@diff_monitor", monitored); //esdl-xml over rides parent
-
+                const char *selectorList = child.queryProp("@diff_monitor"); //esdl-xml over rides parent
                 XTrackScope xscope(xtrack, child.queryProp("@name"));
-                bool template_diff_monitor = getMonFirstDiffAttributeBool(mon, xtrack, "@diff_monitor", diff_monitor);
-                if (template_diff_monitor != diff_monitor)
+                selectorList = queryMonFirstDiffAttribute(tmplate, xtrack, "@diff_monitor", selectorList);
+                Owned<IPropertyTree> selectorTree;
+                bool childMonitored = monitored;
+                if (selectorList && *selectorList)
                 {
-                    child.setPropBool("@diff_monitor", template_diff_monitor);
-                    diff_monitor=template_diff_monitor;
+                    if (strieq(selectorList, "0") || strieq(selectorList, "false") || strieq(selectorList, "no") || strieq(selectorList, "off"))
+                        childMonitored = false;
+                    else if (strieq(selectorList, "1") || strieq(selectorList, "true") || strieq(selectorList, "yes") || strieq(selectorList, "on"))
+                        childMonitored = true;
+                    else
+                    {
+                        StringArray selectors;
+                        selectors.appendListUniq(selectorList, "|");
+                        allSelectors.appendListUniq(selectorList, "|");
+                        if (selectors.length())
+                        {
+                            selectorTree.setown(createPTree());
+                            ForEachItemIn(i1, selectors)
+                                selectorTree->addProp("selector", selectors.item(i1));
+                            child.setPropTree("_diff_selectors", LINK(selectorTree));
+                            IPropertyTree *ctxChild = ensurePTree(ctxLocal, name);
+                            ctxChild->setPropTree("_diff_selectors", LINK(selectorTree));
+                            childMonitored = true;
+                        }
+                    }
                 }
-                if (diff_monitor && !childMonSection) //start of a monitored section
-                {
-                    child.setProp("@diff_section", StringBuffer(xtrack.str()).replace('/', '_').str());
-                    childMonSection = true;
-                }
+
+                if (childMonitored) //structure can be reused in different locations.  track yes and no monitoring separately so we know whether we need to check context
+                    child.setPropBool("@_mon", true);
+                else if (monitored)
+                    child.setPropBool("@_nomon", true);
+                VStringBuffer ctxMonFlag("_CheckField_%s", name);
+                ctxLocal->setPropBool(ctxMonFlag, childMonitored);
 
                 const char *childElementName =child.queryName();
                 if (strieq(childElementName, "EsdlElement"))
@@ -1076,8 +864,12 @@ public:
                         IPropertyTree *childType = depTree.queryPropTree(xpath);
                         if (childType)
                         {
+                            if (selectorTree)
+                                childType->setPropTree("_diff_selectors", LINK(selectorTree));
+
                             childType->setPropBool("@_used", true);
-                            bool mon_elem = expandDiffIds(depTree, childType, mon, xtrack, NULL, diff_monitor, childMonSection); //walk the type info
+                            IPropertyTree *ctxChild = ensurePTree(ctxLocal, name);
+                            bool mon_elem = expandDiffTrees(ctxChild, depTree, childType, tmplate, xtrack, NULL, childMonitored, childMonSection, allSelectors); //walk the type info
                             if (!monitored && mon_elem)
                             {
                                 child.setPropBool("@mon_child", true);
@@ -1099,30 +891,31 @@ public:
                             if (childType)
                             {
                                 childType->setPropBool("@_used", true);
-                                const char *diff_key = queryMonFirstDiffAttribute(mon, xtrack, "@diff_key");
-                                if (!diff_key || !*diff_key)
-                                    diff_key = child.queryProp("@diff_key");
-                                if (!diff_key || !*diff_key)
-                                    diff_key = findInheritedAttribute(depTree, childType, "@diff_key");
-                                if (diff_key && *diff_key)
+                                const char *diff_match = queryMonFirstDiffAttribute(tmplate, xtrack, "@diff_match", nullptr);
+                                if (!diff_match || !*diff_match)
+                                    diff_match = child.queryProp("@diff_match");
+                                if (!diff_match || !*diff_match)
+                                    diff_match = findInheritedAttribute(depTree, childType, "@diff_match");
+                                if (diff_match && *diff_match)
                                 {
                                     StringBuffer idname;
-                                    Owned<IPropertyTree> diffIdTree = createDiffIdTree(depTree, childType, diff_key, idname);
-                                    xpath.setf("diff_key[@name='%s']", idname.toLowerCase().str());
+                                    Owned<IPropertyTree> diffIdTree = createDiffIdTree(depTree, childType, diff_match, idname);
+                                    xpath.setf("diff_match[@name='%s']", idname.toLowerCase().str());
 
-                                    IPropertyTree *diffKeys = child.queryPropTree("DiffKeys");
+                                    IPropertyTree *diffKeys = child.queryPropTree("DiffMatchs");
                                     if (!diffKeys)
-                                        diffKeys = child.addPropTree("DiffKeys", createPTree("DiffKeys"));
+                                        diffKeys = child.addPropTree("DiffMatchs", createPTree("DiffMatchs"));
                                     if (diffKeys && !diffKeys->hasProp(xpath))
-                                        diffKeys->addPropTree("diff_key", LINK(diffIdTree));
-                                    diffKeys = childType->queryPropTree("DiffKeys");
+                                        diffKeys->addPropTree("diff_match", LINK(diffIdTree));
+                                    diffKeys = childType->queryPropTree("DiffMatchs");
                                     if (!diffKeys)
-                                        diffKeys = childType->addPropTree("DiffKeys", createPTree("DiffKeys"));
+                                        diffKeys = childType->addPropTree("DiffMatchs", createPTree("DiffMatchs"));
                                     if (diffKeys && !diffKeys->hasProp(xpath))
-                                        diffKeys->addPropTree("diff_key", LINK(diffIdTree));
+                                        diffKeys->addPropTree("diff_match", LINK(diffIdTree));
                                 }
 
-                                bool mon_elem = expandDiffIds(depTree, childType, mon, xtrack, child.queryProp("@item_tag"), diff_monitor, childMonSection); //walk the type info
+                                IPropertyTree *ctxChild = ensurePTree(ctxLocal, name);
+                                bool mon_elem = expandDiffTrees(ctxChild, depTree, childType, tmplate, xtrack, child.queryProp("@item_tag"), childMonitored, childMonSection, allSelectors); //walk the type info
                                 if (!monitored && mon_elem)
                                 {
                                     child.setPropBool("@mon_child", true);
@@ -1160,10 +953,15 @@ public:
         removeEclHidden(*depTree);
 
         VStringBuffer xpath("EsdlMethod[@name='%s']/@response_type", optMethod.str());
-        const char *resp_type = "SmartLinxReportResponse"; //depTree->queryProp(xpath);
-        if (resp_type && *resp_type)
+        StringBuffer resp_type = depTree->queryProp(xpath);
+        if (resp_type.length() > 2)
         {
-            xpath.setf("EsdlStruct[@name='%s']", resp_type);
+            if (resp_type.charAt(resp_type.length()-2)=='E' && resp_type.charAt(resp_type.length()-1)=='x')
+                resp_type.setLength(resp_type.length()-2);
+        }
+        if (resp_type.length())
+        {
+            xpath.setf("EsdlStruct[@name='%s']", resp_type.str());
             IPropertyTree *respTree = depTree->queryPropTree(xpath);
             if (respTree)
             {
@@ -1176,7 +974,17 @@ public:
                         respTree = altTree;
                 }
                 XpathTrack xtrack;
-                expandDiffIds(*depTree, respTree, monitoringTemplate->queryPropTree(resp_type), xtrack, NULL, false, false);
+                Owned<IPropertyTree> ctxTree = createPTree();
+                StringArray allSelectors;
+                expandDiffTrees(ctxTree, *depTree, respTree, monitoringTemplate->queryPropTree(resp_type), xtrack, NULL, false, false, allSelectors);
+                trimContext(ctxTree, *depTree, respTree);
+                depTree->addPropTree("Context", LINK(ctxTree));
+                if (allSelectors.length())
+                {
+                    IPropertyTree *selectorTree = depTree->addPropTree("Selectors", LINK(createPTree()));
+                    ForEachItemIn(i1, allSelectors)
+                        selectorTree->addProp("Selector", allSelectors.item(i1));
+                }
             }
         }
 

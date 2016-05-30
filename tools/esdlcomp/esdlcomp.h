@@ -602,7 +602,7 @@ public:
         }
         else
         {
-            out.appendf("\t\t<EsdlElement name='%s' here='1'", name);
+            out.appendf("\t\t<EsdlElement name='%s'", name);
             toStringXmlAttr(out);
             for (MetaTagInfo *mtag=tags; mtag; mtag=mtag->next)
             {
