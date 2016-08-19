@@ -618,19 +618,25 @@ public:
             }
         }
     }
-    IPropertyTree *createDiffIdTree(IPropertyTree &depTree, IPropertyTree *parent, const char *diff_match, StringBuffer &idname)
+    IPropertyTree *createDiffIdTree(IPropertyTree &depTree, IPropertyTree *parent, const char *diff_match, const char *item_tag, StringBuffer &idname)
     {
         StringArray idparts;
         idparts.appendListUniq(diff_match, "+");
         idparts.sortAscii(true);
 
-        Owned<IPropertyTree> map = createDiffIdTypeMap(depTree, parent, idparts);
-
+        VStringBuffer itemRef("%s.", item_tag ? item_tag : "");
         ForEachItemIn(i1, idparts)
         {
             StringBuffer s(idparts.item(i1));
+            if (strncmp(s, itemRef, itemRef.length())==0)
+            {
+                s.remove(0, itemRef.length());
+                idparts.replace(s, i1);
+            }
             idname.append(s.trim());
         }
+
+        Owned<IPropertyTree> map = createDiffIdTypeMap(depTree, parent, idparts);
 
         Owned<IPropertyTree> diffIdTree = createPTree("diff_match");
         diffIdTree->setProp("@name", idname.toLowerCase());
@@ -907,19 +913,21 @@ public:
                                 if (diff_match && *diff_match)
                                 {
                                     StringBuffer idname;
-                                    Owned<IPropertyTree> diffIdTree = createDiffIdTree(depTree, childType, diff_match, idname);
+                                    Owned<IPropertyTree> diffIdTree = createDiffIdTree(depTree, childType, diff_match, child.queryProp("@item_tag"), idname);
                                     xpath.setf("diff_match[@name='%s']", idname.toLowerCase().str());
 
-                                    IPropertyTree *diffKeys = child.queryPropTree("DiffMatchs");
-                                    if (!diffKeys)
-                                        diffKeys = child.addPropTree("DiffMatchs", createPTree("DiffMatchs"));
-                                    if (diffKeys && !diffKeys->hasProp(xpath))
-                                        diffKeys->addPropTree("diff_match", LINK(diffIdTree));
-                                    diffKeys = childType->queryPropTree("DiffMatchs");
-                                    if (!diffKeys)
-                                        diffKeys = childType->addPropTree("DiffMatchs", createPTree("DiffMatchs"));
-                                    if (diffKeys && !diffKeys->hasProp(xpath))
-                                        diffKeys->addPropTree("diff_match", LINK(diffIdTree));
+                                    IPropertyTree *arrayDiffKeys = child.queryPropTree("DiffMatchs");
+                                    if (!arrayDiffKeys)
+                                        arrayDiffKeys = child.addPropTree("DiffMatchs", createPTree("DiffMatchs"));
+                                    if (arrayDiffKeys && !arrayDiffKeys->hasProp(xpath))
+                                        arrayDiffKeys->addPropTree("diff_match", LINK(diffIdTree));
+
+
+                                    IPropertyTree *itemTypeDiffKeys = childType->queryPropTree("DiffMatchs");
+                                    if (!itemTypeDiffKeys)
+                                        itemTypeDiffKeys = childType->addPropTree("DiffMatchs", createPTree("DiffMatchs"));
+                                    if (itemTypeDiffKeys && !itemTypeDiffKeys->hasProp(xpath))
+                                        itemTypeDiffKeys->addPropTree("diff_match", LINK(diffIdTree));
                                 }
 
                                 IPropertyTree *ctxChild = ensurePTree(ctxLocal, name);
