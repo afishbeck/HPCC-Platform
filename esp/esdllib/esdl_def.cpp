@@ -18,6 +18,7 @@
 #pragma warning(disable : 4786)
 
 #include "jliball.hpp"
+#include "jlib.hpp"
 #include "espcontext.hpp"
 #include "esdl_def.hpp"
 #include <xpp/XmlPullParser.h>
@@ -1355,6 +1356,8 @@ public:
     virtual IEsdlDefObjectIterator* getDependencies( const char* service, const char* method, double requestedVersion, IProperties *opts, unsigned flags=0 );
     virtual IEsdlDefObjectIterator* getDependencies( const char* service, StringArray &methods, double requestedVersion, IProperties *opts, unsigned flags=0 );
     virtual IEsdlDefObjectIterator* getDependencies( const char* service, const char* delimethodlist, const char* delim, double requestedVer, IProperties *opts, unsigned flags );
+    virtual IEsdlDefObjectIterator *getCustomResponseDependencies( const char* service, const char* method, const char *instanceXml);
+
 
     void gatherMethodDependencies( EsdlDefObjectWrapperArray& dependencies, EsdlDefObjectArray& methods, double requestedVer, IProperties *opts, unsigned flags=0 );
     void walkDefinitionDepthFirst( AddedObjs& foundByName, EsdlDefObjectWrapperArray& dependencies, IEsdlDefObject* esdlObj, double requestedVer, IProperties *opts, int level=0, unsigned flags=0, unsigned state=0);
@@ -1465,6 +1468,8 @@ IEsdlDefObjectIterator* EsdlDefinition::getDependencies( const char* service, St
         methodIter.setown(serviceDef->getMethods());
         for( methodIter->first(); methodIter->isValid(); methodIter->next() )
         {
+            if ((flags & DEPFLAG_ECL_ONLY) && methodIter->query().getPropInt("ecl_hide"))
+                continue;
             methodArray.append( methodIter->query() );
         }
     }
@@ -1474,20 +1479,18 @@ IEsdlDefObjectIterator* EsdlDefinition::getDependencies( const char* service, St
         {
             methodDef = serviceDef->queryMethodByName(methods.item(i));
 
-            if( NULL == methodDef )
-            {
+            if(!methodDef)
                 throw( MakeStringException(0, "ESDL Method Definition not found for %s in service %s", methods.item(i), service) );
-            }
-
+            if ((flags & DEPFLAG_ECL_ONLY) && methodDef->getPropInt("ecl_hide"))
+                continue;
             methodArray.append( *methodDef );
         }
     }
 
     this->gatherMethodDependencies( *dependencies, methodArray, requestedVer, opts, flags );
 
-    // Put the highest level objects on last- the services
-    // Tony did say that these will be useful
-    if( serviceDef != NULL )
+    bool allTypes = !(flags & DEPFLAG_INCLUDE_TYPES); //not asking for any explicit types indicates all types
+    if(serviceDef && (allTypes || (flags & DEPFLAG_INCLUDE_SERVICE)))
     {
         EsdlDefObjectWrapper* wrapper = new EsdlDefObjectWrapper( *serviceDef );
         dependencies->append( *wrapper );
@@ -1500,13 +1503,8 @@ void EsdlDefinition::gatherMethodDependencies( EsdlDefObjectWrapperArray& depend
 {
     AddedObjs foundByName;
 
-    // At this point all the Methods we want to walk are in this array-
-    // either explicitly passed in to the array, or added by walking the
-    // service definitions passed in and adding all of the services' methods
+    bool allTypes = !(flags & DEPFLAG_INCLUDE_TYPES); //not asking for any explicit types indicates all types
 
-    // Q:
-    // What circumstances do we want to throw an unhandled exception
-    // vs. those that we may just want to log or DBGLOG a warning?
     int numMethods = methods.ordinality();
     for( int i = 0; i<numMethods; i++ )
     {
@@ -1515,26 +1513,29 @@ void EsdlDefinition::gatherMethodDependencies( EsdlDefObjectWrapperArray& depend
 
         if( methodObj->checkOptional(opts) && (requestedVer==0.0 || method->checkVersion(requestedVer)) )
         {
-            const char* request = method->queryRequestType();
-            IEsdlDefObject* requestObj = this->queryObj( request );
-            if( NULL == requestObj )
+            if (allTypes || (flags & DEPFLAG_INCLUDE_REQUEST))
             {
-                throw( MakeStringException(0, "Request struct %s not found in ESDL Definition", request) );
-            } else {
-                this->walkDefinitionDepthFirst( foundByName, dependencies, requestObj, requestedVer, opts, 0, flags );
+                const char* request = method->queryRequestType();
+                IEsdlDefObject* requestObj = this->queryObj( request );
+                if(!requestObj)
+                    throw( MakeStringException(0, "Request struct %s not found in ESDL Definition", request) );
+                walkDefinitionDepthFirst( foundByName, dependencies, requestObj, requestedVer, opts, 0, flags );
             }
 
-            const char* response = method->queryResponseType();
-            IEsdlDefObject* responseObj = this->queryObj( response );
-            if( NULL == responseObj )
+            if (allTypes || (flags & DEPFLAG_INCLUDE_RESPONSE))
             {
-                throw( MakeStringException(0, "Response struct %s not found in ESDL Definition", response) );
-            } else {
-                this->walkDefinitionDepthFirst( foundByName, dependencies, responseObj, requestedVer, opts, 0, flags );
+                const char* response = method->queryResponseType();
+                IEsdlDefObject* responseObj = this->queryObj( response );
+                if(!responseObj)
+                    throw( MakeStringException(0, "Response struct %s not found in ESDL Definition", response) );
+                walkDefinitionDepthFirst( foundByName, dependencies, responseObj, requestedVer, opts, 0, flags );
             }
 
-            EsdlDefObjectWrapper* wrapper = new EsdlDefObjectWrapper( *methodObj );
-            dependencies.append( *wrapper );
+            if (allTypes || (flags & DEPFLAG_INCLUDE_METHOD))
+            {
+                EsdlDefObjectWrapper* wrapper = new EsdlDefObjectWrapper( *methodObj );
+                dependencies.append( *wrapper );
+            }
         }
     }
 }
@@ -1558,6 +1559,11 @@ unsigned EsdlDefinition::walkChildrenDepthFirst( AddedObjs& foundByName, EsdlDef
             while( children->isValid() )
             {
                 IEsdlDefObject& child = children->query();
+                if ((flags & DEPFLAG_ECL_ONLY) && child.getPropInt("ecl_hide"))
+                {
+                    children->next();
+                    continue;
+                }
                 const char *childname = child.queryName();
                 EsdlDefTypeId childType = child.getEsdlType();
                 //DBGLOG("  %s<%s> child", StringBuffer(level*2, " ").str(), childname );
@@ -1588,7 +1594,7 @@ unsigned EsdlDefinition::walkChildrenDepthFirst( AddedObjs& foundByName, EsdlDef
                     }
 
                     // Should this element be included based on ESP version & optional tags?
-                    if( child.checkOptional(opts) && ( requestedVer==0.0 || child.checkVersion(requestedVer)) )
+                    if( child.checkOptional(opts) && ( requestedVer==0.0 || child.checkVersion(requestedVer)))
                     {
                         if( complexType != NULL )
                         {
@@ -1919,6 +1925,184 @@ public:
 
 };
 
+bool flagCustomTags(IPropertyTree *tree)
+{
+    bool custom = false;
+
+    Owned<IPropertyTreeIterator> children = tree->getElements("*");
+    ForEach(*children)
+    {
+        IPropertyTree &child = children->query();
+        if (flagCustomTags(&child))
+            custom=true;
+    }
+    Owned<IAttributeIterator> attrs = tree->getAttributes();
+    if (attrs->first())
+        custom=true;
+    if (custom)
+        tree->setPropBool("@diff_custom", true);
+    return custom;
+}
+class XpathTrack
+{
+public:
+    XpathTrack(){}
+    void push(const char *node)
+    {
+        size32_t len = xpath.length();
+        pos.append(len);
+        if (len)
+            xpath.append('/');
+        xpath.append(node);
+    }
+    void pop()
+    {
+        if (!pos.length())
+            return;
+        size32_t len = pos.popGet();
+        xpath.setLength(len);
+    }
+    const char *str(){return xpath.str();}
+private:
+    ArrayOf<size32_t> pos;
+    StringBuffer xpath;
+};
+
+void appendCustomizeTypeInstance(EsdlDefinition &esdl, StringBuffer &out, XpathTrack &xpath, EsdlDefStruct *st, IPropertyTree &insTree, const char *modifiedName, const IPropertyTree *attrs)
+{
+    StringBuffer xml;
+    st->toXML(xml, 0, nullptr, 0);
+    DBGLOG("original esdl struct: \n%s\n", xml.str());
+
+    Owned<IPropertyTree> esdlPtStruct = createPTreeFromXMLString(xml.str(), ipt_ordered);
+    if (modifiedName && *modifiedName)
+        esdlPtStruct->setProp("@name", modifiedName);
+    if (attrs) //note that for nested structures the same attrs are added to the child and the custom type
+    {
+        Owned<IAttributeIterator> aiter = attrs->getAttributes();
+        ForEach (*aiter)
+            esdlPtStruct->addProp(aiter->queryName(), aiter->queryValue());
+    }
+
+    const char *esdlBaseTypeName = esdlPtStruct->queryProp("@base_type");
+    if (esdlBaseTypeName)
+    {
+        IEsdlDefStruct *istruct = esdl.queryStruct(esdlBaseTypeName);
+        if (istruct)
+        {
+            EsdlDefStruct *esdlBaseTypeStruct = dynamic_cast<EsdlDefStruct *>(istruct);
+            if (esdlBaseTypeStruct)
+            {
+                StringBuffer newBaseTypeName(insTree.queryName());
+                newBaseTypeName.append('_').append(xpath.str()).replace('/', '_').append('_').append(esdlBaseTypeName);
+                appendCustomizeTypeInstance(esdl, out, xpath, esdlBaseTypeStruct, insTree, newBaseTypeName, attrs);
+                esdlPtStruct->setProp("@base_type", newBaseTypeName);
+            }
+        }
+    }
+
+    Owned<IPropertyTreeIterator> esdlPtChildren = esdlPtStruct->getElements("*");
+    ForEach(*esdlPtChildren)
+    {
+        IPropertyTree &esdlPtChild = esdlPtChildren->query();
+        xpath.push(esdlPtChild.queryProp("@name"));
+        IPropertyTree *insChild = insTree.queryPropTree(xpath.str());
+        if (insChild && insChild->hasProp("@diff_custom"))
+        {
+            const char *esdlTag = esdlPtChild.queryName();
+            if (strieq(esdlTag, "EsdlElement"))
+            {
+                const char *esdlPtChildTypeName = esdlPtChild.queryProp("@complex_type");
+                if (esdlPtChildTypeName)
+                {
+                    IEsdlDefStruct *istruct = esdl.queryStruct(esdlPtChildTypeName);
+                    if (istruct)
+                    {
+                        EsdlDefStruct *esdlPtChildStruct = dynamic_cast<EsdlDefStruct *>(istruct);
+                        if (esdlPtChildStruct)
+                        {
+                            StringBuffer newChildTypeName(insTree.queryName());
+                            newChildTypeName.append('_').append(xpath.str()).replace('/', '_').append('_').append(esdlPtChildTypeName);
+                            appendCustomizeTypeInstance(esdl, out, xpath, esdlPtChildStruct, insTree, newChildTypeName, insChild);
+                            esdlPtChild.setProp("@complex_type", newChildTypeName);
+                        }
+                    }
+                }
+            }
+            else if (strieq(esdlTag, "EsdlArray"))
+            {
+                const char *esdlPtChildTypeName = esdlPtChild.queryProp("@type");
+                if (esdlPtChildTypeName)
+                {
+                    IEsdlDefStruct *istruct = esdl.queryStruct(esdlPtChildTypeName);
+                    if (istruct)
+                    {
+                        EsdlDefStruct *esdlPtChildStruct = dynamic_cast<EsdlDefStruct *>(istruct);
+                        if (esdlPtChildStruct)
+                        {
+                            const char* item_tag = esdlPtChild.queryProp("item_tag");
+                            xpath.push(item_tag ? item_tag : esdlPtChildTypeName);
+                            IPropertyTree *insItem = insTree.queryPropTree(xpath.str());
+                            xpath.pop();
+
+                            StringBuffer newChildTypeName(insTree.queryName());
+                            newChildTypeName.append('_').append(xpath.str()).replace('/', '_').append('_').append(esdlPtChildTypeName);
+                            appendCustomizeTypeInstance(esdl, out, xpath, esdlPtChildStruct, insTree, newChildTypeName, insItem);
+                            esdlPtChild.setProp("@type", newChildTypeName);
+                        }
+                    }
+                }
+            }
+        }
+        xpath.pop();
+    }
+    toXML(esdlPtStruct, out);
+}
+
+void saveAsFile(const char *name, const char *text)
+{
+    Owned<IFile> file = createIFile(name);
+    Owned<IFileIO> io;
+    io.setown(file->open(IFOcreaterw));
+
+    if (io.get())
+        io->write(0, strlen(text), text);
+}
+
+IEsdlDefObjectIterator *EsdlDefinition::getCustomResponseDependencies( const char* service, const char* method, const char *instanceXml)
+{
+    StringBuffer customXml("<esxdl>");
+    if (instanceXml && *instanceXml)
+    {
+        Owned<IPropertyTree> instancePt = createPTreeFromXMLString(instanceXml);
+        flagCustomTags(instancePt);
+        StringBuffer flaggedXml;
+        DBGLOG("Flagged instancePt: \n%s\n", toXML(instancePt, flaggedXml).str());
+        Owned<IPropertyTreeIterator> children = instancePt->getElements("*");
+        ForEach(*children)
+        {
+            IEsdlDefStruct *iStruct = this->queryStruct(children->query().queryName());
+            if (iStruct)
+            {
+                EsdlDefStruct *defStruct = dynamic_cast<EsdlDefStruct*>(iStruct);
+                if (defStruct)
+                {
+                    XpathTrack xpath;
+                    appendCustomizeTypeInstance(*this, customXml, xpath, defStruct, children->query(), nullptr, nullptr);
+                }
+            }
+        }
+    }
+    customXml.append("</esxdl>");
+    saveAsFile("custom.xml", customXml);
+
+    EsdlDefLoader loader(this);
+    loader.loadXMLDefinitionFrombuffer(customXml);
+
+    return this->getDependencies(service, method, 0, nullptr, 0);
+}
+
+
 bool EsdlDefinition::hasFileLoaded(const char *filename)
 {
     //The existance of the entry indicates whether it has been added or not
@@ -2016,8 +2200,8 @@ EsdlDefObject::EsdlDefObject(StartTag &tag, EsdlDefinition *esdl)
                 const char *verdefval=(verdefs) ? verdefs->queryProp(value) : NULL;
                 if (verdefval && *verdefval)
                     props->setProp(localname, verdefval);
-                else
-                    throw MakeStringException(-1, "Error! EsdlDefVersion %s not found", value);
+//                else
+//                    throw MakeStringException(-1, "Error! EsdlDefVersion %s not found", value);
             }
             else if (strieq(localname, "optional"))
             {
