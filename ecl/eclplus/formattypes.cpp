@@ -212,9 +212,9 @@ void TextFormatType::printBody(FILE* fp, int len, char* txt)
 
     Owned<IXslTransform> transform = xslprocessor->createXslTransform();
 
-    //fprintf(fp, "%s\n", txt);
     StringBuffer xmlbuf;
     xmlbuf.append("<Result>").append(len, txt).append("</Result>");
+    fprintf(fp, "xml for transform: %s\n", xmlbuf.str());
     transform->setXmlSource(xmlbuf.str(), xmlbuf.length());
     transform->setXslNoCache(formatxsl, strlen(formatxsl));
     transform->setParameter("showHeader", displayNamesHeader()?"1":"0");
