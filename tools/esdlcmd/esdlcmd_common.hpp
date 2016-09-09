@@ -136,6 +136,7 @@ public:
     Owned<IEsdlDefinition> esdlDef;
     Owned<IEsdlDefinitionHelper> defHelper;
     Owned<IFile> serviceDefFile;
+    bool verbose = false;
 
 public:
     EsdlCmdHelper()
@@ -164,7 +165,7 @@ public:
             if (stricmp(extension.str(),LEGACY_FILE_EXTENSION)==0 || stricmp(extension.str(),ESDL_FILE_EXTENSION)==0)
             {
                 StringBuffer esxml;
-                EsdlCmdHelper::convertECMtoESXDL(sourceFileName, filename.str(), esxml, true, true, false, true);
+                EsdlCmdHelper::convertECMtoESXDL(sourceFileName, filename.str(), esxml, true, verbose, false, true);
                 VStringBuffer serviceid("%s.%f", serviceName, version);
                 esdlDef->addDefinitionFromXML(esxml, serviceid.str());
             }
@@ -325,10 +326,14 @@ static bool getCurrentFolder(StringBuffer & path)
 
 static bool getComponentFilesRelPathFromBin(StringBuffer & path)
 {
-    if (getCurrentFolder(path))
+    StringBuffer s;
+    if (getCurrentFolder(s))
     {
-        path.appendf("%c%s%c%s", PATHSEPCHAR, HIGHER_DIR_RELATIVE,PATHSEPCHAR,COMPONENTS_DIR_NAME);
-        return true;
+        if (checkDirExists(s.appendf("%c%s%c%s", PATHSEPCHAR, HIGHER_DIR_RELATIVE,PATHSEPCHAR,COMPONENTS_DIR_NAME)))
+        {
+            path.set(s);
+            return true;
+        }
     }
 
     return false;
