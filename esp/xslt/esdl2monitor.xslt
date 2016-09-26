@@ -29,7 +29,6 @@
         <xsl:text>/*** Generated Code do not hand edit ***/
 </xsl:text>
     </xsl:template>
-<!--EsdlMethod response_type="SmartLinxReportResponseEx" description="SmartLinx Report." request_type="SmartLinxReportRequest" help="SmartLinx Report." name="SmartLinxReport"/-->
 
 <xsl:template match="esxdl">
   <xsl:call-template name="doNotChangeManuallyComment"/>
@@ -85,6 +84,15 @@ request := MODULE<xsl:text>
 </xsl:text>
 layouts := MODULE
 
+  EXPORT DiffString := RECORD
+    string7 _diff {XPATH('@diff')} := '';
+    string value {XPATH('')} := '';
+  END;
+
+  EXPORT DiffStringRow := RECORD  (DiffString)
+    integer _diff_ord {xpath('@diff_ord')} := 0;
+  END;
+
   EXPORT DiffMetaRow := RECORD
     string name {XPATH ('@name')};
     string prior {XPATH ('@prior')};
@@ -108,9 +116,54 @@ difference := MODULE<xsl:text>
 </xsl:text>
     </xsl:for-each><xsl:text>
 </xsl:text>
-  <xsl:apply-templates select="EsdlStruct" mode="difference.struct"/>
-  <xsl:apply-templates select="EsdlRequest" mode="difference.struct"/>
-  <xsl:apply-templates select="EsdlResponse" mode="difference.struct"/>
+
+EXPORT _df_DiffString(boolean is_active, string path) := MODULE
+
+  EXPORT layouts.DiffStringRow ProcessTxRow(layouts.DiffStringRow L, layouts.DiffStringRow R, integer1 joinRowType) :=TRANSFORM
+    boolean is_deleted := joinRowType = DiffStatus.JoinRowType.OuterRight;
+    boolean is_added := joinRowType = DiffStatus.JoinRowType.OuterLeft;
+
+
+    integer _change := MAP (is_deleted  => DiffStatus.State.DELETED,
+                      is_added    => DiffStatus.State.ADDED,
+                      DiffStatus.State.UNCHANGED);
+
+    SELF._diff := IF(is_active, DiffStatus.Convert (_change), '');
+    SELF._diff_ord := IF (is_added, L._diff_ord, R._diff_ord);
+    SELF := IF (is_deleted, R, L);
+
+  END;
+
+  EXPORT  integer1 CheckOuter(layouts.DiffString L, layouts.DiffString R) := FUNCTION
+    boolean IsInner :=  (L.Value = R.Value);
+    boolean IsOuterRight :=   (L.Value = '');
+    return IF (IsInner, DiffStatus.JoinRowType.IsInner, IF (IsOuterRight, DiffStatus.JoinRowType.OuterRight, DiffStatus.JoinRowType.OuterLeft));
+  END;
+
+  EXPORT  AsDataset (dataset(layouts.DiffString) _n, dataset(layouts.DiffString) _o) := FUNCTION
+
+    _new := PROJECT (_n, TRANSFORM (layouts.DiffStringRow, SELF._diff_ord := COUNTER, SELF := LEFT));
+    _old := PROJECT (_o, TRANSFORM (layouts.DiffStringRow, SELF._diff_ord := 10000 + COUNTER, SELF := LEFT));
+    ActiveJoin := JOIN (_new, _old,
+                  LEFT.Value = RIGHT.Value,
+                  ProcessTxRow (LEFT, RIGHT,
+                  CheckOuter(LEFT, RIGHT)),
+                  FULL OUTER,
+                  LIMIT (0));
+    PassiveJoin := JOIN (_new, _old,
+                  LEFT.Value = RIGHT.Value,
+                  ProcessTxRow (LEFT, RIGHT,
+                  CheckOuter(LEFT, RIGHT)),
+                  LEFT OUTER,
+                  LIMIT (0));
+    RETURN PROJECT(SORT(IF (is_active, ActiveJoin, PassiveJoin), _diff_ord), layouts.DiffString);
+  END;
+  
+END;
+
+  <xsl:apply-templates select="EsdlStruct" mode="CreateDiffObjectModule"/>
+  <xsl:apply-templates select="EsdlRequest" mode="CreateDiffObjectModule"/>
+  <xsl:apply-templates select="EsdlResponse" mode="CreateDiffObjectModule"/>
 <xsl:text>END;
 
 </xsl:text>
@@ -121,6 +174,7 @@ difference := MODULE<xsl:text>
 
   //Inputs
   string csndServer := '127.0.0.1' : stored('cassandraServer', FORMAT(SEQUENCE(1)));
+  string csndServer2 := '127.0.0.1' : stored('cassandraServer2', FORMAT(SEQUENCE(21)));
   string csndUser := '' : stored('cassandraUser', FORMAT(SEQUENCE(2)));
   string csndPassword := '' : stored('cassandraPassword', FORMAT(PASSWORD, SEQUENCE(3)));
   string csndKeySpace := 'eclresultmonitoring' : stored('cassandraKeyspace', FORMAT(SEQUENCE(4)));
@@ -172,7 +226,7 @@ monitorStoreRec getStoredMonitor(string id) := EMBED(cassandra : server(csndServ
   SELECT monitorId, result from monitors WHERE monitorId=? LIMIT 1;
 ENDEMBED;
 
-updateMonitor(dataset(monitorStoreRec) values) := EMBED(cassandra : server(csndServer), user(csndUser), password(csndPassword), keyspace('eclresultmonitoring'), maxFutures(100), maxRetries(10))
+updateMonitor(dataset(monitorStoreRec) values) := EMBED(cassandra : server(csndServer2), user(csndUser), password(csndPassword), keyspace('eclresultmonitoring'), maxFutures(100), maxRetries(10))
   INSERT INTO monitors (monitorId, result) values (?,?);
 ENDEMBED;
 
@@ -272,83 +326,46 @@ END;
   <xsl:call-template name="doNotChangeManuallyComment"/>
 </xsl:template>
 
-
-<xsl:template match="EsdlElement[@complex_type]" mode="selectors.section">
-  <xsl:value-of select="@complex_type"/><xsl:text> </xsl:text><xsl:value-of select="@diff_section"/>;
-</xsl:template>
-
-<xsl:template match="EsdlArray[DiffMatchs/diff_match]" mode="selectors.section">
-  <xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@diff_section"/>;
-</xsl:template>
-
-<xsl:template match="*" mode="selectors.section">
-</xsl:template>
-
 <!-- Difference -->
 
-<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="difference.children.scalars">
+<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="DiffScalarsCompareChildren">
   <xsl:if test="@base_type">
     <xsl:variable name="base_type" select="@base_type"/>
-    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="difference.children.scalars"/>
+    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="DiffScalarsCompareChildren"/>
   </xsl:if>
-  <xsl:apply-templates select="EsdlElement[@type]|EsdlEnumRef" mode="difference"/>
+  <xsl:apply-templates select="EsdlElement[@type]|EsdlEnumRef" mode="CheckCompare"/>
 </xsl:template>
 
-<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="difference.children.nested">
+<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="ProcessTxChildren">
   <xsl:if test="@base_type">
     <xsl:variable name="base_type" select="@base_type"/>
-    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="difference.children.nested"/>
+    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="ProcessTxChildren"/>
   </xsl:if>
-  <xsl:apply-templates select="EsdlElement[@complex_type]|EsdlArray" mode="difference"/>
+  <xsl:apply-templates select="EsdlElement[@complex_type]|EsdlArray" mode="CheckCompare"/>
 </xsl:template>
 
-<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="difference.children.changed">
+<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="GatherUpdateFlagsChildren">
   <xsl:if test="@base_type">
     <xsl:variable name="base_type" select="@base_type"/>
-    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="difference.children.changed"/>
+    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="GatherUpdateFlagsChildren"/>
   </xsl:if>
-  <xsl:apply-templates select="*" mode="difference.changed"/>
+  <xsl:apply-templates select="EsdlElement[@type]" mode="AppendUpdateFlag"/>
 </xsl:template>
 
-<xsl:template match="EsdlElement[@complex_type and (not(@_nomon) or @_mon='1')]" mode="difference.changed">
-          OR (checked_<xsl:call-template name="output_ecl_name"/><xsl:text>._diff != '')</xsl:text>
-</xsl:template>
-
-<xsl:template match="EsdlArray[DiffMatchs/diff_match and (not(@_nomon) or @_mon='1')]" mode="difference.changed">
-          OR (EXISTS (checked_<xsl:call-template name="output_ecl_name"/><xsl:text>(_diff != '')))</xsl:text>
-</xsl:template>
-
-<xsl:template match="EsdlElement[@type]" mode="difference.changed">
-</xsl:template>
-
-<xsl:template match="EsdlArray" mode="difference.changed">
-</xsl:template>
-
-<xsl:template match="*" mode="difference.changed">
-</xsl:template>
-
-<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="difference.children.updated">
-  <xsl:if test="@base_type">
-    <xsl:variable name="base_type" select="@base_type"/>
-    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="difference.children.updated"/>
-  </xsl:if>
-  <xsl:apply-templates select="EsdlElement[@type]" mode="difference.updated"/>
-</xsl:template>
-
-<xsl:template match="EsdlElement[@type and (not(@_nomon) or @_mon='1')]" mode="difference.updated">
+<xsl:template match="EsdlElement[@type and (not(@_nomon) or @_mon='1')]" mode="AppendUpdateFlag">
       OR updated_<xsl:call-template name="output_ecl_name"/>
 </xsl:template>
 
 
-<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="difference.children.meta">
+<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="BuildMetaDataChildren">
     <xsl:variable name="base_content">
       <xsl:if test="@base_type">
         <xsl:variable name="base_type" select="@base_type"/>
-        <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="difference.children.meta"/>
+        <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="BuildMetaDataChildren"/>
       </xsl:if>
     </xsl:variable>
   <xsl:variable name="local_content">
-    <xsl:apply-templates select="EsdlElement[@type]" mode="difference.meta"/>
+    <xsl:apply-templates select="EsdlElement[@type]" mode="AppendMetaData"/>
   </xsl:variable>
   <xsl:if test="string($base_content)">
     <xsl:value-of select="$base_content"/>
@@ -357,7 +374,7 @@ END;
   <xsl:value-of select="$local_content"/>
 </xsl:template>
 
-<xsl:template match="EsdlElement[@type and (not(@_nomon) or @_mon='1')]" mode="difference.meta">
+<xsl:template match="EsdlElement[@type and (not(@_nomon) or @_mon='1')]" mode="AppendMetaData">
   <xsl:if test="position()!=1"><xsl:text>
          + </xsl:text></xsl:if> IF (updated_<xsl:call-template name="output_ecl_name"/>, DATASET ([{'<xsl:call-template name="output_ecl_name"/><xsl:text>', </xsl:text>
   <xsl:choose>
@@ -367,12 +384,12 @@ END;
 <xsl:text>}], layouts.DiffMetaRow))</xsl:text>
 </xsl:template>
 
-<xsl:template match="*[@mon_child]" mode="difference.struct">
+<xsl:template match="*[@mon_child]" mode="CreateDiffObjectModule">
   <xsl:variable name="struct_name"><xsl:call-template name="output_ecl_name"/></xsl:variable>
   <xsl:text>EXPORT _df_</xsl:text><xsl:value-of select="$struct_name"/>(boolean is_active, string path) := MODULE<xsl:text>
   </xsl:text>EXPORT layouts._lt_<xsl:value-of select="$struct_name"/> ProcessTx(layouts._lt_<xsl:value-of select="$struct_name"/> L, layouts._lt_<xsl:value-of select="$struct_name"/> R) :=TRANSFORM
 
-  <xsl:apply-templates select="." mode="difference.children.sections"/>
+  <xsl:apply-templates select="." mode="UnmonitoredDiffModuleChildren"/>
 <xsl:text>END;
 </xsl:text>
     EXPORT AsRecord (layouts._lt_<xsl:call-template name="output_ecl_name"/> _new, layouts._lt_<xsl:call-template name="output_ecl_name"/> _old) := FUNCTION
@@ -385,7 +402,7 @@ END;
 </xsl:template>
 
 
-<xsl:template match="*[@diff_monitor]" mode="difference.struct">
+<xsl:template match="*[@diff_monitor]" mode="CreateDiffObjectModule">
 <xsl:if test="not(@_base) or @_used">
   <xsl:variable name="struct_name"><xsl:call-template name="output_ecl_name"/></xsl:variable>
   <xsl:text>EXPORT _df_</xsl:text><xsl:value-of select="$struct_name"/>(boolean is_active, string path) := MODULE
@@ -393,9 +410,9 @@ END;
 <xsl:text>
   </xsl:text>EXPORT DiffScalars (layouts._lt_<xsl:value-of select="$struct_name"/> L, layouts._lt_<xsl:value-of select="$struct_name"/> R, boolean is_deleted, boolean is_added) := MODULE<xsl:text>
 </xsl:text>
-  <xsl:apply-templates select="." mode="difference.children.scalars"/><xsl:text>
+  <xsl:apply-templates select="." mode="DiffScalarsCompareChildren"/><xsl:text>
     shared is_updated := false</xsl:text>
-  <xsl:apply-templates select="." mode="difference.children.updated"/>;
+  <xsl:apply-templates select="." mode="GatherUpdateFlagsChildren"/>;
 
     shared integer _change := MAP (is_deleted  => DiffStatus.State.DELETED,
                       is_added    => DiffStatus.State.ADDED,
@@ -404,7 +421,7 @@ END;
 
     EXPORT _diff := DiffStatus.Convert (_change);
     // Get update information for all scalars
-    _meta :=  <xsl:apply-templates select="." mode="difference.children.meta"/>;
+    _meta :=  <xsl:apply-templates select="." mode="BuildMetaDataChildren"/>;
 
     EXPORT _diffmeta := IF (~is_deleted AND ~is_added AND is_updated, _meta);
   END;
@@ -417,7 +434,7 @@ END;
       SELF._diff := IF(is_active, m._diff, '');
       SELF._diffmeta := IF(is_active, m._diffmeta);
 </xsl:if>
-  <xsl:apply-templates select="." mode="difference.children.nested"/>
+  <xsl:apply-templates select="." mode="ProcessTxChildren"/>
 
       SELF := IF (is_deleted, R, L);
 <xsl:text>
@@ -436,7 +453,7 @@ END;
     SELF._diff := IF(is_active, m._diff, '');
     SELF._diffmeta := IF(is_active, m._diffmeta);
 </xsl:if>
-   <xsl:apply-templates select="." mode="difference.children.nested"/>
+   <xsl:apply-templates select="." mode="ProcessTxChildren"/>
     SELF._diff_ord := IF (is_added, L._diff_ord, R._diff_ord);
     SELF := IF (is_deleted, R, L);
 <xsl:text>
@@ -500,18 +517,18 @@ END;
 </xsl:template>
 
 
-<xsl:template match="*" mode="difference.struct"></xsl:template>
+<xsl:template match="*" mode="CreateDiffObjectModule"></xsl:template>
 
-<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="difference.children.sections">
+<xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="UnmonitoredDiffModuleChildren">
   <xsl:if test="@base_type">
     <xsl:variable name="base_type" select="@base_type"/>
-    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="difference.children.sections"/>
+    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="UnmonitoredDiffModuleChildren"/>
   </xsl:if>
-  <xsl:apply-templates select="*" mode="difference.children.sections"/>
+  <xsl:apply-templates select="*" mode="UnmonitoredDiffModuleChildren"/>
 </xsl:template>
 
 
-<xsl:template match="EsdlElement[@complex_type]" mode="difference.children.sections">
+<xsl:template match="EsdlElement[@complex_type]" mode="UnmonitoredDiffModuleChildren">
 <xsl:choose>
   <xsl:when test="@mon_child | @_mon">
     <xsl:variable name="type" select="@complex_type"/>
@@ -528,11 +545,11 @@ END;
 </xsl:choose>
 </xsl:template>
 
-<xsl:template match="EsdlElement[@type]" mode="difference.children.sections">
+<xsl:template match="EsdlElement[@type]" mode="UnmonitoredDiffModuleChildren">
       SELF.<xsl:call-template name="output_ecl_name"/> := L.<xsl:call-template name="output_ecl_name"/>;
 </xsl:template>
 
-<xsl:template match="EsdlArray[DiffMatchs/diff_match and (@mon_child='1' or @_mon='1')]" mode="difference.children.sections">
+<xsl:template match="EsdlArray[DiffMatchs/diff_match and (@mon_child='1' or @_mon='1')]" mode="UnmonitoredDiffModuleChildren">
     <xsl:variable name="vid_name" select="translate(DiffMatchs/diff_match/@name, ' .', '__')"/>
     <xsl:variable name="type" select="@type"/>
     <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
@@ -543,16 +560,25 @@ END;
 <xsl:text>, path + '/</xsl:text><xsl:call-template name="output_ecl_name"/>/<xsl:call-template name="output_item_tag"/>').AsDataset_<xsl:value-of select="$vid_name"/>(L.<xsl:call-template name="output_ecl_name"/>, R.<xsl:call-template name="output_ecl_name"/>);
 </xsl:template>
 
-<xsl:template match="EsdlArray" mode="difference.children.sections">
+<xsl:template match="EsdlArray[@type='string']" mode="UnmonitoredDiffModuleChildren">
+    <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
+      SELF.<xsl:value-of select="$field"/>  := _df_DiffString<xsl:text>(</xsl:text>
+<xsl:call-template name="output_active_check">
+  <xsl:with-param name="pathvar">path + '/<xsl:value-of select="$field"/>'</xsl:with-param>
+</xsl:call-template>
+<xsl:text>, path + '/</xsl:text><xsl:value-of select="$field"/>/<xsl:call-template name="output_item_tag"/>').AsDataset(L.<xsl:value-of select="$field"/>, R.<xsl:value-of select="$field"/>);
+</xsl:template>
+
+<xsl:template match="EsdlArray" mode="UnmonitoredDiffModuleChildren">
         SELF.<xsl:call-template name="output_ecl_name"/> := L.<xsl:call-template name="output_ecl_name"/>;
 </xsl:template>
 
-<xsl:template match="DiffMatchs|_diff_selectors" mode="difference.children.sections">
+<xsl:template match="DiffMatchs|_diff_selectors" mode="UnmonitoredDiffModuleChildren">
 </xsl:template>
 
 
 
-<xsl:template match="EsdlElement[@complex_type]" mode="difference">
+<xsl:template match="EsdlElement[@complex_type]" mode="CheckCompare">
     <xsl:variable name="type" select="@complex_type"/>
     <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
     <xsl:choose>
@@ -587,7 +613,7 @@ END;
     </xsl:choose>
 </xsl:template>
 
-<xsl:template match="EsdlElement[@type and (not(@_nomon) or @_mon='1')]" mode="difference">
+<xsl:template match="EsdlElement[@type and (not(@_nomon) or @_mon='1')]" mode="CheckCompare">
     <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
     <xsl:if test="diff_selectors/entry">
       <xsl:text>    </xsl:text><xsl:value-of select="$field"/><xsl:text>_active := </xsl:text>
@@ -626,12 +652,24 @@ END;
 </xsl:text>
 </xsl:template>
 
-<xsl:template match="EsdlArray" mode="difference">
+<xsl:template match="EsdlArray" mode="CheckCompare">
+  <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
   <xsl:choose>
+  <xsl:when test="@type='string'">
+      updated_<xsl:value-of select="$field"/> := _df_DiffString<xsl:text>(</xsl:text>
+    <xsl:call-template name="output_active_check">
+      <xsl:with-param name="pathvar">path + '/<xsl:value-of select="$field"/>'</xsl:with-param>
+    </xsl:call-template>
+    <xsl:text>, path + '/</xsl:text><xsl:value-of select="$field"/>/<xsl:call-template name="output_item_tag"/>').AsDataset(L.<xsl:value-of select="$field"/>, R.<xsl:value-of select="$field"/>);
+      checked_<xsl:value-of select="$field"/> := MAP (is_deleted => R.<xsl:value-of select="$field"/>,
+                              is_added => L.<xsl:value-of select="$field"/>,
+                              updated_<xsl:value-of select="$field"/>);
+      SELF.<xsl:value-of select="$field"/> := checked_<xsl:value-of select="$field"/><xsl:text>;
+    </xsl:text>
+  </xsl:when>
   <xsl:when test="DiffMatchs/diff_match and (not(@_nomon) or @_mon='1')">
     <xsl:variable name="vid_name" select="translate(DiffMatchs/diff_match/@name, ' .', '__')"/>
     <xsl:variable name="type" select="@type"/>
-    <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
       updated_<xsl:call-template name="output_ecl_name"/> := _df_<xsl:value-of select="$type"/><xsl:text>(</xsl:text>
 <xsl:call-template name="output_active_check">
   <xsl:with-param name="pathvar">path + '/<xsl:value-of select="$field"/>'</xsl:with-param>
@@ -650,11 +688,11 @@ END;
   </xsl:choose>
 </xsl:template>
 
-<xsl:template match="EsdlEnum" mode="difference">
+<xsl:template match="EsdlEnum" mode="CheckCompare">
   <xsl:variable name="entype" select="@enum_type"/>
 </xsl:template>
 
-<xsl:template match="DiffMatchs|_diff_selectors" mode="difference">
+<xsl:template match="DiffMatchs|_diff_selectors" mode="CheckCompare">
 </xsl:template>
 
 <!-- Layouts -->
@@ -682,7 +720,7 @@ END;
 </xsl:template>
 
 <xsl:template match="EsdlArray[@type='string']" mode="layouts">
-    <xsl:text>    set of string </xsl:text><xsl:call-template name="output_ecl_name"/>
+    <xsl:text>    DATASET (DiffString) </xsl:text><xsl:call-template name="output_ecl_name"/>
     <xsl:text> {xpath('</xsl:text>
     <xsl:if test="not(@flat_array)"><xsl:value-of select="@name"/></xsl:if>
     <xsl:text>/</xsl:text><xsl:call-template name="output_item_tag"/>
