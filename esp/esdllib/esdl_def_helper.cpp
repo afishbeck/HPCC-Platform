@@ -125,25 +125,13 @@ void removeEclHiddenElements(IPropertyTree &depTree)
     ForEach(*it)
     {
         StringArray names;
-        Owned<IPropertyTreeIterator> elements = it->query().getElements("*[@ecl_hide='1']");
-        ForEach(*elements)
-            names.append(elements->query().queryProp("@name"));
-        ForEachItemIn(i, names)
-        {
-            VStringBuffer xpath("*[@name='%s']", names.item(i));
-            it->query().removeProp(xpath);
-        }
-    }
-}
-void removeGetDataFromElements(IPropertyTree &depTree)
-{
-    Owned<IPropertyTreeIterator> it = depTree.getElements("*");
-    ForEach(*it)
-    {
-        StringArray names;
         Owned<IPropertyTreeIterator> elements = it->query().getElements("*[@get_data_from]");
         ForEach(*elements)
-            names.append(elements->query().queryProp("@name"));
+            names.appendUniq(elements->query().queryProp("@name"));
+        elements.setown(it->query().getElements("*[@ecl_hide='1']"));
+        ForEach(*elements)
+            names.appendUniq(elements->query().queryProp("@name"));
+
         ForEachItemIn(i, names)
         {
             VStringBuffer xpath("*[@name='%s']", names.item(i));
@@ -151,17 +139,18 @@ void removeGetDataFromElements(IPropertyTree &depTree)
         }
     }
 }
-void removeEclHidden(IPropertyTree &depTree)
+esdl_decl void removeEclHidden(IPropertyTree *depTree)
 {
-    removeEclHiddenStructs(depTree);
-    removeEclHiddenElements(depTree);
-    removeGetDataFromElements(depTree);
+    if (!depTree)
+        return;
+    removeEclHiddenStructs(*depTree);
+    removeEclHiddenElements(*depTree);
 }
 
-void removeEclHidden(StringBuffer &xml)
+esdl_decl void removeEclHidden(StringBuffer &xml)
 {
     Owned<IPropertyTree> depTree = createPTreeFromXMLString(xml);
-    removeEclHidden(*depTree);
+    removeEclHidden(depTree);
     toXML(depTree, xml.clear());
 }
 

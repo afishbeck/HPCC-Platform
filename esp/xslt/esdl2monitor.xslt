@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 ##############################################################################
-# HPCC SYSTEMS software Copyright (C) 2012 HPCC Systems®.
+# HPCC SYSTEMS software Copyright (C) 2016 HPCC Systems®.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,10 +19,8 @@
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
     <xsl:output method="text" version="1.0" encoding="UTF-8" indent="yes"/>
     <xsl:param name="sourceFileName" select="'UNKNOWN'"/>
-    <xsl:param name="responseType" select="'AssetReportResponse'"/>
-    <xsl:param name="requestType" select="'AssetReportRequest'"/>
-    <xsl:param name="queryName" select="'PersonReports.AssetReportService'"/>
-    <xsl:param name="Action" select="'Create'"/>
+    <xsl:param name="responseType" select="''"/>
+    <xsl:param name="requestType" select="''"/>
     <xsl:variable name="docname" select="/esxdl/@name"/>
     <xsl:template match="/">
         <xsl:apply-templates select="esxdl"/>
@@ -36,17 +34,13 @@
 <xsl:template match="esxdl">
   <xsl:call-template name="doNotChangeManuallyComment"/>
 
+IMPORT cassandra;
+IMPORT std;
+IMPORT lib_timelib.TimeLib;
   <xsl:for-each select="ECL/Import">
 IMPORT <xsl:value-of select="."/>;<xsl:text>
 </xsl:text>
   </xsl:for-each>
-
-IMPORT cassandra;
-IMPORT std;
-IMPORT lib_timelib.TimeLib;
-
-IMPORT $.iesp AS iesp;
-IMPORT $.iesp.Constants AS Constants;
 
   <xsl:for-each select="ECL/Input">
 <xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/><xsl:text> := </xsl:text><xsl:value-of select="@default"/><xsl:text> : STORED('</xsl:text><xsl:value-of select="@name"/><xsl:text>'</xsl:text><xsl:if test="@format">, FORMAT(<xsl:value-of select="@format"/>)</xsl:if><xsl:text>);
@@ -82,6 +76,13 @@ DiffStatus := MODULE
          '');
 END;
 
+request := MODULE<xsl:text>
+
+</xsl:text>
+  <xsl:apply-templates select="RequestInfo/EsdlStruct" mode="layouts"/>
+  <xsl:apply-templates select="RequestInfo/EsdlRequest" mode="layouts"/>
+  <xsl:text>END;
+</xsl:text>
 layouts := MODULE
 
   EXPORT DiffMetaRow := RECORD
@@ -93,59 +94,46 @@ layouts := MODULE
     string7 _child_diff {XPATH('@child_diff')} := '';
     string7 _diff {XPATH('@diff')} := '';
     DATASET (DiffMetaRow) _diffmeta {XPATH ('DiffMeta/Field')} := DATASET ([], DiffMetaRow);
-  END;
-
+  END;<xsl:text>
+</xsl:text>
   <xsl:apply-templates select="EsdlStruct" mode="layouts"/>
-  <xsl:apply-templates select="EsdlRequest" mode="layouts"/>
   <xsl:apply-templates select="EsdlResponse" mode="layouts"/>
   <xsl:text>END;
+</xsl:text>
+difference := MODULE<xsl:text>
 
 </xsl:text>
-difference := MODULE
-    <xsl:for-each select="Selectors/Selector">
-      shared boolean Monitor<xsl:value-of select="."/> := FALSE : STORED('Monitor_<xsl:value-of select="."/>', FORMAT(sequence(<xsl:value-of select="position()+10"/>)));
-    </xsl:for-each>
-<xsl:text>
-  shared set of string optional_fields := [
+  <xsl:for-each select="Selectors/Selector">
+<xsl:text>  EXPORT boolean Monitor</xsl:text><xsl:value-of select="."/> := FALSE : STORED('Monitor_<xsl:value-of select="."/>', FORMAT(sequence(<xsl:value-of select="position()+10"/>)));<xsl:text>
 </xsl:text>
-    <xsl:for-each select="OptionalFields/Path">
-      <xsl:if test="position()!=1">,</xsl:if><xsl:text>'/</xsl:text><xsl:value-of select="."/><xsl:text>'
-    </xsl:text>
-    </xsl:for-each>
-       <xsl:text>
-    ];
+    </xsl:for-each><xsl:text>
 </xsl:text>
-       <xsl:apply-templates select="EsdlStruct" mode="difference.struct"/>
-       <xsl:apply-templates select="EsdlRequest" mode="difference.struct"/>
-       <xsl:apply-templates select="EsdlResponse" mode="difference.struct"/>
+  <xsl:apply-templates select="EsdlStruct" mode="difference.struct"/>
+  <xsl:apply-templates select="EsdlRequest" mode="difference.struct"/>
+  <xsl:apply-templates select="EsdlResponse" mode="difference.struct"/>
 <xsl:text>END;
 
 </xsl:text>
+  //Defines
   the_differenceModule := difference._df_<xsl:value-of select="$responseType"/>;
-  the_requestLayout := layouts._lt_<xsl:value-of select="$requestType"/>;
-
+  the_requestLayout := request._lt_<xsl:value-of select="$requestType"/>;
   the_responseLayout := layouts._lt_<xsl:value-of select="$responseType"/>;
 
+  //Inputs
+  string csndServer := '127.0.0.1' : stored('cassandraServer', FORMAT(SEQUENCE(1)));
+  string csndUser := '' : stored('cassandraUser', FORMAT(SEQUENCE(2)));
+  string csndPassword := '' : stored('cassandraPassword', FORMAT(PASSWORD, SEQUENCE(3)));
+  string csndKeySpace := 'eclresultmonitoring' : stored('cassandraKeyspace', FORMAT(SEQUENCE(4)));
 
+  string monAction := 'Create' : STORED('MonAction', FORMAT(SELECT('Create,Run'), SEQUENCE(5)));
+  string userId := '' : stored('UserId', FORMAT(SEQUENCE(6)));
+  string service_url := '' : stored('QueryURL', FORMAT(SEQUENCE(7)));
+  string service_name := '' : stored('QueryName', FORMAT(SEQUENCE(8)));
+  string MonitorIdIn := '' : stored('MonitorId', FORMAT(SEQUENCE(9)));
 
-default_service_url := 'http://roxiestaging.sc.seisint.com:9876/';
-  content := '' : STORED ('Content', FORMAT(FIELDWIDTH(100),FIELDHEIGHT(30), sequence(100)));
+  requestIn := DATASET([], the_requestLayout) : STORED ('<xsl:value-of select="$requestType"/>', FEW, FORMAT(FIELDWIDTH(100),FIELDHEIGHT(30), sequence(100)));
 
-// Save fatal SOAP errors
-  out_rec := RECORD (the_responseLayout)
-    integer soap_code;
-    string soap_message;
-  END;
-
-MonSoapcall(string requestXml) := FUNCTION
-
-  // Service name: cannot be calculated from ESDL
-  service_name := '<xsl:value-of select="$queryName"/>';
-
-  // Read service location (there must be no default, just here for convenience)
-  string service_url := default_service_url : STORED ('URL', FORMAT(sequence(2)));
-
-  request := DATASET (FROMXML (the_requestLayout, requestXml));
+MonSoapcall(DATASET(the_requestLayout) req) := FUNCTION
 
   // Wrap it so that request would look like:
   // <AssetReportRequest><Row><User>...</User><Options>..</Options><SearchBy>...</SearchBy></Row></AssetReportRequest>
@@ -154,172 +142,135 @@ MonSoapcall(string requestXml) := FUNCTION
   end;
 
   in_rec Format () := transform
-    Self.<xsl:value-of select="$requestType"/> := request;
+    Self.<xsl:value-of select="$requestType"/> := req;
   end;
 
   ds_request := dataset ([Format()]);
-
-  out_rec SetError (ds_request inn) := TRANSFORM
-    SELF.soap_code := FAILCODE;
-    SELF.soap_message := FAILMESSAGE;
-    self := [];
-  END;
 
   // execute soapcall
   ar_results := SOAPCALL (ds_request,
                           service_url,
                           service_name,
                           {ds_request},
-                          dataset (out_rec),
-                          onFail (SetError (Left)), TIMEOUT(6), RETRY(1));
+                          dataset (the_responseLayout),
+                          TIMEOUT(6), RETRY(1));
 
   RETURN ar_results;
 END;
 
-
-
-  monitorStore := RECORD
-    string MonitorId,
-    string userId,
-    string request,
-    string result
-  END;
-
-monitorStoreUpdate := RECORD
+  monitorStoreRec := RECORD
     string MonitorId,
     string result
   END;
-
-  MonitorResultRec := RECORD
-    string monitorId;
-    dataset(the_responseLayout) diff_report;
-    dataset(the_responseLayout) latest;
-  END;
-
-  MonitorCreateResultRec := RECORD (MonitorResultRec)
-    dataset(monitorStore) monitor;
-  END;
-
-  MonitorUpdateResultRec := RECORD (MonitorResultRec)
-    dataset(monitorStoreUpdate) monitor;
-  END;
-
-  monAct := ENUM(Create=0, Run=1, DebugCreate=2, DebugInsert=3, DebugCompare=4);
-
-  string monAction := 'Create' : STORED('MonAction', FORMAT(SELECT('Create,Run,DebugCreate,DebugInsert,DebugCompare'), SEQUENCE(4)));
-  string cassandraServer := '127.0.0.1' : stored('cassandraServer', FORMAT(SEQUENCE(1)));
-  string queryUrl := '' : stored('URL', FORMAT(SEQUENCE(3)));
-  string MonitorIdIn := '' : stored('MonitorId', FORMAT(SEQUENCE(5)));
-  string userid := 'xyz123' : stored('UserId', FORMAT(SEQUENCE(6)));
-
 
 // Initialize the Cassandra table, passing in the ECL dataset to provide the rows
 // When not using batch mode, maxFutures controls how many simultaenous writes to Cassandra are allowed before
 // we start to throttle, and maxRetries controls how many times inserts that fail because Cassandra is too busy
 // will be retried.
 
-addMonitor(dataset(monitorStore) values) := EMBED(cassandra : server(cassandraServer), user('eclmon'), keyspace('eclresultmonitoring'), maxFutures(100), maxRetries(10))
-  INSERT INTO monitors (monitorId, userId, request, result) values (?,?,?,?);
+monitorStoreRec getStoredMonitor(string id) := EMBED(cassandra : server(csndServer), user(csndUser), password(csndPassword), keyspace('eclresultmonitoring'))
+  SELECT monitorId, result from monitors WHERE monitorId=? LIMIT 1;
 ENDEMBED;
 
-monitorStore getStoredMonitor(string id) := EMBED(cassandra : server(cassandraServer), user('eclmon'), keyspace('eclresultmonitoring'))
-  SELECT monitorId, userId, request, result from monitors WHERE monitorId=? LIMIT 1;
-ENDEMBED;
-
-updateMonitor(dataset(monitorStoreUpdate) values) := EMBED(cassandra : server(cassandraServer), user('eclmon'), keyspace('eclresultmonitoring'), maxFutures(100), maxRetries(10))
+updateMonitor(dataset(monitorStoreRec) values) := EMBED(cassandra : server(csndServer), user(csndUser), password(csndPassword), keyspace('eclresultmonitoring'), maxFutures(100), maxRetries(10))
   INSERT INTO monitors (monitorId, result) values (?,?);
 ENDEMBED;
 
+  MonitorResultRec := RECORD
+    string id;
+    string responseXML;
+    dataset(the_responseLayout) report;
+//    dataset(the_responseLayout) soap;
+//    dataset(the_responseLayout) prior;
+  END;
 
-CreateMonitor (string userid, string url, string requestXml) := MODULE
-  DATA16 monitorHash := HASHMD5(userId, requestXml, TimeLib.CurrentTime(false), '<xsl:value-of select="$queryName"/>');
+CreateMonitor (string userid, dataset(the_requestLayout) req) := MODULE
+  requestXML := TOXML(req[1]);
+  DATA16 monitorHash := HASHMD5(userId, requestXml, TimeLib.CurrentTimestamp(false));
   SHARED string monitorId := STD.Str.ToHexPairs(monitorHash);
-  SHARED soapOut := MonSoapCall(requestXml)[1];
-  SHARED responseXML := IF (soapOut.soap_code!=0, ERROR(soapOut.soap_code, soapOut.soap_message), '&lt;Row&gt;' + TOXML(soapOut) + '&lt;/Row&gt;');
-  SHARED mon1 := Dataset([{monitorId, userId, requestXml, responseXML}], monitorStore);
+  SHARED soapOut := MonSoapCall(req)[1];
+  SHARED responseXML := '&lt;Row&gt;' + TOXML(soapOut) + '&lt;/Row&gt;';
 
-  SHARED MonitorCreateResultRec BuildMonitor(string id, dataset(monitorStore) monitor) :=TRANSFORM
-    SELF.monitor := monitor;
-    SELF.monitorId := id;
-    SELF.diff_report := [];
-    SELF.latest := soapOut;
+  SHARED MonitorResultRec BuildMonitor() :=TRANSFORM
+    SELF.id := monitorId;
+    SELF.responseXML := (string) responseXML;
+    SELF.report := soapOut;
+//    SELF.soap := soapOut;
+//    SELF.prior := DATASET([], the_responseLayout);
   END;
   EXPORT Result () := FUNCTION
-    RETURN ROW(BuildMonitor(monitorId, mon1));
+    RETURN ROW(BuildMonitor());
   END;
 END;
 
-
-DebugUpdateMonitor (string id, string xml) := MODULE
-  SHARED string monitorId := id;
-  SHARED string responseXML := xml;
-  SHARED mon1 := Dataset([{id, xml}], monitorStoreUpdate);
-
-  SHARED MonitorUpdateResultRec BuildMonitor(string id, dataset(monitorStoreUpdate) monitor) :=TRANSFORM
-    SELF.monitorId := id;
-    SELF.monitor := monitor;
-    SELF.diff_report := [];
-    SELF.latest := DATASET(FROMXML(the_responseLayout, responseXML));
-  END;
-  EXPORT Result () := FUNCTION
-    RETURN ROW(BuildMonitor(monitorId, mon1));
-  END;
-END;
-
-
-RunMonitor (string id) := MODULE
+RunMonitor (string id, dataset(the_requestLayout) req) := MODULE
   SHARED monitorId := id;
   SHARED monitorStore := getStoredMonitor(id);
-  SHARED soapOut := MonSoapCall(monitorStore.request)[1];
-  SHARED responseXML := IF (soapOut.soap_code!=0, ERROR(soapOut.soap_code, soapOut.soap_message), '&lt;Row&gt;' + TOXML(soapOut) + '&lt;/Row&gt;');
-  SHARED mon1 := Dataset([{id, responseXML}], monitorStoreUpdate);
+  SHARED soapOut := MonSoapCall(req)[1];
+  SHARED responseXML := '&lt;Row&gt;' + TOXML(soapOut) + '&lt;/Row&gt;';
 
-  oldResponse := FROMXML (the_responseLayout, monitorStore.result);
+  SHARED oldResponse := FROMXML (the_responseLayout, monitorStore.result);
 
   SHARED diff_result := the_differenceModule(false, '').AsRecord(soapOut, oldResponse);
 
-  EXPORT MonitorUpdateResultRec BuildMonitor(string id, dataset(monitorStoreUpdate) monitor) :=TRANSFORM
-    SELF.monitorId := id;
-    SELF.monitor := monitor;
-    SELF.diff_report := diff_result;
-    SELF.latest := soapOut;
+  EXPORT MonitorResultRec BuildMonitor() :=TRANSFORM
+    SELF.id := monitorId;
+    SELF.responseXML := (string) responseXML;
+    SELF.report := diff_result;
+//    SELF.soap := soapOut;
+//    SELF.prior := oldResponse;
   END;
   EXPORT Result () := FUNCTION
-    RETURN ROW(BuildMonitor(monitorId, mon1));
+    RETURN ROW(BuildMonitor());
   END;
 END;
 
+  createAction := CreateMonitor(userId, requestIn).Result();
+  runAction := RunMonitor(MonitorIdIn, requestIn).Result();
 
-  //executedAction := IF (monAction ='DebugInsert', DebugUpdateMonitor(MonitorIdIn, content).Result());
-  //executedAction := IF (monAction ='DebugCompare', DebugCompareMonitor(MonitorIdIn, content).Result());
+  executedAction := IF(monAction='Create', createAction, runAction);
 
-<xsl:choose>
-  <xsl:when test="$Action='Create'">
-  executedAction := CreateMonitor(userId, queryUrl, STD.Str.FilterOut(content, '\r\n')).Result();
-  addMonitor(executedAction.monitor);
-  output(executedAction.latest, NAMED('LatestResult'));
-  </xsl:when>
-  <xsl:when test="$Action='Run'">
-  executedAction := RunMonitor(MonitorIdIn).Result();
-  updateMonitor(executedAction.monitor);
-  output(executedAction.diff_report, NAMED('Difference'));
-  </xsl:when>
-  <xsl:when test="$Action='DebugUpdate'">
-  executedAction := DebugUpdateMonitor(MonitorIdIn, STD.Str.FilterOut(content, '\r\n')).Result();
-  updateMonitor(executedAction.monitor);
-  output(executedAction.latest, NAMED('LatestResult'));
-  </xsl:when>
-</xsl:choose>
-//  output(executedAction.diff_report, NAMED('DiffResult'));
+  output(executedAction.id, NAMED('MonitorId'));
+  output(executedAction.report, NAMED('Result'));
+//  output(executedAction.soap, NAMED('SOAP'));
+//  output(executedAction.prior, NAMED('PRIOR'));
+  updateMonitor(DATASET([{executedAction.id, executedAction.responseXML}], monitorStoreRec));
 
-  output(executedAction.monitorId, NAMED('MonitorId'));
+  <xsl:if test="Selectors/Selector">
+  SelectorRec := RECORD
+    string monitor {xpath('@monitor')};
+    boolean active {xpath('@active')};
+  END;
 
+    <xsl:text>OUTPUT(DATASET([</xsl:text>
+    <xsl:for-each select="Selectors/Selector">
+      <xsl:if test="position()!=1"><xsl:text>,</xsl:text></xsl:if>
+      <xsl:text>{'</xsl:text><xsl:value-of select="."/>', difference.Monitor<xsl:value-of select="."/><xsl:text>}</xsl:text>
+    </xsl:for-each>], SelectorRec), NAMED('Selected'));
+  </xsl:if>
+
+  <xsl:if test="Template//*[@diff_monitor]">
+  CategoryPathsRec := RECORD
+    string categories {xpath('@categories')};
+    string path{xpath('@path')};
+  END;
+
+    <xsl:text>OUTPUT(DATASET([</xsl:text>
+    <xsl:for-each select="Template//*[@diff_monitor]">
+        <xsl:if test="position()!=1"><xsl:text>,</xsl:text></xsl:if>
+        <xsl:text>{'</xsl:text><xsl:value-of select="@diff_monitor"/><xsl:text>','</xsl:text>
+        <xsl:for-each select="ancestor-or-self::*">
+          <xsl:if test="position()>2">
+            <xsl:text>/</xsl:text><xsl:value-of select="name()"/>
+          </xsl:if>
+        </xsl:for-each>
+      <xsl:text>'}</xsl:text>
+      </xsl:for-each>
+    <xsl:text>], CategoryPathsRec), NAMED('Categories'));</xsl:text>
+  </xsl:if>
 
   <xsl:call-template name="doNotChangeManuallyComment"/>
 </xsl:template>
-
-
-
 
 
 <xsl:template match="EsdlElement[@complex_type]" mode="selectors.section">
@@ -391,10 +342,10 @@ END;
 
 <xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="difference.children.meta">
     <xsl:variable name="base_content">
-	  <xsl:if test="@base_type">
-	    <xsl:variable name="base_type" select="@base_type"/>
-	    <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="difference.children.meta"/>
-	  </xsl:if>
+      <xsl:if test="@base_type">
+        <xsl:variable name="base_type" select="@base_type"/>
+        <xsl:apply-templates select="/esxdl/EsdlStruct[@name=$base_type]" mode="difference.children.meta"/>
+      </xsl:if>
     </xsl:variable>
   <xsl:variable name="local_content">
     <xsl:apply-templates select="EsdlElement[@type]" mode="difference.meta"/>
@@ -407,8 +358,13 @@ END;
 </xsl:template>
 
 <xsl:template match="EsdlElement[@type and (not(@_nomon) or @_mon='1')]" mode="difference.meta">
-          <xsl:if test="position()!=1">+ </xsl:if> IF (updated_<xsl:call-template name="output_ecl_name"/>, DATASET ([{'<xsl:call-template name="output_ecl_name"/>', R.<xsl:call-template name="output_ecl_name"/><xsl:text>}],   layouts.DiffMetaRow))
-          </xsl:text>
+  <xsl:if test="position()!=1"><xsl:text>
+         + </xsl:text></xsl:if> IF (updated_<xsl:call-template name="output_ecl_name"/>, DATASET ([{'<xsl:call-template name="output_ecl_name"/><xsl:text>', </xsl:text>
+  <xsl:choose>
+    <xsl:when test="@type='bool'">IF(R.<xsl:call-template name="output_ecl_name"/> = true, 'true', 'false')</xsl:when>       
+    <xsl:otherwise>R.<xsl:call-template name="output_ecl_name"/></xsl:otherwise>       
+  </xsl:choose>
+<xsl:text>}], layouts.DiffMetaRow))</xsl:text>
 </xsl:template>
 
 <xsl:template match="*[@mon_child]" mode="difference.struct">
@@ -433,38 +389,36 @@ END;
 <xsl:if test="not(@_base) or @_used">
   <xsl:variable name="struct_name"><xsl:call-template name="output_ecl_name"/></xsl:variable>
   <xsl:text>EXPORT _df_</xsl:text><xsl:value-of select="$struct_name"/>(boolean is_active, string path) := MODULE
-
 <xsl:if test="EsdlElement[@type]">
 <xsl:text>
-  </xsl:text>EXPORT DiffScalars (layouts._lt_<xsl:value-of select="$struct_name"/> L, layouts._lt_<xsl:value-of select="$struct_name"/> R, boolean is_deleted, boolean is_added) := MODULE
-
+  </xsl:text>EXPORT DiffScalars (layouts._lt_<xsl:value-of select="$struct_name"/> L, layouts._lt_<xsl:value-of select="$struct_name"/> R, boolean is_deleted, boolean is_added) := MODULE<xsl:text>
+</xsl:text>
   <xsl:apply-templates select="." mode="difference.children.scalars"/><xsl:text>
-
-      shared is_updated := false</xsl:text>
+    shared is_updated := false</xsl:text>
   <xsl:apply-templates select="." mode="difference.children.updated"/>;
 
-      shared integer _change := MAP (is_deleted  => DiffStatus.State.DELETED,
-                              is_added    => DiffStatus.State.ADDED,
-                              is_updated  => DiffStatus.State.UPDATED,
-                              DiffStatus.State.UNCHANGED);
+    shared integer _change := MAP (is_deleted  => DiffStatus.State.DELETED,
+                      is_added    => DiffStatus.State.ADDED,
+                      is_updated  => DiffStatus.State.UPDATED,
+                      DiffStatus.State.UNCHANGED);
 
-      EXPORT _diff := DiffStatus.Convert (_change);
-      // Get update information for all scalars
-      _meta :=  <xsl:apply-templates select="." mode="difference.children.meta"/>;
+    EXPORT _diff := DiffStatus.Convert (_change);
+    // Get update information for all scalars
+    _meta :=  <xsl:apply-templates select="." mode="difference.children.meta"/>;
 
-      EXPORT _diffmeta := IF (~is_deleted AND ~is_added AND is_updated, _meta);
-END;
+    EXPORT _diffmeta := IF (~is_deleted AND ~is_added AND is_updated, _meta);
+  END;
   </xsl:if>
 <xsl:text>
   </xsl:text>EXPORT layouts._lt_<xsl:value-of select="$struct_name"/> ProcessTx(layouts._lt_<xsl:value-of select="$struct_name"/> L, layouts._lt_<xsl:value-of select="$struct_name"/> R, boolean is_deleted, boolean is_added) :=TRANSFORM
 <xsl:if test="EsdlElement[@type]">
       m := DiffScalars(L, R, is_deleted, is_added);
 
-  <xsl:apply-templates select="." mode="difference.children.nested"/>
-
       SELF._diff := IF(is_active, m._diff, '');
       SELF._diffmeta := IF(is_active, m._diffmeta);
 </xsl:if>
+  <xsl:apply-templates select="." mode="difference.children.nested"/>
+
       SELF := IF (is_deleted, R, L);
 <xsl:text>
     END;
@@ -474,36 +428,34 @@ END;
 <xsl:if test="@_usedInArray">
 <xsl:text>
   </xsl:text>EXPORT layouts._lt_row_<xsl:value-of select="$struct_name"/> ProcessTxRow(layouts._lt_row_<xsl:value-of select="$struct_name"/> L, layouts._lt_row_<xsl:value-of select="$struct_name"/> R, integer1 joinRowType) :=TRANSFORM
-      boolean is_deleted := joinRowType = DiffStatus.JoinRowType.OuterRight;
-      boolean is_added := joinRowType = DiffStatus.JoinRowType.OuterLeft;
-
+    boolean is_deleted := joinRowType = DiffStatus.JoinRowType.OuterRight;
+    boolean is_added := joinRowType = DiffStatus.JoinRowType.OuterLeft;
 <xsl:if test="EsdlElement[@type]">
-      m := DiffScalars(L, R, is_deleted, is_added);
+    m := DiffScalars(L, R, is_deleted, is_added);
 
-  <xsl:apply-templates select="." mode="difference.children.nested"/>
-
-      SELF._diff := IF(is_active, m._diff, '');
-      SELF._diffmeta := IF(is_active, m._diffmeta);
+    SELF._diff := IF(is_active, m._diff, '');
+    SELF._diffmeta := IF(is_active, m._diffmeta);
 </xsl:if>
-      SELF._diff_ord := IF (is_added, L._diff_ord, R._diff_ord);
-      SELF := IF (is_deleted, R, L);
+   <xsl:apply-templates select="." mode="difference.children.nested"/>
+    SELF._diff_ord := IF (is_added, L._diff_ord, R._diff_ord);
+    SELF := IF (is_deleted, R, L);
 <xsl:text>
-    END;
+  END;
 
 </xsl:text>
 </xsl:if>
-    EXPORT AsRecord (layouts._lt_<xsl:call-template name="output_ecl_name"/> _new, layouts._lt_<xsl:call-template name="output_ecl_name"/> _old) := FUNCTION
-      RETURN ROW (ProcessTx(_new, _old, false, false));
-    END;
+  EXPORT AsRecord (layouts._lt_<xsl:call-template name="output_ecl_name"/> _new, layouts._lt_<xsl:call-template name="output_ecl_name"/> _old) := FUNCTION
+    RETURN ROW (ProcessTx(_new, _old, false, false));
+  END;
   <xsl:for-each select="DiffMatchs/diff_match">
     <xsl:variable name="vid_name" select="translate(@name, ' .', '__')"/>
-      EXPORT  integer1 CheckOuter_<xsl:value-of select="$vid_name"/>(layouts._lt_<xsl:value-of select="$struct_name"/> L, layouts._lt_<xsl:value-of select="$struct_name"/> R) := FUNCTION
-        boolean IsInner := <xsl:text> (</xsl:text>
+  EXPORT  integer1 CheckOuter_<xsl:value-of select="$vid_name"/>(layouts._lt_<xsl:value-of select="$struct_name"/> L, layouts._lt_<xsl:value-of select="$struct_name"/> R) := FUNCTION
+    boolean IsInner := <xsl:text> (</xsl:text>
         <xsl:for-each select="part">
           <xsl:if test="position()!=1"> AND </xsl:if>L.<xsl:value-of select="@name"/><xsl:text> = </xsl:text>R.<xsl:value-of select="@name"/>
         </xsl:for-each>);
 
-        boolean IsOuterRight :=  <xsl:text> (</xsl:text>
+    boolean IsOuterRight :=  <xsl:text> (</xsl:text>
       <xsl:for-each select="part">
         <xsl:if test="position()!=1"> AND </xsl:if>L.<xsl:value-of select="@name"/><xsl:text> = </xsl:text>
         <xsl:choose>
@@ -513,35 +465,35 @@ END;
           <xsl:otherwise><xsl:text>''</xsl:text></xsl:otherwise>
         </xsl:choose>
       </xsl:for-each>);
-        return IF (IsInner, DiffStatus.JoinRowType.IsInner, IF (IsOuterRight, DiffStatus.JoinRowType.OuterRight, DiffStatus.JoinRowType.OuterLeft));
-      END;
-      EXPORT  AsDataset_<xsl:value-of select="$vid_name"/> (dataset(layouts._lt_<xsl:value-of select="$struct_name"/>) _n, dataset(layouts._lt_<xsl:value-of select="$struct_name"/>) _o) := FUNCTION
+    return IF (IsInner, DiffStatus.JoinRowType.IsInner, IF (IsOuterRight, DiffStatus.JoinRowType.OuterRight, DiffStatus.JoinRowType.OuterLeft));
+  END;
+  EXPORT  AsDataset_<xsl:value-of select="$vid_name"/> (dataset(layouts._lt_<xsl:value-of select="$struct_name"/>) _n, dataset(layouts._lt_<xsl:value-of select="$struct_name"/>) _o) := FUNCTION
 
-         _new := PROJECT (_n, TRANSFORM (layouts._lt_row_<xsl:value-of select="$struct_name"/>, SELF._diff_ord := COUNTER, SELF := LEFT));
-         _old := PROJECT (_o, TRANSFORM (layouts._lt_row_<xsl:value-of select="$struct_name"/>, SELF._diff_ord := 10000 + COUNTER, SELF := LEFT));
-         ActiveJoin := JOIN (_new, _old,<xsl:text>
-                      </xsl:text>
+    _new := PROJECT (_n, TRANSFORM (layouts._lt_row_<xsl:value-of select="$struct_name"/>, SELF._diff_ord := COUNTER, SELF := LEFT));
+    _old := PROJECT (_o, TRANSFORM (layouts._lt_row_<xsl:value-of select="$struct_name"/>, SELF._diff_ord := 10000 + COUNTER, SELF := LEFT));
+    ActiveJoin := JOIN (_new, _old,<xsl:text>
+                  </xsl:text>
     <xsl:for-each select="part">
       <xsl:if test="position()!=1"> AND </xsl:if>LEFT.<xsl:value-of select="@name"/> = RIGHT.<xsl:value-of select="@name"/>
     </xsl:for-each>,
-                      ProcessTxRow (LEFT, RIGHT,
-                      CheckOuter_<xsl:value-of select="$vid_name"/>(LEFT, RIGHT)),
-                      FULL OUTER,
-                      LIMIT (0));
-         PassiveJoin := JOIN (_new, _old,<xsl:text>
-                      </xsl:text>
+                  ProcessTxRow (LEFT, RIGHT,
+                  CheckOuter_<xsl:value-of select="$vid_name"/>(LEFT, RIGHT)),
+                  FULL OUTER,
+                  LIMIT (0));
+    PassiveJoin := JOIN (_new, _old,<xsl:text>
+                  </xsl:text>
     <xsl:for-each select="part">
       <xsl:if test="position()!=1"> AND </xsl:if>LEFT.<xsl:value-of select="@name"/> = RIGHT.<xsl:value-of select="@name"/>
     </xsl:for-each>,
-                      ProcessTxRow (LEFT, RIGHT,
-                      CheckOuter_<xsl:value-of select="$vid_name"/>(LEFT, RIGHT)),
-                      LEFT OUTER,
-                      LIMIT (0));
-        RETURN PROJECT(SORT(IF (is_active, ActiveJoin, PassiveJoin), _diff_ord), layouts._lt_<xsl:value-of select="$struct_name"/>);
-    END;
-
+                  ProcessTxRow (LEFT, RIGHT,
+                  CheckOuter_<xsl:value-of select="$vid_name"/>(LEFT, RIGHT)),
+                  LEFT OUTER,
+                  LIMIT (0));
+    RETURN PROJECT(SORT(IF (is_active, ActiveJoin, PassiveJoin), _diff_ord), layouts._lt_<xsl:value-of select="$struct_name"/>);
+  END;
   </xsl:for-each>
-<xsl:text>END;
+<xsl:text>
+END;
 
 </xsl:text>
 </xsl:if>
@@ -549,7 +501,6 @@ END;
 
 
 <xsl:template match="*" mode="difference.struct"></xsl:template>
-
 
 <xsl:template match="EsdlStruct|EsdlRequest|EsdlResponse" mode="difference.children.sections">
   <xsl:if test="@base_type">
@@ -565,7 +516,11 @@ END;
   <xsl:when test="@mon_child | @_mon">
     <xsl:variable name="type" select="@complex_type"/>
     <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
-      SELF.<xsl:value-of select="$field"/> := _df_<xsl:value-of select="$type"/>(<xsl:call-template name="output_active_check"/>, path + '/' + '<xsl:value-of select="$field"/>').AsRecord(L.<xsl:value-of select="$field"/>, R.<xsl:value-of select="$field"/>);
+      SELF.<xsl:value-of select="$field"/> := _df_<xsl:value-of select="$type"/><xsl:text>(</xsl:text>
+<xsl:call-template name="output_active_check">
+  <xsl:with-param name="pathvar">'/' + path + '/<xsl:call-template name="output_ecl_name"/>'</xsl:with-param>
+</xsl:call-template>
+<xsl:text>, path + '/</xsl:text><xsl:value-of select="$field"/>').AsRecord(L.<xsl:value-of select="$field"/>, R.<xsl:value-of select="$field"/>);
   </xsl:when>
   <xsl:otherwise>
       SELF.<xsl:call-template name="output_ecl_name"/> := L.<xsl:call-template name="output_ecl_name"/>;
@@ -580,7 +535,12 @@ END;
 <xsl:template match="EsdlArray[DiffMatchs/diff_match and (@mon_child='1' or @_mon='1')]" mode="difference.children.sections">
     <xsl:variable name="vid_name" select="translate(DiffMatchs/diff_match/@name, ' .', '__')"/>
     <xsl:variable name="type" select="@type"/>
-      SELF.<xsl:call-template name="output_ecl_name"/>  := _df_<xsl:value-of select="$type"/>(<xsl:call-template name="output_active_check"><xsl:with-param name="def" select="'false'"/></xsl:call-template>, path + '/' + '<xsl:call-template name="output_ecl_name"/>').AsDataset_<xsl:value-of select="$vid_name"/>(L.<xsl:call-template name="output_ecl_name"/>, R.<xsl:call-template name="output_ecl_name"/>);
+    <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
+      SELF.<xsl:call-template name="output_ecl_name"/>  := _df_<xsl:value-of select="$type"/><xsl:text>(</xsl:text>
+<xsl:call-template name="output_active_check">
+  <xsl:with-param name="pathvar">path + '/<xsl:value-of select="$field"/>'</xsl:with-param>
+</xsl:call-template>
+<xsl:text>, path + '/</xsl:text><xsl:call-template name="output_ecl_name"/>/<xsl:call-template name="output_item_tag"/>').AsDataset_<xsl:value-of select="$vid_name"/>(L.<xsl:call-template name="output_ecl_name"/>, R.<xsl:call-template name="output_ecl_name"/>);
 </xsl:template>
 
 <xsl:template match="EsdlArray" mode="difference.children.sections">
@@ -601,30 +561,48 @@ END;
 </xsl:text>
       </xsl:when>
       <xsl:otherwise>
-          path_<xsl:value-of select="$field"/> := path + '/' + '<xsl:value-of select="$field"/>';
+      path_<xsl:value-of select="$field"/> := path + '/<xsl:value-of select="$field"/>';
     <xsl:choose>
       <xsl:when test="@_nomon='1'">
-          updated_<xsl:value-of select="$field"/> := IF (path_<xsl:value-of select="$field"/> IN optional_fields, _df_<xsl:value-of select="$type"/>(<xsl:call-template name="output_active_check"/>, path_<xsl:value-of select="$field"/>).AsRecord(L.<xsl:value-of select="$field"/>, R.<xsl:value-of select="$field"/>), L.R.<xsl:value-of select="$field"/>);
+      updated_<xsl:value-of select="$field"/> := IF (path_<xsl:value-of select="$field"/> IN optional_fields, _df_<xsl:value-of select="$type"/><xsl:text>(</xsl:text>
+<xsl:call-template name="output_active_check">
+  <xsl:with-param name="pathvar">path_<xsl:value-of select="$field"/></xsl:with-param>
+</xsl:call-template>
+<xsl:text>, path_</xsl:text><xsl:value-of select="$field"/>).AsRecord(L.<xsl:value-of select="$field"/>, R.<xsl:value-of select="$field"/>), L.R.<xsl:value-of select="$field"/>);
         </xsl:when>
         <xsl:otherwise>
-          updated_<xsl:value-of select="$field"/> := _df_<xsl:value-of select="$type"/>(<xsl:call-template name="output_active_check"/>, path_<xsl:value-of select="$field"/>).AsRecord(L.<xsl:value-of select="$field"/>, R.<xsl:value-of select="$field"/>);
+      updated_<xsl:value-of select="$field"/> := _df_<xsl:value-of select="$type"/><xsl:text>(</xsl:text>
+<xsl:call-template name="output_active_check">
+  <xsl:with-param name="pathvar">path_<xsl:value-of select="$field"/></xsl:with-param>
+</xsl:call-template>
+<xsl:text>, path_</xsl:text><xsl:value-of select="$field"/>).AsRecord(L.<xsl:value-of select="$field"/>, R.<xsl:value-of select="$field"/>);
         </xsl:otherwise>
         </xsl:choose>
       checked_<xsl:value-of select="$field"/> := MAP (is_deleted => R.<xsl:value-of select="$field"/>,
                               is_added => L.<xsl:value-of select="$field"/>,
                               updated_<xsl:value-of select="$field"/>);
-      SELF.<xsl:value-of select="$field"/> := checked_<xsl:value-of select="$field"/>;
+      SELF.<xsl:value-of select="$field"/> := checked_<xsl:value-of select="$field"/>;<xsl:text>
+</xsl:text>
       </xsl:otherwise>
     </xsl:choose>
 </xsl:template>
 
 <xsl:template match="EsdlElement[@type and (not(@_nomon) or @_mon='1')]" mode="difference">
     <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
+    <xsl:if test="diff_selectors/entry">
+      <xsl:text>    </xsl:text><xsl:value-of select="$field"/><xsl:text>_active := </xsl:text>
+ <xsl:call-template name="output_active_check">
+  <xsl:with-param name="pathvar">path + '/<xsl:value-of select="$field"/>'</xsl:with-param>
+</xsl:call-template>
+<xsl:text>;
+</xsl:text>
+</xsl:if>
     <xsl:if test="diff_compare">
       <xsl:text>    </xsl:text><xsl:value-of select="$field"/>_path := path + '/<xsl:value-of select="$field"/>';<xsl:text>
 </xsl:text>
 </xsl:if>
-    <xsl:text>    </xsl:text>shared boolean updated_<xsl:value-of select="$field"/><xsl:text> := </xsl:text>
+    <xsl:text>    </xsl:text>shared boolean updated_<xsl:value-of select="$field"/><xsl:text> := </xsl:text><xsl:if test="diff_selectors/entry"><xsl:value-of select="$field"/><xsl:text>_active AND </xsl:text></xsl:if>
+
     <xsl:if test="diff_compare">
       <xsl:text>CASE(</xsl:text><xsl:value-of select="$field"/><xsl:text>_path,
 </xsl:text>
@@ -654,7 +632,11 @@ END;
     <xsl:variable name="vid_name" select="translate(DiffMatchs/diff_match/@name, ' .', '__')"/>
     <xsl:variable name="type" select="@type"/>
     <xsl:variable name="field"><xsl:call-template name="output_ecl_name"/></xsl:variable>
-      updated_<xsl:call-template name="output_ecl_name"/> := _df_<xsl:value-of select="$type"/>(<xsl:call-template name="output_active_check"><xsl:with-param name="def" select="'false'"/></xsl:call-template>, path + '/' + '<xsl:call-template name="output_ecl_name"/>').AsDataset_<xsl:value-of select="$vid_name"/>(L.<xsl:call-template name="output_ecl_name"/>, R.<xsl:call-template name="output_ecl_name"/>);
+      updated_<xsl:call-template name="output_ecl_name"/> := _df_<xsl:value-of select="$type"/><xsl:text>(</xsl:text>
+<xsl:call-template name="output_active_check">
+  <xsl:with-param name="pathvar">path + '/<xsl:value-of select="$field"/>'</xsl:with-param>
+</xsl:call-template>
+<xsl:text>, path + '/</xsl:text><xsl:call-template name="output_ecl_name"/>/<xsl:call-template name="output_item_tag"/>').AsDataset_<xsl:value-of select="$vid_name"/>(L.<xsl:call-template name="output_ecl_name"/>, R.<xsl:call-template name="output_ecl_name"/>);
       checked_<xsl:value-of select="$field"/> := MAP (is_deleted => R.<xsl:value-of select="$field"/>,
                               is_added => L.<xsl:value-of select="$field"/>,
                               updated_<xsl:value-of select="$field"/>);
@@ -678,13 +660,13 @@ END;
 <!-- Layouts -->
 
 <xsl:template match="EsdlElement[@complex_type]" mode="layouts">
-    <xsl:text>  _lt_</xsl:text><xsl:call-template name="output_ecl_complex_type"/><xsl:text> </xsl:text><xsl:call-template name="output_ecl_name"/>
+    <xsl:text>    _lt_</xsl:text><xsl:call-template name="output_ecl_complex_type"/><xsl:text> </xsl:text><xsl:call-template name="output_ecl_name"/>
     <xsl:text> {</xsl:text><xsl:call-template name="output_xpath"/><xsl:text>};</xsl:text><xsl:call-template name="output_comments"/><xsl:text>
 </xsl:text>
 </xsl:template>
 
 <xsl:template match="EsdlElement[@type]" mode="layouts">
-    <xsl:text>  </xsl:text><xsl:call-template name="output_basic_type"/><xsl:text> </xsl:text><xsl:call-template name="output_ecl_name"/>
+    <xsl:text>    </xsl:text><xsl:call-template name="output_basic_type"/><xsl:text> </xsl:text><xsl:call-template name="output_ecl_name"/>
     <xsl:text> {</xsl:text><xsl:call-template name="output_xpath"/>
     <xsl:if test="@ecl_max_len"><xsl:text>, maxlength(</xsl:text><xsl:value-of select="@ecl_max_len"/><xsl:text>)</xsl:text></xsl:if>
     <xsl:text>};</xsl:text><xsl:call-template name="output_comments"/>
@@ -694,13 +676,13 @@ END;
 
 <xsl:template match="EsdlEnum" mode="layouts">
   <xsl:variable name="entype" select="@enum_type"/>
-  <xsl:text>  </xsl:text><xsl:call-template name="output_enum_type"/><xsl:text> </xsl:text><xsl:call-template name="output_ecl_name"/>
+  <xsl:text>    </xsl:text><xsl:call-template name="output_enum_type"/><xsl:text> </xsl:text><xsl:call-template name="output_ecl_name"/>
   <xsl:text> {</xsl:text><xsl:call-template name="output_xpath"/><xsl:text>}; </xsl:text><xsl:call-template name="output_comments"/><xsl:text>
 </xsl:text>
 </xsl:template>
 
 <xsl:template match="EsdlArray[@type='string']" mode="layouts">
-    <xsl:text>  set of string </xsl:text><xsl:call-template name="output_ecl_name"/>
+    <xsl:text>    set of string </xsl:text><xsl:call-template name="output_ecl_name"/>
     <xsl:text> {xpath('</xsl:text>
     <xsl:if test="not(@flat_array)"><xsl:value-of select="@name"/></xsl:if>
     <xsl:text>/</xsl:text><xsl:call-template name="output_item_tag"/>
@@ -715,13 +697,13 @@ END;
 </xsl:template>
 
 <xsl:template match="EsdlArray[starts-with(@ecl_type,'string') or starts-with(@ecl_type,'unicode')]" mode="layouts">
-  <xsl:text>  </xsl:text><xsl:value-of select="@ecl_type"/><xsl:text> </xsl:text><xsl:call-template name="output_ecl_name"/>
+  <xsl:text>    </xsl:text><xsl:value-of select="@ecl_type"/><xsl:text> </xsl:text><xsl:call-template name="output_ecl_name"/>
   <xsl:text> {xpath('</xsl:text><xsl:value-of select="@name"/><xsl:text>')};</xsl:text><xsl:call-template name="output_comments"/><xsl:text>
 </xsl:text>
 </xsl:template>
 
 <xsl:template match="EsdlArray" mode="layouts">
-    <xsl:text>  dataset(_lt_</xsl:text><xsl:call-template name="output_ecl_array_type"/><xsl:text>) </xsl:text><xsl:call-template name="output_ecl_name"/>
+    <xsl:text>    dataset(_lt_</xsl:text><xsl:call-template name="output_ecl_array_type"/><xsl:text>) </xsl:text><xsl:call-template name="output_ecl_name"/>
     <xsl:text> {xpath('</xsl:text><xsl:if test="not(@flat_array)"><xsl:value-of select="@name"/></xsl:if><xsl:text>/</xsl:text><xsl:call-template name="output_item_tag"/><xsl:text>')</xsl:text>
     <xsl:choose>
       <xsl:when test="@max_count_var"><xsl:text>, MAXCOUNT(</xsl:text><xsl:value-of select="@max_count_var"/><xsl:text> * 2)</xsl:text></xsl:when>
@@ -739,58 +721,61 @@ END;
 </xsl:template>
 
 <xsl:template match="EsdlStruct" mode="layouts">
-    <xsl:text>EXPORT _lt_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD</xsl:text>
+    <xsl:text>  EXPORT _lt_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD</xsl:text>
     <xsl:call-template name="output_lt_base_type"/>
     <xsl:if test="@max_len"><xsl:text>, MAXLENGTH (</xsl:text><xsl:value-of select="@max_len"/><xsl:text>)</xsl:text></xsl:if>
     <xsl:text>
 </xsl:text>
     <xsl:apply-templates select="*" mode="layouts"/>
-    <xsl:if test="@element and not(*[@name='Content_'])">	string Content_ {xpath('')};</xsl:if>
-    <xsl:text>END;
+    <xsl:if test="@element and not(*[@name='Content_'])">    string Content_ {xpath('')};</xsl:if>
+    <xsl:text>  END;
 
 </xsl:text>
 
     <xsl:if test="@_usedInArray and @diff_monitor">
-      <xsl:text>EXPORT _lt_row_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD </xsl:text> (_lt_<xsl:call-template name="output_ecl_name"/>)<xsl:text>
+      <xsl:text>  EXPORT _lt_row_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD </xsl:text> (_lt_<xsl:call-template name="output_ecl_name"/>)<xsl:text>
     integer _diff_ord {xpath('@diff_ord')} := 0;
   END;
+
 </xsl:text>
     </xsl:if>
 </xsl:template>
 
 <xsl:template match="EsdlRequest" mode="layouts">
-  <xsl:text>EXPORT _lt_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD</xsl:text>
+  <xsl:text>  EXPORT _lt_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD</xsl:text>
   <xsl:call-template name="output_lt_base_type"/>
   <xsl:if test="@max_len"><xsl:text>, MAXLENGTH (</xsl:text><xsl:value-of select="@max_len"/><xsl:text>)</xsl:text></xsl:if>
     <xsl:text>
 </xsl:text>
   <xsl:apply-templates select="*" mode="layouts"/>
-  <xsl:text>END;
+  <xsl:text>  END;
 
 </xsl:text>
     <xsl:if test="@diff_usedInArray and @diff_monitor">
-      <xsl:text>EXPORT _lt_row_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD </xsl:text> _lt_<xsl:call-template name="output_ecl_name"/>
+      <xsl:text>  EXPORT _lt_row_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD </xsl:text> _lt_<xsl:call-template name="output_ecl_name"/>
       <xsl:text>    integer _diff_ord {xpath('@diff_ord')} := 0;
   END;
+
 </xsl:text>
     </xsl:if>
 </xsl:template>
 
 <xsl:template match="EsdlResponse" mode="layouts">
-  <xsl:text>EXPORT _lt_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD</xsl:text>
+  <xsl:text>  EXPORT _lt_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD</xsl:text>
   <xsl:call-template name="output_lt_base_type"/>
   <xsl:if test="@max_len"><xsl:text>, MAXLENGTH (</xsl:text><xsl:value-of select="@max_len"/><xsl:text>)</xsl:text></xsl:if>
   <xsl:text>
 </xsl:text>
   <xsl:apply-templates select="*" mode="layouts"/>
-  <xsl:text>END;
+  <xsl:text>  END;
 
 </xsl:text>
 
     <xsl:if test="@diff_usedInArray and @diff_monitor">
-      <xsl:text>EXPORT _lt_row_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD </xsl:text> _lt_<xsl:call-template name="output_ecl_name"/>
+      <xsl:text>  EXPORT _lt_row_</xsl:text><xsl:call-template name="output_ecl_name"/><xsl:text> := RECORD </xsl:text> _lt_<xsl:call-template name="output_ecl_name"/>
       <xsl:text>    integer _diff_ord {xpath('@diff_ord')} := 0;
   END;
+
 </xsl:text>
     </xsl:if>
 </xsl:template>
@@ -890,25 +875,25 @@ END;
 </xsl:template>
 
 <xsl:template name="output_comments">
-	<xsl:if test="@ecl_comment"><xsl:value-of select="@ecl_comment"/></xsl:if>
-	<xsl:choose>
-		<xsl:when test="@complex_type">
-			<xsl:variable name="ctype" select="@complex_type"/>
-			<xsl:if test="/expesdl/types/type[@name=$ctype]/@comment">
-				<xsl:text>//</xsl:text><xsl:value-of select="/expesdl/types/type[@name=$ctype]/@comment"/>
-			</xsl:if>
-		</xsl:when>
-		<xsl:when test="@enum_type">
-			<xsl:variable name="etype" select="@enum_type"/>
-			<xsl:if test="/expesdl/types/type[@name=$etype]/@comment">
-				<xsl:text>//</xsl:text><xsl:value-of select="/expesdl/types/type[@name=$etype]/@comment"/>
-			</xsl:if>
-		</xsl:when>
-	</xsl:choose>
-	<xsl:if test="@optional">
-		<xsl:text>//hidden[</xsl:text><xsl:value-of select="@optional"/><xsl:text>]</xsl:text>
-	</xsl:if>
-	<xsl:if test="@ecl_type and (@type or @complex_type)">
+    <xsl:if test="@ecl_comment"><xsl:value-of select="@ecl_comment"/></xsl:if>
+    <xsl:choose>
+        <xsl:when test="@complex_type">
+            <xsl:variable name="ctype" select="@complex_type"/>
+            <xsl:if test="/expesdl/types/type[@name=$ctype]/@comment">
+                <xsl:text>//</xsl:text><xsl:value-of select="/expesdl/types/type[@name=$ctype]/@comment"/>
+            </xsl:if>
+        </xsl:when>
+        <xsl:when test="@enum_type">
+            <xsl:variable name="etype" select="@enum_type"/>
+            <xsl:if test="/expesdl/types/type[@name=$etype]/@comment">
+                <xsl:text>//</xsl:text><xsl:value-of select="/expesdl/types/type[@name=$etype]/@comment"/>
+            </xsl:if>
+        </xsl:when>
+    </xsl:choose>
+    <xsl:if test="@optional">
+        <xsl:text>//hidden[</xsl:text><xsl:value-of select="@optional"/><xsl:text>]</xsl:text>
+    </xsl:if>
+    <xsl:if test="@ecl_type and (@type or @complex_type)">
         <xsl:choose>
          <xsl:when test="name()='EsdlArray'">
            <xsl:text> // Real type: </xsl:text>
@@ -938,14 +923,14 @@ END;
 </xsl:template>
 
 <xsl:template name="output_xpath">
-	<xsl:text>xpath('</xsl:text>
-	<xsl:choose>
-		<xsl:when test="@ecl_path"><xsl:value-of select="@ecl_path"/></xsl:when>
-		<xsl:when test="@get_data_from"><xsl:if test="@attribute"><xsl:value-of select="'@'"/></xsl:if> <xsl:value-of select="@get_data_from"/></xsl:when>
-		<xsl:when test="@alt_data_from"><xsl:if test="@attribute"><xsl:value-of select="'@'"/></xsl:if> <xsl:value-of select="@alt_data_from"/></xsl:when>
-		<xsl:otherwise><xsl:if test="@attribute"><xsl:value-of select="'@'"/></xsl:if> <xsl:value-of select="@name"/></xsl:otherwise>
-	</xsl:choose>
-	<xsl:text>')</xsl:text>
+    <xsl:text>xpath('</xsl:text>
+    <xsl:choose>
+        <xsl:when test="@ecl_path"><xsl:value-of select="@ecl_path"/></xsl:when>
+        <xsl:when test="@get_data_from"><xsl:if test="@attribute"><xsl:value-of select="'@'"/></xsl:if> <xsl:value-of select="@get_data_from"/></xsl:when>
+        <xsl:when test="@alt_data_from"><xsl:if test="@attribute"><xsl:value-of select="'@'"/></xsl:if> <xsl:value-of select="@alt_data_from"/></xsl:when>
+        <xsl:otherwise><xsl:if test="@attribute"><xsl:value-of select="'@'"/></xsl:if> <xsl:value-of select="@name"/></xsl:otherwise>
+    </xsl:choose>
+    <xsl:text>')</xsl:text>
 </xsl:template>
 
 <xsl:template name="output_item_tag">
@@ -962,12 +947,19 @@ END;
 </xsl:template>
 
 <xsl:template name="output_active_check">
+  <xsl:param name="pathvar"/>
   <xsl:param name="def" select="'is_active'"/>
   <xsl:choose>
-    <xsl:when test="_diff_selectors/selector">
-      <xsl:for-each select="_diff_selectors/selector">
-       <xsl:if test="position()!=1"><xsl:text> OR</xsl:text></xsl:if><xsl:text> Monitor</xsl:text><xsl:value-of select="."/>
-      </xsl:for-each>
+    <xsl:when test="diff_selectors/entry">
+    <xsl:text>CASE(</xsl:text><xsl:value-of select="$pathvar"/><xsl:text>, </xsl:text>
+  <xsl:for-each select="diff_selectors/entry">
+    <xsl:if test="position()!=1"><xsl:text>, </xsl:text>
+    </xsl:if>
+    <xsl:text>'/</xsl:text><xsl:value-of select="@path"/><xsl:text>' => (</xsl:text>
+  <xsl:for-each select="category">
+    <xsl:if test="position()!=1"><xsl:text> OR </xsl:text></xsl:if><xsl:value-of select="."/>
+  </xsl:for-each><xsl:text>)</xsl:text>
+      </xsl:for-each>, <xsl:value-of select="$def"/><xsl:text>)</xsl:text>
     </xsl:when>
     <xsl:otherwise><xsl:value-of select="$def"/></xsl:otherwise>
   </xsl:choose>

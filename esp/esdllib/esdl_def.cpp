@@ -18,7 +18,6 @@
 #pragma warning(disable : 4786)
 
 #include "jliball.hpp"
-#include "jlib.hpp"
 #include "espcontext.hpp"
 #include "esdl_def.hpp"
 #include <xpp/XmlPullParser.h>

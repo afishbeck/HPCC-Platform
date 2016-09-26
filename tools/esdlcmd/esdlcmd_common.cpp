@@ -37,6 +37,33 @@ void outputMultiExceptions(const IMultiException &me)
     fprintf(stderr, "\n");
 }
 
+void saveAsFile(const char * dir, StringBuffer &outname, const char *text, const char *ext)
+{
+    StringBuffer path(dir);
+
+    if( outname.length()>0 && path.charAt(path.length()) != PATHSEPCHAR &&  outname.charAt(0) != PATHSEPCHAR)
+    {
+        path.append(PATHSEPCHAR);
+        path.append(outname);
+    }
+
+    if( ext && *ext )
+    {
+        path.append(ext);
+    }
+
+    Owned<IFile> file = createIFile(path.str());
+    Owned<IFileIO> io;
+    io.setown(file->open(IFOcreaterw));
+
+    DBGLOG("Writing to file %s", file->queryFilename());
+
+    if (io.get())
+        io->write(0, strlen(text), text);
+    else
+        DBGLOG("File %s can't be created", file->queryFilename());
+}
+
 //=========================================================================================
 
 #define PE_OFFSET_LOCATION_IN_DOS_SECTION 0x3C

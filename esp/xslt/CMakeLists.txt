@@ -42,7 +42,6 @@ FOREACH( iFILES
     ${CMAKE_CURRENT_SOURCE_DIR}/passwordupdate.xsl
     ${CMAKE_CURRENT_SOURCE_DIR}/esdl2ecl.xslt
     ${CMAKE_CURRENT_SOURCE_DIR}/esdl2monitor.xslt
-    ${CMAKE_CURRENT_SOURCE_DIR}/esdl2diffecl.xslt
     ${CMAKE_CURRENT_SOURCE_DIR}/esxdl2xsd.xslt
     ${CMAKE_CURRENT_SOURCE_DIR}/esdl2java_srvbase.xslt
     ${CMAKE_CURRENT_SOURCE_DIR}/esdl2java_srvdummy.xslt

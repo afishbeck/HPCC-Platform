@@ -28,59 +28,6 @@
 #include "esdl-publish.cpp"
 #include "xsdparser.hpp"
 
-void removeEclHiddenStructs(IPropertyTree &depTree)
-{
-    Owned<IPropertyTreeIterator> it = depTree.getElements("*[@ecl_hide='1']");
-    ForEach(*it)
-        depTree.removeTree(&it->query());
-}
-void removeEclHiddenElements(IPropertyTree &depTree)
-{
-    Owned<IPropertyTreeIterator> it = depTree.getElements("*");
-    ForEach(*it)
-    {
-        StringArray names;
-        Owned<IPropertyTreeIterator> elements = it->query().getElements("*[@ecl_hide='1']");
-        ForEach(*elements)
-            names.append(elements->query().queryProp("@name"));
-        ForEachItemIn(i, names)
-        {
-            VStringBuffer xpath("*[@name='%s']", names.item(i));
-            it->query().removeProp(xpath);
-        }
-    }
-}
-
-void removeGetDataFromElements(IPropertyTree &depTree)
-{
-    Owned<IPropertyTreeIterator> it = depTree.getElements("*");
-    ForEach(*it)
-    {
-        StringArray names;
-        Owned<IPropertyTreeIterator> elements = it->query().getElements("*[@get_data_from]");
-        ForEach(*elements)
-            names.append(elements->query().queryProp("@name"));
-        ForEachItemIn(i, names)
-        {
-            VStringBuffer xpath("*[@name='%s']", names.item(i));
-            it->query().removeProp(xpath);
-        }
-    }
-}
-void removeEclHidden(IPropertyTree &depTree)
-{
-    removeEclHiddenStructs(depTree);
-    removeEclHiddenElements(depTree);
-    removeGetDataFromElements(depTree);
-}
-
-void removeEclHidden(StringBuffer &xml)
-{
-    Owned<IPropertyTree> depTree = createPTreeFromXMLString(xml);
-    removeEclHidden(*depTree);
-    toXML(depTree, xml.clear());
-}
-
 StringBuffer &getEsdlCmdComponentFilesPath(StringBuffer & path)
 {
     if (getComponentFilesRelPathFromBin(path))
@@ -88,11 +35,10 @@ StringBuffer &getEsdlCmdComponentFilesPath(StringBuffer & path)
     return path.set(COMPONENTFILES_DIR);
 }
 
-
-class EsdlDiffTemplateCmd : public EsdlConvertCmd
+class EsdlMonitorTemplateCmd : public EsdlConvertCmd
 {
 public:
-    EsdlDiffTemplateCmd(){}
+    EsdlMonitorTemplateCmd(){}
 
     virtual bool parseCommandLineOptions(ArgvIterator &iter)
     {
@@ -255,23 +201,23 @@ public:
         xml.append("</esdl>");
 
         Owned<IPropertyTree> depTree = createPTreeFromXMLString(xml, ipt_ordered);
-        removeEclHidden(*depTree);
+        removeEclHidden(depTree);
         toXML(depTree, xml.clear());
 
         StringBuffer monTemplate;
         createMonitoringTemplate(monTemplate, depTree, optMethod);
 
-        VStringBuffer templatefile("diff_template_%s.xml", optMethod.str());
+        VStringBuffer templatefile("monitor_template_%s.xml", optMethod.str());
         saveAsFile(".", templatefile, monTemplate);
         return 0;
     }
 
     virtual void usage()
     {
-        puts("\nesdl ecl-diff-template");
+        puts("\nesdl monitor-template");
         puts("  Generates a blank Differencing template for the given ESDL based query.\n");
         puts("Usage:");
-        puts("esdl ecl-diff-template <esdlSourcePath> <serviceName> <methodName> [options]\n" );
+        puts("esdl monitor-template <esdlSourcePath> <serviceName> <methodName> [options]\n" );
         puts("  <esdlSourcePath> Path to the ESDL Definition file containing the ESDL service definition" );
         puts("                   to create a ECL result differencing template for." );
         puts("  <serviceName>    Name of the ESDL Service to generate the template for." );
@@ -285,33 +231,6 @@ public:
         cmdHelper.loadDefinition(optSource, optService, 0);
     }
 
-    void saveAsFile(const char * dir, StringBuffer &outname, const char *text, const char *ext="")
-    {
-        StringBuffer path(dir);
-
-        if( outname.length()>0 && path.charAt(path.length()) != PATHSEPCHAR &&  outname.charAt(0) != PATHSEPCHAR)
-        {
-            path.append(PATHSEPCHAR);
-            path.append(outname);
-        }
-
-        if( ext && *ext )
-        {
-            path.append(ext);
-        }
-
-        Owned<IFile> file = createIFile(path.str());
-        Owned<IFileIO> io;
-        io.setown(file->open(IFOcreaterw));
-
-        DBGLOG("Writing to file %s", file->queryFilename());
-
-        if (io.get())
-            io->write(0, strlen(text), text);
-        else
-            DBGLOG("File %s can't be created", file->queryFilename());
-    }
-
 public:
     EsdlCmdHelper cmdHelper;
 
@@ -319,10 +238,10 @@ public:
     StringAttr optMethod;
 };
 
-class EsdlDiffGenCmd : public EsdlConvertCmd
+class EsdlMonitorCmd : public EsdlConvertCmd
 {
 public:
-    EsdlDiffGenCmd() : optFlags(DEPFLAG_COLLAPSE|DEPFLAG_ARRAYOF){}
+    EsdlMonitorCmd() : optFlags(DEPFLAG_COLLAPSE|DEPFLAG_ARRAYOF){}
 
     virtual bool parseCommandLineOptions(ArgvIterator &iter)
     {
@@ -654,11 +573,11 @@ public:
         VStringBuffer xpath("%s[1]/%s", xtrack.str(), attribute);
         return tmplate->getPropBool(xpath, def);
     }
-    const char *queryMonFirstDiffAttribute(IPropertyTree *tmplate, XpathTrack &xtrack, const char *attribute, const char *def)
+    const char *queryMonFirstDiffAttribute(IPropertyTree *tmplate, XpathTrack &xtrack, const char *attribute, const char *def, bool allowEmpty)
     {
         VStringBuffer xpath("%s[1]/%s", xtrack.str(), attribute);
         const char *s = tmplate->queryProp(xpath);
-        return (s && *s) ? s : def;
+        return (s && (allowEmpty || *s)) ? s : def;
     }
     const char *getArrayTemplateItemName(IPropertyTree *tmplate, XpathTrack &xtrack, IPropertyTree &arrayDef)
     {
@@ -821,12 +740,9 @@ public:
                     mergePTree(&child, globalChildDef);
                 }
                 bool childMonSection = inMonSection;
-                bool ecl_hide = child.getPropBool("@ecl_hide");
-                if (ecl_hide)
-                    continue;
                 const char *selectorList = child.queryProp("@diff_monitor"); //esdl-xml over rides parent
                 XTrackScope xscope(xtrack, child.queryProp("@name"));
-                const char *compare = queryMonFirstDiffAttribute(respTemplate, xtrack, "@diff_comp", nullptr);
+                const char *compare = queryMonFirstDiffAttribute(respTemplate, xtrack, "@diff_comp", nullptr, false);
                 if (compare)
                 {
                     Owned<IPropertyTree> compareNode = createPTree("diff_comp");
@@ -834,30 +750,23 @@ public:
                     compareNode->setProp("@compare", compare);
                     child.addPropTree("diff_compare", compareNode.getClear());
                 }
-                selectorList = queryMonFirstDiffAttribute(respTemplate, xtrack, "@diff_monitor", selectorList);
-                Owned<IPropertyTree> selectorTree;
+                selectorList = queryMonFirstDiffAttribute(respTemplate, xtrack, "@diff_monitor", selectorList, true);
                 bool childMonitored = monitored;
-                if (selectorList && *selectorList)
+                if (selectorList)
                 {
-                    if (strieq(selectorList, "0") || strieq(selectorList, "false") || strieq(selectorList, "no") || strieq(selectorList, "off"))
-                        childMonitored = false;
-                    else if (strieq(selectorList, "1") || strieq(selectorList, "true") || strieq(selectorList, "yes") || strieq(selectorList, "on"))
-                        childMonitored = true;
-                    else
+                    childMonitored = *selectorList!=0;
+                    StringArray selectors;
+                    selectors.appendListUniq(selectorList, "|");
+                    allSelectors.appendListUniq(selectorList, "|");
+                    IPropertyTree *selectorsTree = ensurePTree(&child, "diff_selectors");
+                    IPropertyTree *pathTree = selectorsTree->addPropTree("entry", createPTree());
+                    pathTree->setProp("@path", xtrack.str());
+                    if (!selectors.length())
+                        pathTree->addProp("category", "false");
+                    ForEachItemIn(i1, selectors)
                     {
-                        StringArray selectors;
-                        selectors.appendListUniq(selectorList, "|");
-                        allSelectors.appendListUniq(selectorList, "|");
-                        if (selectors.length())
-                        {
-                            selectorTree.setown(createPTree());
-                            ForEachItemIn(i1, selectors)
-                                selectorTree->addProp("selector", selectors.item(i1));
-                            child.setPropTree("_diff_selectors", LINK(selectorTree));
-                            IPropertyTree *ctxChild = ensurePTree(ctxLocal, name);
-                            ctxChild->setPropTree("_diff_selectors", LINK(selectorTree));
-                            childMonitored = true;
-                        }
+                        StringBuffer s("Monitor");
+                        pathTree->addProp("category", s.append(selectors.item(i1)).str());
                     }
                 }
 
@@ -878,9 +787,6 @@ public:
                         IPropertyTree *childType = depTree.queryPropTree(xpath);
                         if (childType)
                         {
-                            if (selectorTree)
-                                childType->setPropTree("_diff_selectors", LINK(selectorTree));
-
                             childType->setPropBool("@_used", true);
                             IPropertyTree *ctxChild = ensurePTree(ctxLocal, name);
                             bool mon_elem = expandDiffTrees(ctxChild, depTree, childType, xtrack, NULL, childMonitored, childMonSection, allSelectors); //walk the type info
@@ -906,7 +812,7 @@ public:
                             {
                                 childType->setPropBool("@_used", true);
                                 childType->setPropBool("@_usedInArray", true);
-                                const char *diff_match = queryMonFirstDiffAttribute(respTemplate, xtrack, "@diff_match", nullptr);
+                                const char *diff_match = queryMonFirstDiffAttribute(respTemplate, xtrack, "@diff_match", nullptr, false);
                                 if (!diff_match || !*diff_match)
                                     diff_match = child.queryProp("@diff_match");
                                 if (!diff_match || !*diff_match)
@@ -977,11 +883,17 @@ public:
     {
         cmdHelper.loadDefinition(optSource, optService, 0);
 
-        Owned<IEsdlDefObjectIterator> structs = cmdHelper.esdlDef->getDependencies(optService, optMethod, 0, nullptr, DEPFLAG_INCLUDE_REQUEST | DEPFLAG_INCLUDE_RESPONSE | DEPFLAG_INCLUDE_METHOD | DEPFLAG_ECL_ONLY);
+        Owned<IEsdlDefObjectIterator> responseEsdl = cmdHelper.esdlDef->getDependencies(optService, optMethod, 0, nullptr, DEPFLAG_INCLUDE_RESPONSE | DEPFLAG_INCLUDE_METHOD | DEPFLAG_ECL_ONLY);
+        Owned<IEsdlDefObjectIterator> requestEsdl = cmdHelper.esdlDef->getDependencies(optService, optMethod, 0, nullptr, DEPFLAG_INCLUDE_REQUEST | DEPFLAG_ECL_ONLY);
         Owned<IEsdlDefinitionHelper> defHelper = createEsdlDefinitionHelper();
 
         StringBuffer xml("<esxdl>\n");
-        defHelper->toXML(*structs, xml, 0, nullptr, 0);
+        xml.append("<RequestInfo>\n");
+        defHelper->toXML(*requestEsdl, xml, 0, nullptr, 0);
+        xml.append("</RequestInfo>\n");
+
+        defHelper->toXML(*responseEsdl, xml, 0, nullptr, 0);
+
         xml.append("\n</esxdl>");
 
         Owned<IPropertyTree> depTree = createPTreeFromXMLString(xml, ipt_ordered);
@@ -989,7 +901,8 @@ public:
         monitoringTemplate.setown(createPTreeFromXMLString(diffTemplateContent, ipt_ordered));
         globals = ensurePTree(monitoringTemplate, "Globals");
 
-        removeEclHidden(*depTree);
+        removeEclHidden(depTree);
+        removeEclHidden(depTree->getPropTree("RequestInfo"));
 
         VStringBuffer xpath("EsdlMethod[@name='%s']/@response_type", optMethod.str());
         StringBuffer resp_type = depTree->queryProp(xpath);
@@ -1001,39 +914,44 @@ public:
 
         respTemplate = monitoringTemplate->queryPropTree(resp_type);
 
-        xpath.setf("EsdlStruct[@name='%s']", resp_type.str());
-        IPropertyTree *respTree = depTree->queryPropTree(xpath);
-        if (respTree)
+        IPropertyTree *respTree = depTree->queryPropTree(xpath.setf("EsdlResponse[@name='%s']", resp_type.str()));
+        if (!respTree)
+            respTree = depTree->queryPropTree(xpath.setf("EsdlStruct[@name='%s']", resp_type.str()));
+
+        if (!respTree)
+            throw( MakeStringException(0, "Esdl Response type '%s' definition not found", resp_type.str()));
+
+        respTree = checkExtractNestedResponseType(depTree, respTree, resp_type);
+
+        XpathTrack xtrack;
+        Owned<IPropertyTree> ctxTree = createPTree();
+        StringArray allSelectors;
+        expandDiffTrees(ctxTree, *depTree, respTree, xtrack, NULL, false, false, allSelectors);
+
+        noteAllMonitoredArrayItems(*depTree);
+
+        XpathTrack fieldtrack;
+        StringArray optionalFields;
+        buildOptionalFieldList(ctxTree, *depTree, respTree, NULL, fieldtrack, optionalFields);
+        if (optionalFields.length())
         {
-            respTree = checkExtractNestedResponseType(depTree, respTree, resp_type);
-
-            XpathTrack xtrack;
-            Owned<IPropertyTree> ctxTree = createPTree();
-            StringArray allSelectors;
-            expandDiffTrees(ctxTree, *depTree, respTree, xtrack, NULL, false, false, allSelectors);
-
-            noteAllMonitoredArrayItems(*depTree);
-
-            XpathTrack fieldtrack;
-            StringArray optionalFields;
-            buildOptionalFieldList(ctxTree, *depTree, respTree, NULL, fieldtrack, optionalFields);
-            if (optionalFields.length())
-            {
-                IPropertyTree *optionalTree = depTree->addPropTree("OptionalFields", LINK(createPTree()));
-                ForEachItemIn(i1, optionalFields)
-                optionalTree->addProp("Path", optionalFields.item(i1));
-            }
-            if (allSelectors.length())
-            {
-                IPropertyTree *selectorTree = depTree->addPropTree("Selectors", LINK(createPTree()));
-                ForEachItemIn(i2, allSelectors)
-                    selectorTree->addProp("Selector", allSelectors.item(i2));
-            }
+            IPropertyTree *optionalTree = depTree->addPropTree("OptionalFields", LINK(createPTree()));
+            ForEachItemIn(i1, optionalFields)
+            optionalTree->addProp("Path", optionalFields.item(i1));
+        }
+        if (allSelectors.length())
+        {
+            IPropertyTree *selectorTree = depTree->addPropTree("Selectors", LINK(createPTree()));
+            ForEachItemIn(i2, allSelectors)
+                selectorTree->addProp("Selector", allSelectors.item(i2));
         }
 
         IPropertyTree *eclSection = monitoringTemplate->queryPropTree("ECL");
         if (eclSection)
             depTree->addPropTree("ECL", LINK(eclSection));
+
+        depTree->addPropTree("Template", LINK(monitoringTemplate)); //make available to xslt
+
         toXML(depTree, xml.clear()); //refresh changes
 
         VStringBuffer filename("%s_preprocess.xml", optMethod.str());
@@ -1053,14 +971,8 @@ public:
 
         StringBuffer ecl;
 
-        xform->setParameter("Action", "'Create'");
         xform->transform(ecl);
-        filename.setf("Monitor_%s_Create.ecl", optMethod.str());
-        saveAsFile(".", filename, ecl);
-
-        xform->setParameter("Action", "'Run'");
-        xform->transform(ecl.clear());
-        filename.setf("Monitor_%s_Run.ecl", optMethod.str());
+        filename.setf("Monitor_%s.ecl", optMethod.str());
         saveAsFile(".", filename, ecl);
 
         return 0;
@@ -1068,11 +980,11 @@ public:
 
     virtual void usage()
     {
-        puts("\nesdl ecl-diff-gen");
+        puts("\nesdl monitor");
         puts("  Generates ECL code to perform a comparison between two ECL results from the specified");
         puts("  ESDL based query.");
         puts("Usage:");
-        puts("esdl ecl-diff-gen <esdlSourcePath> <serviceName> <methodName> <diffTemplate> [options]\n");
+        puts("esdl monitor <esdlSourcePath> <serviceName> <methodName> <diffTemplate> [options]\n");
         puts("  <esdlSourcePath> Path to the ESDL Definition file containing the ESDL service definition");
         puts("                   to perform result differencing on.");
         puts("  <serviceName>    Name of the service to use, as defined in the specified ESDL source file.");
@@ -1081,33 +993,6 @@ public:
         puts("                   differencing and monitoring ECL code for the given service method.\n" );
 
         EsdlConvertCmd::usage();
-    }
-
-    void saveAsFile(const char * dir, StringBuffer &outname, const char *text, const char *ext="")
-    {
-        StringBuffer path(dir);
-
-        if( outname.length()>0 && path.charAt(path.length()) != PATHSEPCHAR &&  outname.charAt(0) != PATHSEPCHAR)
-        {
-            path.append(PATHSEPCHAR);
-            path.append(outname);
-        }
-
-        if( ext && *ext )
-        {
-            path.append(ext);
-        }
-
-        Owned<IFile> file = createIFile(path.str());
-        Owned<IFileIO> io;
-        io.setown(file->open(IFOcreaterw));
-
-        DBGLOG("Writing to file %s", file->queryFilename());
-
-        if (io.get())
-            io->write(0, strlen(text), text);
-        else
-            DBGLOG("File %s can't be created", file->queryFilename());
     }
 
     void setFlag( unsigned f ) { optFlags |= f; }
@@ -1128,12 +1013,12 @@ public:
 };
 
 
-IEsdlCommand *createEsdlDiffCommand(const char *cmdname)
+IEsdlCommand *createEsdlMonitorCommand(const char *cmdname)
 {
-    if (strieq(cmdname, "DIFF-TEMPLATE"))
-        return new EsdlDiffTemplateCmd();
-    if (strieq(cmdname, "DIFF-GEN"))
-        return new EsdlDiffGenCmd();
+    if (strieq(cmdname, "MONITOR-TEMPLATE"))
+        return new EsdlMonitorTemplateCmd();
+    if (strieq(cmdname, "MONITOR"))
+        return new EsdlMonitorCmd();
 
     return nullptr;
 }

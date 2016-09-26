@@ -326,16 +326,11 @@ static bool getCurrentFolder(StringBuffer & path)
 
 static bool getComponentFilesRelPathFromBin(StringBuffer & path)
 {
-    StringBuffer s;
-    if (getCurrentFolder(s))
-    {
-        if (checkDirExists(s.appendf("%c%s%c%s", PATHSEPCHAR, HIGHER_DIR_RELATIVE,PATHSEPCHAR,COMPONENTS_DIR_NAME)))
-        {
-            path.set(s);
-            return true;
-        }
-    }
-
+    if (getCurrentFolder(path))
+        return checkDirExists(path.appendf("%c%s%c%s", PATHSEPCHAR, HIGHER_DIR_RELATIVE,PATHSEPCHAR,COMPONENTS_DIR_NAME));
     return false;
 }
+
+void saveAsFile(const char * dir, StringBuffer &outname, const char *text, const char *ext="");
+
 #endif
