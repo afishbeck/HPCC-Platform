@@ -4786,7 +4786,7 @@ unsigned CHqlRealExpression::getCachedEclCRC()
             const IAtom * name = queryBody()->queryName();
             //Horrible backward compatibility "fix" for record crcs - they need to remain the same otherwise files
             //will be incompatible.
-            if (name == maxLengthAtom || name == xpathAtom || name == cardinalityAtom || name == caseAtom || name == maxCountAtom || name == choosenAtom || name == maxSizeAtom || name == namedAtom || name == rangeAtom || name == xmlDefaultAtom || name == virtualAtom)
+            if (name == maxLengthAtom || name == xpathAtom || name == fieldPathsAtom || name == cardinalityAtom || name == caseAtom || name == maxCountAtom || name == choosenAtom || name == maxSizeAtom || name == namedAtom || name == rangeAtom || name == xmlDefaultAtom || name == virtualAtom)
                 crc = no_attr;
             //fallthrough
         }
@@ -14847,6 +14847,7 @@ static void simplifyFileViewRecordTypes(HqlExprArray & fields, IHqlExpression * 
                 needsTransform = true;
                 //MORE xmldefault, default
                 inheritAttribute(attrs, cur, xpathAtom);
+                inheritAttribute(attrs, cur, fieldPathsAtom);
                 inheritAttribute(attrs, cur, xmlDefaultAtom);
                 inheritAttribute(attrs, cur, defaultAtom);
                 newField.setown(createField(cur->queryId(), targetType.getLink(), attrs));

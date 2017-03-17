@@ -169,6 +169,7 @@ IAtom * falseAtom;
 IAtom * fastAtom;
 IAtom * fewAtom;
 IAtom * fieldAtom;
+IAtom * fieldPathsAtom;
 IAtom * fieldsAtom;
 IAtom * __fileposAtom;
 IAtom * _signed_Atom;

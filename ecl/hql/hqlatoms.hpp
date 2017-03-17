@@ -173,6 +173,7 @@ extern HQL_API IAtom * falseAtom;
 extern HQL_API IAtom * fastAtom;
 extern HQL_API IAtom * fewAtom;
 extern HQL_API IAtom * fieldAtom;
+extern HQL_API IAtom * fieldPathsAtom;
 extern HQL_API IAtom * fieldsAtom;
 extern HQL_API IAtom * filenameAtom;
 extern HQL_API IAtom * __fileposAtom;

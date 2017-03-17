@@ -539,6 +539,7 @@ public:
     void warnIfRecordPacked(const attribute & errpos) { warnIfRecordPacked(errpos.queryExpr(), errpos); }
     void validateParseTerminate(IHqlExpression * e, attribute & errpos);
     void validateXPath(attribute & a);
+    void validateFieldPath(IIdAtom * name, attribute & a);
 
     void beginFunctionCall(attribute & function);
     IHqlExpression * endFunctionCall();

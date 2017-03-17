@@ -4540,6 +4540,37 @@ void HqlGram::validateXPath(attribute & a)
     }
 }
 
+bool validateHTTPParseFieldPath(const char *p, StringBuffer &error)
+{
+    const char *finger = p;
+    for (;*finger; finger++)
+    {
+        if (!isalnum(*finger) && *finger!='-')
+        {
+            error.append(finger-p+1, p).append("*ERROR*").append(finger+1);
+            return false;
+        }
+    }
+    return true;
+}
+
+void HqlGram::validateFieldPath(IIdAtom *name, attribute & a)
+{
+    const char *pathType = name->queryLower()->queryStr();
+    if (!streq(pathType, "http")) //more to come
+        reportError(ERR_BAD_FIELDPATH_TYPE, a, "Unknown FIELDPATH type: %s", pathType);
+
+    IHqlExpression * expr = a.queryExpr();
+    IValue * value = expr->queryValue();
+    if (value)
+    {
+        StringBuffer s, error;
+        value->getStringValue(s);
+        if (!validateHTTPParseFieldPath(s.str(), error))
+            reportError(ERR_INVALID_FIELDPATH, a, "Invalid HTTP field path syntax: %s", error.str());
+    }
+}
+
 void HqlGram::ensureTypeCanBeIndexed(attribute &a)
 {
     ITypeInfo *t1 = a.queryExprType();

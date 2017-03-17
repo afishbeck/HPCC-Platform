@@ -216,8 +216,10 @@ static void eclsyntaxerror(HqlGram * parser, const char * s, short yystate, int 
   FAILURE
   TOK_FALSE
   FEATURE
+  FEILDMAP
   FETCH
   FEW
+  FIELDPATH
   FILEPOSITION
   FILTERED
   FIRST
@@ -4606,14 +4608,33 @@ fieldDef
 optFieldAttrs
     :                   { $$.setNullExpr(); }
     | '{' '}'           { $$.setNullExpr(); }
-    | '{' fieldAttrs '}'
-                        { $$.setExpr($2.getExpr()); }
+    | '{' beginList fieldAttrs '}'
+                        {
+                            HqlExprArray fieldpaths; 
+                            parser->endList(fieldpaths);
+                            if (fieldpaths.length())
+                            {
+                                OwnedHqlExpr expr = $3.getExpr();
+                                if (expr)
+                                    $$.setExpr(createComma(expr, createExprAttribute(fieldPathsAtom, fieldpaths)));
+                                else
+                                    $$.setExpr(createExprAttribute(fieldPathsAtom, fieldpaths));
+                            }
+                            else
+                            	$$.setExpr($3.getExpr());
+                        }
     ;
 
 fieldAttrs
     : fieldAttr
     | fieldAttr ',' fieldAttrs      
-                        { $$.setExpr(createComma($1.getExpr(), $3.getExpr())); }
+                        {
+                            OwnedHqlExpr expr = $1.getExpr();
+                            if (expr)
+                                $$.setExpr(createComma(expr.getClear(), $3.getExpr()));
+                            else
+                                $$.setExpr($3.getExpr());
+                        }
     ;
 
 fieldAttr
@@ -4681,6 +4702,17 @@ fieldAttr
                             parser->normalizeExpression($3, type_string, false);
                             parser->validateXPath($3);
                             $$.setExpr(createExprAttribute(xpathAtom, $3.getExpr()));
+                        }
+    | FIELDPATH '(' UNKNOWN_ID ',' constExpression ')'
+                        {
+                            parser->normalizeExpression($5, type_string, false);
+                            IIdAtom *id3 = $3.getId();
+                            parser->validateFieldPath(id3, $5);
+                            HqlExprArray args;
+                            args.append(*LINK($5.getExpr()));
+                            parser->addListElement(createNamedValue(no_id, makeUtf8Type(UNKNOWN_LENGTH, NULL), id3, args));
+                            $$.setNullExpr();
+                            //TBD get rid of this expression, since it is being aggregated in the fieldPathsList?
                         }
     | XMLDEFAULT '(' constExpression ')'
                         {
@@ -11968,6 +12000,23 @@ caseActionItem
                             IHqlExpression *e3 = $3.getExpr();
                             parser->addListElement(createValue(no_mapto, makeVoidType(), $1.getExpr(), e3));
                             $$.clear();
+                            $$.setPosition($3);
+                        }
+    ;
+
+pathMapSpec
+    : pathMapItem
+    | pathMapSpec ',' pathMapItem   
+                        {
+                            $$.setExpr(createComma($1.getExpr(), $3.getExpr()));
+                        }
+    ;
+
+pathMapItem
+    : UNKNOWN_ID GOESTO expression 
+                        {
+                            parser->normalizeExpression($3, type_string, false);
+                            $$.setExpr(createValue(no_mapto, makeVoidType(), createId($1.getId()), $3.getExpr()));
                             $$.setPosition($3);
                         }
     ;
