@@ -8215,8 +8215,8 @@ public:
     {
     }
 
-    void build(IHqlExpression * record, bool &hasMixedContent) const;
-    void build(IHqlExpression * record) const {bool mixed; build(record, mixed);}
+    void build(IHqlExpression * record, bool &hasMixedContent, unsigned keyedCount) const;
+    void build(IHqlExpression * record, unsigned keyedCount) const {bool mixed; build(record, mixed, keyedCount);}
 
 
 protected:
@@ -8229,7 +8229,7 @@ protected:
 
 
 
-void EclXmlSchemaBuilder::build(IHqlExpression * record, bool &hasMixedContent) const
+void EclXmlSchemaBuilder::build(IHqlExpression * record, bool &hasMixedContent, unsigned keyedCount) const
 {
     StringBuffer name, childName;
     ForEachChild(i, record)
@@ -8290,7 +8290,7 @@ void EclXmlSchemaBuilder::build(IHqlExpression * record, bool &hasMixedContent) 
                 default:
                     extractName(name.clear(), NULL, NULL, cur, NULL);
                     if (name.length())
-                        builder.addField(name, *type, false);
+                        builder.addField(name, *type, i < keyedCount);
                     else
                         hasMixedContent = true;
                     break;
@@ -8324,11 +8324,11 @@ void EclXmlSchemaBuilder::extractName(StringBuffer & name, StringBuffer * itemNa
 }
 
 
-void getRecordXmlSchema(StringBuffer & result, IHqlExpression * record, bool useXPath)
+void getRecordXmlSchema(StringBuffer & result, IHqlExpression * record, bool useXPath, unsigned keyedCount)
 {
     XmlSchemaBuilder xmlbuilder(false);
     EclXmlSchemaBuilder builder(xmlbuilder, useXPath);
-    builder.build(record);
+    builder.build(record, keyedCount);
     xmlbuilder.getXml(result);
 }
 
