@@ -653,7 +653,7 @@ public:
     EclCmdPackageMapCopy()
     {
     }
-    virtual eclCmdOptionMatchIndicator parseCommandLineOptions(ArgvIterator &iter)
+    virtual eclCmdOptionMatchIndicator parseCommandLineOptions(ArgvIterator &iter) override
     {
         if (iter.done())
             return EclCmdOptionNoMatch;
@@ -698,7 +698,7 @@ public:
         }
         return EclCmdOptionMatch;
     }
-    virtual bool finalizeOptions(IProperties *globals)
+    virtual bool finalizeOptions(IProperties *globals) override
     {
         if (!EclCmdCommon::finalizeOptions(globals))
         {
@@ -709,21 +709,21 @@ public:
         if (optSrcPath.isEmpty())
             err.append("\n ... Missing path to source packagemap\n");
         else if (optTarget.isEmpty())
-            err.append("\n ... Specify a cluster name\n");
+            err.append("\n ... Specify a target cluster\n");
 
         if (err.length())
         {
-            fprintf(stdout, "%s", err.str());
+            fputs(err.str(), stderr);
             return false;
         }
 
         return true;
     }
-    virtual int processCMD()
+    virtual int processCMD() override
     {
         Owned<IClientWsPackageProcess> packageProcessClient = createCmdClient(WsPackageProcess, *this);
 
-        fprintf(stdout, "\n ... copy package map %s\n\n", optSrcPath.str());
+        fprintf(stdout, "\n ... copy package map %s to %s\n\n", optSrcPath.str(), optTarget.str());
 
         Owned<IClientCopyPackageMapRequest> request = packageProcessClient->createCopyPackageMapRequest();
         request->setSourcePath(optSrcPath);
@@ -754,28 +754,28 @@ public:
         return ret;
     }
 
-    virtual void usage()
+    virtual void usage() override
     {
         fputs("\nUsage:\n"
                     "\n"
                     "The 'copy' command will copy a package map from one target to another \n"
                     "\n"
                     "ecl packagemap copy <path> <target>\n"
-                    "   <path>                   Path to the source packagemap to copy\n"
-                    "                            The following formats are supported:\n"
-                    "                              remote PackageMap - //IP:PORT/Target/PackageMapId\n"
-                    "                              local PackageMap - target/PackageMapId\n"
-                    "   <target>                 Name of target to copy the packagemap to\n"
+                    "   <path>                 Path to the source packagemap to copy\n"
+                    "                          The following formats are supported:\n"
+                    "                            remote PackageMap - //IP:PORT/Target/PackageMapId\n"
+                    "                            local PackageMap - target/PackageMapId\n"
+                    "   <target>               Name of target to copy the packagemap to\n"
                     " Options:\n"
-                    "   -A, --activate           Activate the package information\n"
-                    "   --daliip=<ip>            IP of the remote dali to use for logical file lookups\n"
-                    "   --pmid                   Identifier of package map - defaults to source PMID\n"
-                    "   --source-process         Process cluster to copy files from\n"
-                    "   --preload-all            Set preload files option for all packages\n"
-                    "   --replace                Replace existing packagmap"
-                    "   --update-super-files     Update local DFS super-files if remote DALI has changed\n"
-                    "   --update-clone-from      Update local clone from location if remote DALI has changed\n"
-                    "   --dont-append-cluster    Only use to avoid locking issues due to adding cluster to file\n",
+                    "   -A, --activate         Activate the package information\n"
+                    "   --daliip=<ip>          IP of the remote dali to use for logical file lookups\n"
+                    "   --pmid                 Identifier of package map - defaults to source PMID\n"
+                    "   --source-process       Process cluster to copy files from\n"
+                    "   --preload-all          Set preload files option for all packages\n"
+                    "   --replace              Replace existing packagmap\n"
+                    "   --update-super-files   Update local DFS super-files if remote DALI has changed\n"
+                    "   --update-clone-from    Update local clone from location if remote DALI has changed\n"
+                    "   --dont-append-cluster  Only use to avoid locking issues due to adding cluster to file\n",
                     stdout);
 
         EclCmdCommon::usage();

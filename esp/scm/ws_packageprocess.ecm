@@ -63,7 +63,7 @@ ESPrequest CopyPackageMapRequest
     string DaliIp;
     bool GlobalScope(0);
     string SourceProcess;
-    [min_ver("1.02")] bool PreloadAllPackages(false);
+    bool PreloadAllPackages(false);
     bool ReplacePackageMap(false);
     bool UpdateSuperFiles(false); //usually wouldn't be needed, packagemap referencing superfiles?
     bool UpdateCloneFrom(false); //explicitly wan't to change where roxie will grab from
@@ -313,7 +313,7 @@ ESPresponse [exceptions_inline] GetPartFromPackageMapResponse
     string Content;
 };
 
-ESPservice [auth_feature("NONE"), version("1.02"), exceptions_inline("./smc_xslt/exceptions.xslt")] WsPackageProcess
+ESPservice [auth_feature("NONE"), version("1.03"), exceptions_inline("./smc_xslt/exceptions.xslt")] WsPackageProcess
 {
     ESPmethod Echo(EchoRequest, EchoResponse);
     ESPmethod AddPackage(AddPackageRequest, AddPackageResponse);

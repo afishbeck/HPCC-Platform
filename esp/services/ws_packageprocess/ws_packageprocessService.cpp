@@ -300,7 +300,7 @@ public:
     }
     void setUser(const char *user, const char *password, IEspContext *context)
     {
-        if (user && *user)
+        if (user && *user && password && *password)
         {
             userdesc.setown(createUserDescriptor());
             userdesc->set(user, password);
@@ -381,6 +381,7 @@ public:
 
         if (pmTree->hasProp("Part"))
         {
+            fixPackageMapFileIds(pmTree, checkFlag(PKGADD_PRELOAD_ALL));
             cloneDfsInfo(updateFlags, filesNotFound, pmTree);
         }
         else
@@ -443,6 +444,9 @@ public:
             scopedPMID.append(srcTarget).append("::");
         scopedPMID.append(name);
         Owned<IClientGetPackageMapByIdRequest> req = client->createGetPackageMapByIdRequest();
+        req->rpc().setConnectTimeOutMs(HTTP_CLIENT_DEFAULT_CONNECT_TIMEOUT); //could make configurable, and consider changing read timeout,
+                                                                             //but do so across all copy type methods under a stand alone JIRA
+
         req->setPackageMapId(scopedPMID);
         Owned<IClientGetPackageMapByIdResponse> resp = client->GetPackageMapById(req);
         if (resp->getExceptions().ordinality())
@@ -870,8 +874,9 @@ bool CWsPackageProcessEx::onCopyPackageMap(IEspContext &context, IEspCopyPackage
     if (!splitPMPath(req.getSourcePath(), srcAddress, srcTarget, &srcPMID))
         throw MakeStringException(ECLWATCH_INVALID_INPUT, "Invalid source PackageMap path");
 
-    if (req.getPMID() && *req.getPMID())
-        updater.setPMID(req.getTarget(), req.getPMID(), false);
+    const char *requestedPMID = req.getPMID();
+    if (requestedPMID && *requestedPMID)
+        updater.setPMID(req.getTarget(), requestedPMID, false);
     else
         updater.setPMID(req.getTarget(), srcPMID, false);
 
