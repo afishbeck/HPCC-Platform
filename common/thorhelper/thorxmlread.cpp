@@ -1234,6 +1234,9 @@ public:
             {
                 if ('/' == *path && '/' != *(path+1))
                     throw MakeStringException(0, "Cannot extract xml text from absolute path specification: %s", path);
+                StringBuffer xms;
+                toXML(node, xms);
+                DBGLOG("%s", xms.str());
                 CPTreeWithOffsets *subTree = (CPTreeWithOffsets *)node->queryPropTree(subPath.str());
                 if (subTree)
                 {

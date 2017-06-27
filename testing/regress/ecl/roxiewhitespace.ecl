@@ -17,6 +17,11 @@ PersonRec := RECORD
   AddressRec Address;
 END;
 
+PersonRecOut := RECORD
+  string Name {xpath('name/<>')};
+  AddressRec Address;
+END;
+
 peeps_send := DATASET([{{'  Joe  ', '  Doe  '}, {'Fresno', 'CA', 11111}}], PersonRec);
 
 roxieEchoTestRequestRecord := RECORD
@@ -30,7 +35,7 @@ exceptionRec := RECORD
 END;
 
 roxieEchoTestResponseRecord := RECORD
-  DATASET(PersonRec) Peeps {XPATH('Dataset/Row')} := DATASET([], PersonRec);
+  DATASET(PersonRecOut) Peeps {XPATH('Dataset/Row')} := DATASET([], PersonRecOut);
   exceptionRec Exception {XPATH('Exception')};
 END;
 
@@ -51,18 +56,4 @@ soapcallResult := SOAPCALL(TargetURL, 'roxie_keepwhitespace', roxieEchoTestReque
     ONFAIL(doFail()));
 
 OUTPUT(soapcallResult, NAMED('keepResult'));
-
-roxieEchoTestStripRequest := RECORD
-  roxieEchoTestRequestRecord;
-  boolean _stripWhitespaceFromStoredDataset := true;
-END;
-
-stripResult := SOAPCALL(TargetURL, 'roxie_keepwhitespace', roxieEchoTestStripRequest,
-    DATASET(roxieEchoTestResponseRecord),
-    LITERAL,
-    XPATH('*/Results/Result'),
-    RESPONSE(NOTRIM),
-    ONFAIL(doFail()));
-
-OUTPUT(stripResult, NAMED('stripResult'));
 
