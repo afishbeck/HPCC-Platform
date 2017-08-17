@@ -480,6 +480,7 @@ IIdAtom * outputXmlStringId;
 IIdAtom * outputXmlUIntId;
 IIdAtom * outputXmlUnicodeId;
 IIdAtom * outputXmlUtf8Id;
+IIdAtom * outputXmlInlineId;
 IIdAtom * powerId;
 IIdAtom * prefixDiffStrId;
 IIdAtom * prefixDiffUnicodeId;
@@ -1135,6 +1136,7 @@ MODULE_INIT(INIT_PRIORITY_HQLATOM-1)
     MAKEID(outputXmlUInt);
     MAKEID(outputXmlUnicode);
     MAKEID(outputXmlUtf8);
+    MAKEID(outputXmlInline);
     powerId = createIdAtom("_power");
     MAKEID(prefixDiffStr);
     MAKEID(prefixDiffUnicode);

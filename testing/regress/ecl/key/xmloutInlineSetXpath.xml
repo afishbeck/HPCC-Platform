@@ -1,0 +1,32 @@
+<Dataset name='OrigInline'>
+ <Row><shapes><Item>&lt;cst&gt;Circle&lt;/cst&gt;</Item><Item>&lt;cst&gt;Square&lt;/cst&gt;</Item><Item>&lt;cst&gt;Triangle&lt;/cst&gt;</Item></shapes></Row>
+</Dataset>
+<Dataset name='Result 2'>
+</Dataset>
+<Dataset name='readWrittenOrig'>
+ <Row><shapes><Item>&lt;cst&gt;Circle&lt;/cst&gt;</Item><Item>&lt;cst&gt;Square&lt;/cst&gt;</Item><Item>&lt;cst&gt;Triangle&lt;/cst&gt;</Item></shapes></Row>
+</Dataset>
+<Dataset name='NamedInline'>
+ <Row><Shapes><Shape><cst>Circle</cst></Shape><Shape><cst>Square</cst></Shape><Shape><cst>Triangle</cst></Shape></Shapes></Row>
+</Dataset>
+<Dataset name='Result 5'>
+</Dataset>
+<Dataset name='readWrittenNamed'>
+ <Row><Shapes></Shapes></Row>
+</Dataset>
+<Dataset name='UnnamedInline'>
+ <Row><Shapes><cst>Circle</cst><cst>Square</cst><cst>Triangle</cst></Shapes></Row>
+</Dataset>
+<Dataset name='Result 8'>
+</Dataset>
+<Dataset name='readWrittenUnnamed'>
+ <Row><Shapes><cst>Circle</cst><cst>Square</cst><cst>Triangle</cst></Shapes></Row>
+</Dataset>
+<Dataset name='NonameInline'>
+ <Row><Shapes><cst>Circle</cst></Shapes><Shapes><cst>Square</cst></Shapes><Shapes><cst>Triangle</cst></Shapes></Row>
+</Dataset>
+<Dataset name='Result 11'>
+</Dataset>
+<Dataset name='readWrittenNoname'>
+ <Row><Shapes><cst>Circle</cst><cst>Square</cst><cst>Triangle</cst></Shapes></Row>
+</Dataset>

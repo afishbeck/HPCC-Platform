@@ -1803,6 +1803,7 @@ void HqlCppTranslator::cacheOptions()
         DebugOption(options.addLikelihoodToGraph,"addLikelihoodToGraph", true),
         DebugOption(options.translateDFSlayouts,"translateDFSlayouts", false),
         DebugOption(options.reportDFSinfo,"reportDFSinfo", 0),
+        DebugOption(options.writeInlineContent,"writeInlineContent", false),
     };
 
     //get options values from workunit

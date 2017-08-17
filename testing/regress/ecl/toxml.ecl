@@ -41,7 +41,7 @@ string      author;
 
 personRecord := 
             RECORD
-unicode20       surname;
+unicode20       surname{xpath('surname/<>')};
 unicode10       forename;
 phoneRecord     homePhone;
 boolean         hasMobile;

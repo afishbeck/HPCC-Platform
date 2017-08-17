@@ -1,0 +1,32 @@
+<Dataset name='OrigInline'>
+ <Row><peeps><Row><color>&lt;rgb&gt;Red&lt;/rgb&gt;</color><Shape>&lt;cst&gt;Circle&lt;/cst&gt;</Shape><texture>&lt;sss&gt;Sandy&lt;/sss&gt;</texture></Row><Row><color>&lt;rgb&gt;Green&lt;/rgb&gt;</color><Shape>&lt;cst&gt;Square&lt;/cst&gt;</Shape><texture>&lt;sss&gt;Smooth&lt;/sss&gt;</texture></Row><Row><color>&lt;rgb&gt;Blue&lt;/rgb&gt;</color><Shape>&lt;cst&gt;Triangle&lt;/cst&gt;</Shape><texture>&lt;sss&gt;Spikey&lt;/sss&gt;</texture></Row></peeps></Row>
+</Dataset>
+<Dataset name='Result 2'>
+</Dataset>
+<Dataset name='readWrittenOrig'>
+ <Row><peeps><Row><color>&lt;rgb&gt;Red&lt;/rgb&gt;</color><Shape>&lt;cst&gt;Circle&lt;/cst&gt;</Shape><texture>&lt;sss&gt;Sandy&lt;/sss&gt;</texture></Row><Row><color>&lt;rgb&gt;Green&lt;/rgb&gt;</color><Shape>&lt;cst&gt;Square&lt;/cst&gt;</Shape><texture>&lt;sss&gt;Smooth&lt;/sss&gt;</texture></Row><Row><color>&lt;rgb&gt;Blue&lt;/rgb&gt;</color><Shape>&lt;cst&gt;Triangle&lt;/cst&gt;</Shape><texture>&lt;sss&gt;Spikey&lt;/sss&gt;</texture></Row></peeps></Row>
+</Dataset>
+<Dataset name='NamedInline'>
+ <Row><peeps><L2><color>&lt;rgb&gt;Red&lt;/rgb&gt;</color><shape>&lt;cst&gt;Circle&lt;/cst&gt;</shape><texture>&lt;sss&gt;Sandy&lt;/sss&gt;</texture></L2><L2><color>&lt;rgb&gt;Green&lt;/rgb&gt;</color><shape>&lt;cst&gt;Square&lt;/cst&gt;</shape><texture>&lt;sss&gt;Smooth&lt;/sss&gt;</texture></L2><L2><color>&lt;rgb&gt;Blue&lt;/rgb&gt;</color><shape>&lt;cst&gt;Triangle&lt;/cst&gt;</shape><texture>&lt;sss&gt;Spikey&lt;/sss&gt;</texture></L2></peeps></Row>
+</Dataset>
+<Dataset name='Result 5'>
+</Dataset>
+<Dataset name='readWrittenNamed'>
+ <Row><peeps><L2><color>&lt;rgb&gt;Red&lt;/rgb&gt;</color><shape>&lt;Shape&gt;&amp;lt;cst&amp;gt;Circle&amp;lt;/cst&amp;gt;&lt;/Shape&gt;</shape><texture>&lt;sss&gt;Sandy&lt;/sss&gt;</texture></L2><L2><color>&lt;rgb&gt;Green&lt;/rgb&gt;</color><shape>&lt;Shape&gt;&amp;lt;cst&amp;gt;Square&amp;lt;/cst&amp;gt;&lt;/Shape&gt;</shape><texture>&lt;sss&gt;Smooth&lt;/sss&gt;</texture></L2><L2><color>&lt;rgb&gt;Blue&lt;/rgb&gt;</color><shape>&lt;Shape&gt;&amp;lt;cst&amp;gt;Triangle&amp;lt;/cst&amp;gt;&lt;/Shape&gt;</shape><texture>&lt;sss&gt;Spikey&lt;/sss&gt;</texture></L2></peeps></Row>
+</Dataset>
+<Dataset name='UnnamedInline'>
+ <Row><peeps><L2><color>&lt;rgb&gt;Red&lt;/rgb&gt;</color><shape>&lt;cst&gt;Circle&lt;/cst&gt;</shape><texture>&lt;sss&gt;Sandy&lt;/sss&gt;</texture></L2><L2><color>&lt;rgb&gt;Green&lt;/rgb&gt;</color><shape>&lt;cst&gt;Square&lt;/cst&gt;</shape><texture>&lt;sss&gt;Smooth&lt;/sss&gt;</texture></L2><L2><color>&lt;rgb&gt;Blue&lt;/rgb&gt;</color><shape>&lt;cst&gt;Triangle&lt;/cst&gt;</shape><texture>&lt;sss&gt;Spikey&lt;/sss&gt;</texture></L2></peeps></Row>
+</Dataset>
+<Dataset name='Result 8'>
+</Dataset>
+<Dataset name='readWrittenUnnamed'>
+ <Row><L1><L2><color>&lt;rgb&gt;Red&lt;/rgb&gt;</color><Shape>&lt;cst&gt;Circle&lt;/cst&gt;</Shape><texture>&lt;sss&gt;Sandy&lt;/sss&gt;</texture></L2><L2><color>&lt;rgb&gt;Green&lt;/rgb&gt;</color><Shape>&lt;cst&gt;Square&lt;/cst&gt;</Shape><texture>&lt;sss&gt;Smooth&lt;/sss&gt;</texture></L2><L2><color>&lt;rgb&gt;Blue&lt;/rgb&gt;</color><Shape>&lt;cst&gt;Triangle&lt;/cst&gt;</Shape><texture>&lt;sss&gt;Spikey&lt;/sss&gt;</texture></L2></L1></Row>
+</Dataset>
+<Dataset name='NonameInline'>
+ <Row><peeps><L1><color>&lt;rgb&gt;Red&lt;/rgb&gt;</color><shape>&lt;cst&gt;Circle&lt;/cst&gt;</shape><texture>&lt;sss&gt;Sandy&lt;/sss&gt;</texture></L1><L1><color>&lt;rgb&gt;Green&lt;/rgb&gt;</color><shape>&lt;cst&gt;Square&lt;/cst&gt;</shape><texture>&lt;sss&gt;Smooth&lt;/sss&gt;</texture></L1><L1><color>&lt;rgb&gt;Blue&lt;/rgb&gt;</color><shape>&lt;cst&gt;Triangle&lt;/cst&gt;</shape><texture>&lt;sss&gt;Spikey&lt;/sss&gt;</texture></L1></peeps></Row>
+</Dataset>
+<Dataset name='Result 11'>
+</Dataset>
+<Dataset name='readWrittenNoname'>
+ <Row><L1><color>&lt;rgb&gt;Red&lt;/rgb&gt;</color><shape></shape><texture>&lt;sss&gt;Sandy&lt;/sss&gt;</texture></L1><L1><color>&lt;rgb&gt;Green&lt;/rgb&gt;</color><shape></shape><texture>&lt;sss&gt;Smooth&lt;/sss&gt;</texture></L1><L1><color>&lt;rgb&gt;Blue&lt;/rgb&gt;</color><shape></shape><texture>&lt;sss&gt;Spikey&lt;/sss&gt;</texture></L1></Row>
+</Dataset>

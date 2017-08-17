@@ -8114,7 +8114,8 @@ static void trimSlash(StringBuffer & name)
         name.setLength(len-1);
 }
 
-void extractXmlName(StringBuffer & name, StringBuffer * itemName, StringBuffer * valueName, IHqlExpression * field, const char * defaultItemName, bool reading)
+
+void extractXmlName(StringBuffer & name, StringBuffer * itemName, StringBuffer * valueName, IHqlExpression * field, const char * defaultItemName, bool reading, byte *contentFlags)
 {
     IHqlExpression * xpathAttr = field->queryAttribute(xpathAtom);
     if (xpathAttr)
@@ -8125,8 +8126,20 @@ void extractXmlName(StringBuffer & name, StringBuffer * itemName, StringBuffer *
 
         unsigned lenContents = strlen(XPATH_CONTENTS_TEXT);
         unsigned lenTagName = tagName.length();
-        if ((lenTagName >= lenContents) && (memcmp(tagName.str() + (lenTagName - lenContents), XPATH_CONTENTS_TEXT, lenContents) == 0))
-            tagName.setLength(lenTagName - lenContents);
+        if (lenTagName >= lenContents)
+        {
+            const char *finger = tagName.str() + (lenTagName - lenContents);
+            if (memcmp(finger, XPATH_CONTENTS_TEXT, lenContents) == 0)
+            {
+                if (contentFlags)
+                {
+                    *contentFlags |= XPathContentInline;
+                    if ((lenTagName >= lenContents + 1) && *--finger=='/')
+                        *contentFlags |= XPathContentNamed;
+                }
+                tagName.setLength(lenTagName - lenContents);
+            }
+        }
 
         //Only take the xpath if it isn't an attribute, sub element, or a filtered element.
         //we should probably think about handling attributes as a special case.
@@ -8203,11 +8216,11 @@ void extractXmlName(StringBuffer & name, StringBuffer * itemName, StringBuffer *
 }
 
 
-void extractXmlName(SharedHqlExpr & name, OwnedHqlExpr * itemName, OwnedHqlExpr * valueName, IHqlExpression * field, const char * defaultItemName, bool reading)
+void extractXmlName(SharedHqlExpr & name, OwnedHqlExpr * itemName, OwnedHqlExpr * valueName, IHqlExpression * field, const char * defaultItemName, bool reading, byte *contentFlags)
 {
     StringBuffer nameText, itemNameText, valueNameText;
 
-    extractXmlName(nameText, itemName ? &itemNameText : NULL, valueName ? &valueNameText : NULL, field, defaultItemName, reading);
+    extractXmlName(nameText, itemName ? &itemNameText : NULL, valueName ? &valueNameText : NULL, field, defaultItemName, reading, contentFlags);
 
     if (valueNameText.length())
         valueName->setown(createConstant(constUnknownVarStringType->castFrom(valueNameText.length(), valueNameText.str())));
@@ -8257,8 +8270,8 @@ static ITypeInfo * containsSingleSimpleFieldBlankXPath(IHqlExpression * record)
 class EclXmlSchemaBuilder
 {
 public:
-    EclXmlSchemaBuilder(ISchemaBuilder & _builder, bool _useXPath) 
-        : builder(_builder), useXPath(_useXPath)
+    EclXmlSchemaBuilder(ISchemaBuilder & _builder, bool _useXPath, bool _allowInlineContent)
+        : builder(_builder), useXPath(_useXPath), allowInlineContent(_allowInlineContent)
     {
     }
 
@@ -8267,11 +8280,12 @@ public:
 
 
 protected:
-    void extractName(StringBuffer & name, StringBuffer * itemName, StringBuffer * valueName, IHqlExpression * field, const char * defaultItemName) const;
+    void extractName(StringBuffer & name, StringBuffer * itemName, StringBuffer * valueName, IHqlExpression * field, const char * defaultItemName, byte *contentFlags) const;
 
 protected:
     ISchemaBuilder & builder;
     bool useXPath;
+    bool allowInlineContent = false;
 };
 
 
@@ -8292,7 +8306,7 @@ void EclXmlSchemaBuilder::build(IHqlExpression * record, bool &hasMixedContent, 
                 {
                 case type_row:
                     {
-                        extractName(name.clear(), NULL, NULL, cur, NULL);
+                        extractName(name.clear(), NULL, NULL, cur, NULL, nullptr);
                         unsigned updateMixed=0;
                         builder.beginRecord(name, false, &updateMixed);
                         bool mixed = false;
@@ -8304,9 +8318,10 @@ void EclXmlSchemaBuilder::build(IHqlExpression * record, bool &hasMixedContent, 
                     }
                 case type_set:
                     {
-                        extractName(name.clear(), &childName.clear(), NULL, cur, "Item");
+                        byte contentFlags = 0;
+                        extractName(name.clear(), &childName.clear(), NULL, cur, "Item", allowInlineContent ? &contentFlags : nullptr);
                         if (name.length())
-                            builder.addSetField(name, childName, *type);
+                            builder.addSetField(name, childName, *type, contentFlags);
                         else
                             hasMixedContent = true;
                         break;
@@ -8315,7 +8330,7 @@ void EclXmlSchemaBuilder::build(IHqlExpression * record, bool &hasMixedContent, 
                 case type_table:
                 case type_groupedtable:
                     {
-                        extractName(name.clear(), &childName.clear(), NULL, cur, "Row");
+                        extractName(name.clear(), &childName.clear(), NULL, cur, "Row", nullptr);
                         ITypeInfo * singleFieldType = (useXPath && name.length() && childName.length()) ? containsSingleSimpleFieldBlankXPath(cur->queryRecord()) : NULL;
                         if (!singleFieldType || !builder.addSingleFieldDataset(name, childName, *singleFieldType))
                         {
@@ -8335,12 +8350,16 @@ void EclXmlSchemaBuilder::build(IHqlExpression * record, bool &hasMixedContent, 
                     type = queryAlienType(type)->queryLogicalType();
                     //fallthrough
                 default:
-                    extractName(name.clear(), NULL, NULL, cur, NULL);
-                    if (name.length())
-                        builder.addField(name, *type, i < keyedCount);
-                    else
-                        hasMixedContent = true;
-                    break;
+                    {
+                        byte contentFlags = 0;
+                        extractName(name.clear(), NULL, NULL, cur, NULL, allowInlineContent ? &contentFlags : nullptr);
+                        bool inlineContent = (contentFlags & XPathContentInline)!=0;
+                        if (!hasMixedContent)
+                            hasMixedContent = !name.length() || (inlineContent && !(contentFlags & XPathContentNamed));
+                        if (name.length() || inlineContent)
+                            builder.addField(name, *type, i < keyedCount, contentFlags);
+                        break;
+                    }
                 }
                 break;
             }
@@ -8356,11 +8375,11 @@ void EclXmlSchemaBuilder::build(IHqlExpression * record, bool &hasMixedContent, 
     }
 }
 
-void EclXmlSchemaBuilder::extractName(StringBuffer & name, StringBuffer * itemName, StringBuffer * valueName, IHqlExpression * field, const char * defaultItemName) const
+void EclXmlSchemaBuilder::extractName(StringBuffer & name, StringBuffer * itemName, StringBuffer * valueName, IHqlExpression * field, const char * defaultItemName, byte *contentFlags) const
 {
     if (useXPath)
     {
-        ::extractXmlName(name, itemName, valueName, field, defaultItemName, false);
+        ::extractXmlName(name, itemName, valueName, field, defaultItemName, false, contentFlags);
     }
     else
     {
@@ -8371,10 +8390,10 @@ void EclXmlSchemaBuilder::extractName(StringBuffer & name, StringBuffer * itemNa
 }
 
 
-void getRecordXmlSchema(StringBuffer & result, IHqlExpression * record, bool useXPath, unsigned keyedCount)
+void getRecordXmlSchema(StringBuffer & result, IHqlExpression * record, bool useXPath, unsigned keyedCount, bool allowInlineContent)
 {
     XmlSchemaBuilder xmlbuilder(false);
-    EclXmlSchemaBuilder builder(xmlbuilder, useXPath);
+    EclXmlSchemaBuilder builder(xmlbuilder, useXPath, allowInlineContent);
     builder.build(record, keyedCount);
     xmlbuilder.getXml(result);
 }
