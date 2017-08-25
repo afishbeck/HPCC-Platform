@@ -615,6 +615,7 @@ public:
 
     virtual void match(IColumnProvider &entry, offset_t startOffset, offset_t endOffset)
     {
+        DBGLOG("SOAP MATCH");
         Owned<IException> e;
         if (tail.length())
         {
@@ -637,24 +638,31 @@ public:
         }
         if (parent.getMaster()->getRowTransformer() && !e)
         {
+            DBGLOG("Processing SOAP Rows");
             IEngineRowAllocator * outputAllocator = parent.getOutputAllocator();
             Owned<IColumnProviderIterator> iter = entry.getChildIterator(tail);
             IColumnProvider *rowEntry = iter->first();
             while (rowEntry)
             {
+                DBGLOG("Processing SOAP rowEntry");
                 RtlDynamicRowBuilder rowBuilder(outputAllocator);
                 size32_t sizeGot;
                 if(meta)
                 {
                     meta->setBase(rowEntry);
                     sizeGot = parent.getMaster()->transformRow(rowBuilder, meta);
+                    DBGLOG("Transformed Row meta (%d)", sizeGot);
                 }
                 else
                 {
                     sizeGot = parent.getMaster()->transformRow(rowBuilder, rowEntry);
+                    DBGLOG("Transformed RowEntry (%d)", sizeGot);
                 }
                 if (sizeGot > 0)
+                {
                     parent.getMaster()->putRow(rowBuilder.finalizeRowClear(sizeGot));
+                    DBGLOG("putRow (%d)", sizeGot);
+                }
                 rowEntry = iter->next();
             }
         }
@@ -1729,11 +1737,14 @@ private:
             master->logctx.CTXLOG("%sCALL: LEN=%d %sresponse(%s%s)", master->wscType == STsoap ? "SOAP" : "HTTP",response.length(),chunked?"CHUNKED ":"", dbgheader.str(), response.str());
         else if (soapTraceLevel > 8)
             master->logctx.CTXLOG("%sCALL: LEN=%d %sresponse(%s)", master->wscType == STsoap ? "SOAP" : "HTTP",response.length(),chunked?"CHUNKED ":"", response.str()); // not sure this is that useful but...
+        DBGLOG("SOAPCALL RESPONSE: %s", response.str());
         return rval;
     }
 
     void processEspResponse(Url &url, StringBuffer &response, ColumnProvider * meta)
     {
+        DBGLOG("processEspResponse");
+
         StringBuffer path(responsePath);
         path.append("/Results/Result/");
         const char *tail;
@@ -1761,6 +1772,7 @@ private:
 
     void processLiteralResponse(Url &url, StringBuffer &response, ColumnProvider * meta)
     {
+        DBGLOG("processLiteralResponse");
         StringBuffer path("/Envelope/Body/");
         if(master->rowTransformer && master->inputpath.get())
             path.append(master->inputpath.get());
@@ -1973,9 +1985,7 @@ public:
 
                 int rval = readHttpResponse(response, socket);
 
-                if (soapTraceLevel > 4)
-                    master->logctx.CTXLOG("%sCALL: received response (%s) from %s:%d", master->wscType == STsoap ? "SOAP" : "HTTP",master->service.str(), url.host.str(), url.port);
-
+                DBGLOG("%sCALL: received response (%s) from %s:%d", master->wscType == STsoap ? "SOAP" : "HTTP",master->service.str(), url.host.str(), url.port);
                 if (rval != 200)
                 {
                     if (rval == 503)
