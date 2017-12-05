@@ -186,8 +186,8 @@ public:
     int onSubmitQueryOutput(IEspContext &context, CHttpRequest* request, CHttpResponse* response,    WsEclWuInfo &wsinfo, const char *format);
     int onSubmitQueryOutputView(IEspContext &context, CHttpRequest* request, CHttpResponse* response, WsEclWuInfo &wsinfo);
 
-    int submitWsEclWorkunit(IEspContext & context, WsEclWuInfo &wsinfo, IPropertyTree *reqTree, StringBuffer &out, unsigned flags, TextMarkupFormat fmt=MarkupFmt_XML, const char *viewname=NULL, const char *xsltname=NULL);
-    int submitWsEclWorkunit(IEspContext & context, WsEclWuInfo &wsinfo, const char *xml, StringBuffer &out, unsigned flags, TextMarkupFormat fmt=MarkupFmt_XML, const char *viewname=NULL, const char *xsltname=NULL);
+    int submitWsEclWorkunit(IEspContext & context, WsEclWuInfo &wsinfo, IPropertyTree *reqTree, StringBuffer &out, unsigned flags, CHttpRequest *httpreq, TextMarkupFormat fmt=MarkupFmt_XML, const char *viewname=NULL, const char *xsltname=NULL);
+    int submitWsEclWorkunit(IEspContext & context, WsEclWuInfo &wsinfo, const char *xml, StringBuffer &out, unsigned flags, CHttpRequest *httpreq, TextMarkupFormat fmt=MarkupFmt_XML, const char *viewname=NULL, const char *xsltname=NULL);
 
     void handleHttpPost(CHttpRequest *request, CHttpResponse *response);
     void handleJSONPost(CHttpRequest *request, CHttpResponse *response);
@@ -211,7 +211,7 @@ public:
     void getWsEclJsonRequest(StringBuffer& soapmsg, IEspContext &context, CHttpRequest* request, WsEclWuInfo &wsinfo, const char *xmltype, const char *ns, unsigned flags, bool validate);
     void buildSampleResponseJSON(StringBuffer& msg, IEspContext &context, CHttpRequest* request, WsEclWuInfo &wsinfo);
 
-    void sendRoxieRequest(const char *process, StringBuffer &req, StringBuffer &resp, StringBuffer &status, const char *query, bool trim, const char *contentType);
+    void sendRoxieRequest(const char *process, StringBuffer &req, StringBuffer &resp, StringBuffer &status, const char *query, bool trim, const char *contentType, CHttpRequest *httpreq);
 };
 
 #endif //_WS_ECL_SERVICE_HPP__

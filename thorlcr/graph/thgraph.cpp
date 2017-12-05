@@ -2529,6 +2529,8 @@ class CThorContextLogger : implements IContextLogger, public CSimpleInterface
 {
     CJobBase &job;
     unsigned traceLevel;
+    StringAttr globalId;
+    StringBuffer localId;
 public:
     IMPLEMENT_IINTERFACE_USING(CSimpleInterface);
 
@@ -2565,6 +2567,19 @@ public:
     virtual unsigned queryTraceLevel() const
     {
         return traceLevel;
+    }
+    virtual void setGlobalId(const char *id, SocketEndpoint &ep, unsigned pid)
+    {
+        globalId.set(id);
+        appendLocalId(localId.clear(), ep, pid);
+    }
+    virtual const char *queryGlobalId() const
+    {
+        return globalId.get();
+    }
+    virtual const char *queryLocalId() const
+    {
+        return localId.str();
     }
 };
 

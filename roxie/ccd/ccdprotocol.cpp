@@ -1757,6 +1757,8 @@ readAnother:
             {
                 mlResponseFmt = httpHelper.queryResponseMlFormat();
                 mlRequestFmt = httpHelper.queryRequestMlFormat();
+                msgctx->setTransactionId(httpHelper.queryRequestHeader("RELX-Global-Id"), true);  //logged and forwarded through SOAPCALL/HTTPCALL
+                msgctx->setCallerId(httpHelper.queryRequestHeader("RELX-Caller-Id"));  //only logged
             }
         }
 
@@ -1859,7 +1861,7 @@ readAnother:
                 uid = NULL;
                 sanitizeQuery(queryPT, queryName, sanitizedText, httpHelper, uid, isBlind, isDebug);
                 if (uid)
-                    msgctx->setTransactionId(uid);
+                    msgctx->setTransactionId(uid, false);
                 else
                     uid = "-";
 

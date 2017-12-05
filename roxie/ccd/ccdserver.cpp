@@ -249,6 +249,19 @@ public:
     {
         return ctx->isBlind();
     }
+    virtual void setGlobalId(const char *id, SocketEndpoint &ep, unsigned pid)
+    {
+        ctx->setGlobalId(id, ep, pid);
+    }
+    virtual const char *queryGlobalId() const
+    {
+        return ctx->queryGlobalId();
+    }
+    virtual const char *queryLocalId() const
+    {
+        return ctx->queryLocalId();
+    }
+
     virtual const QueryOptions &queryOptions() const
     {
         return ctx->queryOptions();
@@ -1151,6 +1164,20 @@ public:
             return ctx->queryTraceLevel();
         else
             return traceLevel;
+    }
+
+    virtual void setGlobalId(const char *id, SocketEndpoint&ep, unsigned pid)
+    {
+        if (ctx)
+            ctx->setGlobalId(id, ep, pid);
+    }
+    virtual const char *queryGlobalId() const
+    {
+        return ctx ? ctx->queryGlobalId() : nullptr;
+    }
+    virtual const char *queryLocalId() const
+    {
+        return ctx ? ctx->queryLocalId() : nullptr;
     }
 
     virtual bool isPassThrough()

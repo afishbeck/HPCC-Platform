@@ -570,6 +570,8 @@ public: // Not very clean but I don't care
     mutable bool aborted;
     mutable CIArrayOf<LogItem> log;
 private:
+    StringAttr globalId;
+    StringBuffer localId;
     ContextLogger(const ContextLogger &);  // Disable copy constructor
 public:
     IMPLEMENT_IINTERFACE;
@@ -688,6 +690,19 @@ public:
     void reset()
     {
         stats.reset();
+    }
+    virtual void setGlobalId(const char *id, SocketEndpoint &ep, unsigned pid)
+    {
+        globalId.set(id);
+        appendLocalId(localId.clear(), ep, pid);
+    }
+    virtual const char *queryGlobalId() const
+    {
+        return globalId.get();
+    }
+    virtual const char *queryLocalId() const
+    {
+        return localId.str();
     }
 };
 
