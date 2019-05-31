@@ -85,6 +85,7 @@ public:
     inline CassandraClusterSession(CassCluster *_cluster)
     : cluster(_cluster), semaphore(NULL), maxFutures(0), maxRetries(0)
     {
+    	DBGLOG("new CassandraClusterSession");
     }
     void setOptions(const StringArray &options);
     inline ~CassandraClusterSession()
@@ -125,6 +126,7 @@ private:
     __uint64 getUnsigned64Option(const char *val, const char *option);
     CassandraClusterSession(const CassandraClusterSession &);
     CassCluster *cluster;
+    CassConsistency consistency = CASS_CONSISTENCY_UNKNOWN;
     Owned<CassandraSession> session;
     mutable MapStringToMyClass<CassandraPrepared> preparedCache;
     mutable CriticalSection cacheCrit;
@@ -426,7 +428,7 @@ private:
 class CassandraStatementInfo : public CInterface
 {
 public:
-    CassandraStatementInfo(CassandraSession *_session, CassandraPrepared *_prepared, unsigned _numBindings, CassBatchType _batchMode, unsigned pageSize, Semaphore *_semaphore, unsigned _maxRetries);
+    CassandraStatementInfo(CassandraSession *_session, CassandraPrepared *_prepared, unsigned _numBindings, CassBatchType _batchMode, unsigned pageSize, Semaphore *_semaphore, unsigned _maxRetries, CassConsistency _consistency);
     ~CassandraStatementInfo();
     void stop();
     bool next();

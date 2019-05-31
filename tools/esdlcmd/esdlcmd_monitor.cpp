@@ -301,7 +301,7 @@ public:
 class EsdlMonitorCmd : public EsdlConvertCmd
 {
 public:
-    EsdlMonitorCmd() : optFlags(DEPFLAG_COLLAPSE|DEPFLAG_ARRAYOF){}
+    EsdlMonitorCmd() : optFlags(DEPFLAG_COLLAPSE|DEPFLAG_ARRAYOF), optCassConsistency("LOCAL_QUORUM"){}
 
     virtual bool parseCommandLineOptions(ArgvIterator &iter)
     {
@@ -341,6 +341,8 @@ public:
                     continue;
                 if (EsdlConvertCmd::matchCommandLineOption(iter, true)!=EsdlCmdOptionMatch)
                     return false;
+                if (iter.matchOption(optCassConsistency, ESDL_OPTION_CASSANDRA_CONSISTENCY))
+                    continue;
             }
         }
 
@@ -1046,6 +1048,9 @@ public:
         xform->setParameter("requestType", stringvar.setf("'%s'", depTree->queryProp(xpath.setf("EsdlMethod[@name='%s']/@request_type", optMethod.str()))));
         xform->setParameter("queryName", stringvar.setf("'%s'", monitoringTemplate->queryProp("@queryName")));
 
+        if (optCassConsistency.length())
+            xform->setParameter("cass_consistency", stringvar.setf("'%s'", optCassConsistency.str()));
+
         StringBuffer ecl;
 
         StringBuffer escapedTemplate;
@@ -1131,6 +1136,7 @@ public:
         puts("                   differencing and monitoring ECL code for the given service method.\n" );
 
         puts(ESDLOPT_INCLUDE_PATH_USAGE);
+        puts("   --cassandra-consistency <consistency>  Consistency value to use for Cassandra statements\n");
         EsdlConvertCmd::usage();
     }
 
@@ -1148,6 +1154,7 @@ public:
     StringAttr optService;
     StringAttr optXsltPath;
     StringAttr optMethod;
+    StringAttr optCassConsistency;
     unsigned optFlags;
     bool optOutputCategoryList=false;  //hidden option, do not document
 };
