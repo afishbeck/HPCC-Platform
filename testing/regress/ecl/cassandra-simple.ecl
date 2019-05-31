@@ -67,7 +67,7 @@ createks() := EMBED(cassandra : server(server),user('rchapman'))
   CREATE KEYSPACE IF NOT EXISTS test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3' } ;
 ENDEMBED;
 
-createTables() := EMBED(cassandra : server(server),user('rchapman'),keyspace('test'),consistency('LOCAL_ONE'))
+createTables() := EMBED(cassandra : server(server),user('rchapman'),keyspace('test'))
   DROP TABLE IF EXISTS tbl1;
 
   // Note that an ECL SET can map to either a SET or a LIST in Cassandra (it's actually closer to a LIST since repeated values are allowed and order is preserved)
@@ -163,11 +163,11 @@ dataset(childrec) testCassandraStringParam(string filter) := EMBED(cassandra : s
   SELECT name, value, boolval, r8, r4,d,ddd,u1,u2,a,set1,list1,map1 from tbl1 where name = ?;
 ENDEMBED;
 
-dataset(childrec) testCassandraStringSetParam(set of string filter) := EMBED(cassandra : server(server),user('rchapman'),keyspace('test'),consistency('ONE'))
+dataset(childrec) testCassandraStringSetParam(set of string filter) := EMBED(cassandra : server(server),user('rchapman'),keyspace('test'),consistency('one'))
   SELECT name, value, boolval, r8, r4,d,ddd,u1,u2,a,set1,list1,map1 from tbl1 where name IN ?;
 ENDEMBED;
 
-integer testCassandraInt() := EMBED(cassandra : server(server),user('rchapman'),keyspace('test'),consistency('LOCAL_ONE'))
+integer testCassandraInt() := EMBED(cassandra : server(server),user('rchapman'),keyspace('test'),consistency('local_one'))
   SELECT value from tbl1 LIMIT 1;
 ENDEMBED;
 

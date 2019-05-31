@@ -339,10 +339,10 @@ public:
                     continue;
                 if (EsdlConvertCmd::parseCommandLineOption(iter))
                     continue;
-                if (EsdlConvertCmd::matchCommandLineOption(iter, true)!=EsdlCmdOptionMatch)
-                    return false;
                 if (iter.matchOption(optCassConsistency, ESDL_OPTION_CASSANDRA_CONSISTENCY))
                     continue;
+                if (EsdlConvertCmd::matchCommandLineOption(iter, true)!=EsdlCmdOptionMatch)
+                    return false;
             }
         }
 
@@ -1047,9 +1047,7 @@ public:
         StringBuffer stringvar;
         xform->setParameter("requestType", stringvar.setf("'%s'", depTree->queryProp(xpath.setf("EsdlMethod[@name='%s']/@request_type", optMethod.str()))));
         xform->setParameter("queryName", stringvar.setf("'%s'", monitoringTemplate->queryProp("@queryName")));
-
-        if (optCassConsistency.length())
-            xform->setParameter("cass_consistency", stringvar.setf("'%s'", optCassConsistency.str()));
+        xform->setParameter("cass_consistency", stringvar.setf("'%s'", optCassConsistency.str()));
 
         StringBuffer ecl;
 

@@ -509,7 +509,10 @@ CassandraStatementInfo::CassandraStatementInfo(CassandraSession *_session, Cassa
     if (pageSize)
         cass_statement_set_paging_size(*statement, pageSize);
     if (_consistency != CASS_CONSISTENCY_UNKNOWN)
+    {
+    	DBGLOG("cass_statement_set_consistency(%s(%d))", cass_consistency_string(_consistency), _consistency);
         cass_statement_set_consistency(*statement, _consistency);
+    }
     inBatch = false;
 }
 CassandraStatementInfo::~CassandraStatementInfo()
