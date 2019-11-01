@@ -2202,7 +2202,17 @@ enum
     SOAPFlogmin         = 0x0100,
     SOAPFlogusermsg     = 0x0200,
     SOAPFhttpheaders    = 0x0400,
-    SOAPFusescontents   = 0x0800
+    SOAPFusescontents   = 0x0800,
+    SOAPFhttppost       = 0x1000
+};
+
+enum
+{
+    HTTPPOSTFtrim        = 0x0001,
+    HTTPPOSTFnoroot      = 0x0002,
+    HTTPPOSTFpath        = 0x0004,
+    HTTPPOSTFjson        = 0x0010,
+    HTTPPOSTFxml         = 0x0020
 };
 
 struct IHThorWebServiceCallActionArg : public IHThorArg
@@ -2233,6 +2243,8 @@ struct IHThorWebServiceCallActionArg : public IHThorArg
     virtual const char * getInputIteratorPath() = 0;
     virtual size32_t onFailTransform(ARowBuilder & rowBuilder, const void * left, IException * e) = 0;
     virtual void getLogText(size32_t & lenText, char * & text, const void * left) = 0;  // iff SOAPFlogusermsg set
+    virtual unsigned getRequestFlags() = 0;
+    virtual const char * getRequestInputPath() = 0;
 };
 typedef IHThorWebServiceCallActionArg IHThorSoapActionArg ;
 typedef IHThorWebServiceCallActionArg IHThorHttpActionArg ;

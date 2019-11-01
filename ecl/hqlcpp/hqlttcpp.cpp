@@ -12885,10 +12885,16 @@ IHqlExpression * HqlTreeNormalizer::createTransformedBody(IHqlExpression * expr)
         return removeDefaultsFromExpr(expr, 3, no_newparse);
     case no_xmlparse:
         return removeDefaultsFromExpr(expr, 2, no_newxmlparse);
+    case no_httppost:
+        return removeDefaultsFromExpr(expr, 2, no_newhttppost);
     case no_soapcall:
         return removeDefaultsFromExpr(expr, 2, no_newsoapcall);
+    case no_httppost_ds:
+        return removeDefaultsFromExpr(expr, 3, no_new_httppost_ds);
     case no_soapcall_ds:
         return removeDefaultsFromExpr(expr, 3, no_newsoapcall_ds);
+    case no_httpaction_ds:
+        return removeDefaultsFromExpr(expr, 3, no_new_httpaction_ds);
     case no_soapaction_ds:
         return removeDefaultsFromExpr(expr, 3, no_newsoapaction_ds);
 #ifdef OPTIMIZE_IMPLICIT_CAST

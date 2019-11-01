@@ -6949,8 +6949,11 @@ ABoundActivity * HqlCppTranslator::buildActivity(BuildCtx & ctx, IHqlExpression 
             case no_httpcall:
                 result = doBuildActivityHTTP(ctx, expr, (expr->isAction()), isRoot);
                 break;
+            case no_new_httppost:
             case no_newsoapcall:
+            case no_new_httppost_ds:
             case no_newsoapcall_ds:
+            case no_new_httpaction_ds:
             case no_newsoapaction_ds:
                 result = doBuildActivitySOAP(ctx, expr, (expr->isAction()), isRoot);
                 break;
@@ -17823,43 +17826,43 @@ void HqlCppTranslator::doBuildHttpHeaderStringFunction(BuildCtx &ctx, IHqlExpres
 
 }
 
+
 ABoundActivity * HqlCppTranslator::doBuildActivitySOAP(BuildCtx & ctx, IHqlExpression * expr, bool isSink, bool isRoot)
 {
     ThorActivityKind tak;
-    const char * helper;
     unsigned firstArg = 0;
-    IHqlExpression * dataset = NULL;
+    IHqlExpression * dataset = nullptr;
     Owned<ABoundActivity> boundDataset;
     IHqlExpression * selSeq = querySelSeq(expr);
-    if (expr->getOperator() == no_newsoapcall)
+
+    bool isHttpPost = false;
+    const char * helper= (isSink) ? "SoapAction" : "SoapCall";
+
+    switch (expr->getOperator())
     {
-        if (isSink)
-        {
-            tak = TAKsoap_rowaction;
-            helper = "SoapAction";
-        }
-        else
-        {
-            tak = TAKsoap_rowdataset;
-            helper = "SoapCall";
-        }
-    }
-    else
+    case no_new_httppost:
+        isHttpPost = true; //fall through
+    case no_newsoapcall:
+        tak = (isSink) ? TAKsoap_rowaction : TAKsoap_rowdataset;
+        break;
+    case no_httppost:
+    case no_newhttppost:
+    case no_httppost_ds:
+    case no_new_httppost_ds:
+    case no_httpaction_ds:
+    case no_new_httpaction_ds:
+        isHttpPost = true; //fall through
+    default:
     {
-        if (isSink)
-        {
-            tak = TAKsoap_datasetaction;
-            helper = "SoapAction";
-        }
-        else
-        {
-            tak = TAKsoap_datasetdataset;
-            helper = "SoapCall";
-        }
+        tak = (isSink) ? TAKsoap_datasetaction : TAKsoap_datasetdataset;
         dataset = expr->queryChild(0);
         boundDataset.setown(buildCachedActivity(ctx, dataset));
         firstArg = 1;
+        break;
     }
+    }
+
+    bool isJson = isHttpPost;
 
     StringBuffer s;
     Owned<ActivityInstance> instance = new ActivityInstance(*this, ctx, tak, expr, helper);
@@ -17891,9 +17894,46 @@ ABoundActivity * HqlCppTranslator::doBuildActivitySOAP(BuildCtx & ctx, IHqlExpre
     if (separator)
         doBuildVarStringFunction(instance->startctx, "queryOutputIteratorPath", separator->queryChild(0));
 
+    IHqlExpression * xmlAttr = expr->queryAttribute(xmlAtom);
+    if (!xmlAttr)
+    {
+        xmlAttr = expr->queryAttribute(jsonAtom);
+        if (xmlAttr)
+            isJson=true;
+    }
+
+    IHqlExpression * header = expr->queryAttribute(headingAtom);
+    if (xmlAttr)
+    {
+        IHqlExpression * rowAttr = xmlAttr->queryAttribute(rowAtom);
+        if (rowAttr)
+            doBuildVarStringFunction(instance->startctx, "getRequestInputPath", rowAttr->queryChild(0));
+
+        if (!header)
+            header = xmlAttr->queryAttribute(headingAtom);
+
+        StringBuffer reqFlags;
+        if (xmlAttr->hasAttribute(trimAtom))
+            reqFlags.append("|HTTPPOSTFtrim");
+        if (xmlAttr->hasAttribute(noRootAtom))
+            reqFlags.append("|HTTPPOSTFnoroot");
+        if (rowAttr)
+            reqFlags.append("|HTTPPOSTFpath");
+        if (isJson)
+            reqFlags.append("|HTTPPOSTFjson");
+        else
+            reqFlags.append("|HTTPPOSTFxml");
+
+        if (reqFlags.length())
+        {
+            StringBuffer s;
+            s.append("virtual unsigned getRequestFlags() override { return ").append(reqFlags.str()+1).append("; }");
+            instance->classctx.addQuoted(s);
+        }
+    }
+
     //virtual const char * getHeader()
     //virtual const char * getFooter()
-    IHqlExpression * header = expr->queryAttribute(headingAtom);
     if (header)
     {
         doBuildVarStringFunction(instance->startctx, "getHeader", header->queryChild(0));
@@ -18015,6 +18055,8 @@ ABoundActivity * HqlCppTranslator::doBuildActivitySOAP(BuildCtx & ctx, IHqlExpre
             flags.append("|SOAPFhttpheaders");
         if (usesContents)
             flags.append("|SOAPFusescontents");
+        if (isHttpPost)
+            flags.append("|SOAPFhttppost");
 
         if (flags.length())
             doBuildUnsignedFunction(instance->classctx, "getFlags", flags.str()+1);

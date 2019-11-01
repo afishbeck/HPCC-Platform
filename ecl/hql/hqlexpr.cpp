@@ -1772,6 +1772,12 @@ const char *getOpString(node_operator op)
     case no_assertkeyed: return "KEYED";
     case no_assertwild: return "WILD";
     case no_httpcall: return "HTTPCALL";
+    case no_httppost: return "HTTPCALL";
+    case no_httppost_ds: return "SOAPCALL";
+    case no_new_httppost: return "SOAPCALL";
+    case no_new_httppost_ds: return "SOAPCALL";
+    case no_httpaction_ds: return "SOAPCALL";
+    case no_new_httpaction_ds: return "SOAPCALL";
     case no_soapcall: return "SOAPCALL";
     case no_soapcall_ds: return "SOAPCALL";
     case no_newsoapcall: return "SOAPCALL";
@@ -2027,6 +2033,10 @@ bool checkConstant(node_operator op)
     case no_getgraphloopresult:
     case no_variable:
     case no_httpcall:
+    case no_httppost:
+    case no_httppost_ds:
+    case no_new_httppost:
+    case no_new_httppost_ds:
     case no_soapcall:
     case no_soapcall_ds:
     case no_soapaction_ds:
@@ -2282,6 +2292,8 @@ childDatasetType getChildDatasetType(IHqlExpression * expr)
     case no_skip:
     case no_activetable:
     case no_httpcall:
+    case no_httppost:
+    case no_new_httppost:
     case no_soapcall:
     case no_newsoapcall:
     case no_alias:
@@ -2444,6 +2456,8 @@ childDatasetType getChildDatasetType(IHqlExpression * expr)
         return childdataset_many;
     case no_newxmlparse:
     case no_newparse:
+    case no_httppost_ds:
+    case no_new_httppost_ds:
     case no_soapcall_ds:
     case no_soapaction_ds:
     case no_newsoapcall_ds:
@@ -2662,6 +2676,10 @@ inline unsigned doGetNumChildTables(IHqlExpression * dataset)
     case no_distributer:
     case no_preload:
     case no_createset:
+    case no_httppost_ds:
+    case no_new_httppost_ds:
+    case no_httpaction_ds:
+    case no_new_httpaction_ds:
     case no_soapcall_ds:
     case no_soapaction_ds:
     case no_newsoapcall_ds:
@@ -2726,6 +2744,8 @@ inline unsigned doGetNumChildTables(IHqlExpression * dataset)
     case no_skip:
     case no_activetable:
     case no_httpcall:
+    case no_httppost:
+    case no_new_httppost:
     case no_soapcall:
     case no_newsoapcall:
     case no_alias:
@@ -3024,6 +3044,10 @@ bool definesColumnList(IHqlExpression * dataset)
     case no_skip:
     case no_activetable:
     case no_httpcall:
+    case no_httppost:
+    case no_httppost_ds:
+    case no_new_httppost:
+    case no_new_httppost_ds:
     case no_soapcall:
     case no_soapcall_ds:
     case no_newsoapcall:
@@ -3132,6 +3156,7 @@ unsigned queryTransformIndex(IHqlExpression * expr)
     case no_denormalize:
     case no_denormalizegroup:
     case no_parse:
+    case no_httppost:
     case no_soapcall:
     case no_newxmlparse:
     case no_quantile:
@@ -3139,10 +3164,13 @@ unsigned queryTransformIndex(IHqlExpression * expr)
         break;
     case no_newparse:
     case no_newsoapcall:            // 4 because input(2) gets transformed.
+    case no_new_httppost:
     case no_soapcall_ds:
+    case no_httppost_ds:
         pos = 4;
         break;
     case no_newsoapcall_ds:
+    case no_new_httppost_ds:
         pos = 5;
         break;
     default:
@@ -3199,15 +3227,19 @@ IHqlExpression * queryNewColumnProvider(IHqlExpression * expr)
     case no_denormalizegroup:
     case no_parse:
     case no_soapcall:
+    case no_httppost:
     case no_httpcall:
     case no_newxmlparse:
     case no_quantile:
         return expr->queryChild(3);
     case no_newparse:
     case no_newsoapcall:            // 4 because input(2) gets transformed.
+    case no_new_httppost:
     case no_soapcall_ds:
+    case no_httppost_ds:
         return expr->queryChild(4); 
     case no_newsoapcall_ds:
+    case no_new_httppost_ds:
         return expr->queryChild(5);
     default:
         return NULL;
@@ -4654,7 +4686,9 @@ switch (op)
         assertex(queryChild(0)->queryType()->getTypeCode() != type_function);
         break;
     case no_newsoapcall:
+    case no_new_httppost:
     case no_soapcall:
+    case no_httppost:
         {
             IHqlExpression * onFail = queryAttribute(onFailAtom);
             if (onFail)
@@ -6724,7 +6758,9 @@ void CHqlDataset::cacheParent()
     case no_skip:
     case no_field:
     case no_httpcall:
+    case no_httppost:
     case no_soapcall:
+    case no_new_httppost:
     case no_newsoapcall:
     case no_workunit_dataset:
     case no_getgraphresult:
@@ -11441,6 +11477,17 @@ IHqlExpression *createDataset(node_operator op, IHqlExpression *dataset, IHqlExp
     return createDataset(op, parms);
 }
 
+IHqlExpression *createDatasetFromCommaList(node_operator op, IHqlExpression *list)
+{
+    HqlExprArray parms;
+    if (list)
+    {
+        list->unwindList(parms, no_comma);
+        list->Release();
+    }
+    return createDataset(op, parms);
+}
+
 IHqlExpression *createDataset(node_operator op, IHqlExpression *dataset)
 {
     HqlExprArray parms;
@@ -12637,6 +12684,7 @@ extern IHqlExpression *createRow(node_operator op, HqlExprArray & args)
     switch (op)
     {
     case no_soapcall:
+    case no_httppost:
     case no_quantile:
         {
             IHqlExpression & record = args.item(3);
@@ -12644,13 +12692,16 @@ extern IHqlExpression *createRow(node_operator op, HqlExprArray & args)
             break;
         }
     case no_soapcall_ds:
+    case no_httppost_ds:
     case no_newsoapcall:
+    case no_new_httppost:
         {
             IHqlExpression & record = args.item(4);
             type = makeRowType(record.getType());
             break;
         }
     case no_newsoapcall_ds:
+    case no_new_httppost_ds:
         {
             IHqlExpression & record = args.item(5);
             type = makeRowType(record.getType());

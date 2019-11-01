@@ -634,7 +634,7 @@ IColumnProvider * CreateColumnProvider(unsigned _callLatencyMs, bool _encoding)
 //=================================================================================================
 
 
-enum WSCType{STsoap, SThttp} ;  //web service call type
+enum WSCType{STsoap, SThttp, STjson, STxml} ;  //web service call type
 
 //Web Services Call Asynchronous For
 interface IWSCAsyncFor: public IInterface
@@ -1340,6 +1340,16 @@ IWSCHelper * createSoapCallHelper(IWSCRowProvider *r, IEngineRowAllocator * outp
 IWSCHelper * createHttpCallHelper(IWSCRowProvider *r, IEngineRowAllocator * outputAllocator, const char *authToken, WSCMode wscMode, ClientCertificate *clientCert, const IContextLogger &logctx, IRoxieAbortMonitor * roxieAbortMonitor)
 {
     return new CWSCHelper(r, outputAllocator, authToken, wscMode, clientCert, logctx, roxieAbortMonitor, SThttp);
+}
+
+IWSCHelper * createHttpJsonHelper(IWSCRowProvider *r, IEngineRowAllocator * outputAllocator, const char *authToken, WSCMode wscMode, ClientCertificate *clientCert, const IContextLogger &logctx, IRoxieAbortMonitor * roxieAbortMonitor)
+{
+    return new CWSCHelper(r, outputAllocator, authToken, wscMode, clientCert, logctx, roxieAbortMonitor, STjson);
+}
+
+IWSCHelper * createHttpXmlHelper(IWSCRowProvider *r, IEngineRowAllocator * outputAllocator, const char *authToken, WSCMode wscMode, ClientCertificate *clientCert, const IContextLogger &logctx, IRoxieAbortMonitor * roxieAbortMonitor)
+{
+    return new CWSCHelper(r, outputAllocator, authToken, wscMode, clientCert, logctx, roxieAbortMonitor, STxml);
 }
 
 //=================================================================================================

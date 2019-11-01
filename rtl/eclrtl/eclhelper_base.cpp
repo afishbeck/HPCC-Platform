@@ -614,6 +614,8 @@ IXmlToRowTransformer * CThorSoapActionArg::queryInputTransformer() { return NULL
 const char * CThorSoapActionArg::getInputIteratorPath() { return NULL; }
 size32_t CThorSoapActionArg::onFailTransform(ARowBuilder & rowBuilder, const void * left, IException * e) { return 0; }
 void CThorSoapActionArg::getLogText(size32_t & lenText, char * & text, const void * left) { lenText =0; text = NULL; }
+unsigned CThorSoapActionArg::getRequestFlags() {return 0;}
+const char * CThorSoapActionArg::getRequestInputPath() {return nullptr;}
 
 //CThorSoapCallArg
 
@@ -636,6 +638,9 @@ const char * CThorSoapCallArg::getProxyAddress() { return NULL; }
 const char * CThorSoapCallArg::getAcceptType() { return NULL; }
 IXmlToRowTransformer * CThorSoapCallArg::queryInputTransformer() { return NULL; }
 const char * CThorSoapCallArg::getInputIteratorPath() { return NULL; }
+unsigned CThorSoapCallArg::getRequestFlags() {return 0;}
+const char * CThorSoapCallArg::getRequestInputPath() {return nullptr;}
+
 size32_t CThorSoapCallArg::onFailTransform(ARowBuilder & rowBuilder, const void * left, IException * e) { return 0; }
 void CThorSoapCallArg::getLogText(size32_t & lenText, char * & text, const void * left) { lenText =0; text = NULL; }
 
