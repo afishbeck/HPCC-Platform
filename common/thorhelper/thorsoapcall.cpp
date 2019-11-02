@@ -740,9 +740,11 @@ class CWSCHelperThread : public Thread
 private:
     CWSCHelper * master;
     virtual void outputXmlRows(CommonXmlWriter &xmlWriter, ConstPointerArray &inputRows, const char *itemtag=NULL, bool encode_off=false, char const * itemns = NULL);
+    virtual void outputJsonRows(CommonXmlWriter &xmlWriter, ConstPointerArray &inputRows);
     virtual void createESPQuery(CommonXmlWriter &xmlWriter, ConstPointerArray &inputRows);
     virtual void createSOAPliteralOrEncodedQuery(CommonXmlWriter &xmlWriter, ConstPointerArray &inputRows);
     virtual void createXmlSoapQuery(CommonXmlWriter &xmlWriter, ConstPointerArray &inputRows);
+    virtual void createJsonQuery(CommonXmlWriter &xmlWriter, ConstPointerArray &inputRows);
     virtual void processQuery(ConstPointerArray &inputRows);
     
     //Thread
@@ -775,6 +777,8 @@ private:
     CTimeMon timeLimitMon;
     bool complete, timeLimitExceeded;
     IRoxieAbortMonitor * roxieAbortMonitor;
+    bool isHttpPost = false;
+    unsigned reqFlags = 0;
 
 protected:
     CIArrayOf<CWSCHelperThread> threads;
@@ -795,7 +799,15 @@ public:
         helper = rowProvider->queryActionHelper();
         callHelper = rowProvider->queryCallHelper();
         flags = helper->getFlags();
+
         OwnedRoxieString s;
+
+        isHttpPost = (flags & SOAPFhttppost) != 0;
+        if (isHttpPost)
+        {
+            reqFlags = helper->getRequestFlags();
+            reqPath.set(s.setown(helper->getRequestInputPath()));
+        }
 
         authToken.append(_authToken);
 
@@ -885,7 +897,7 @@ public:
         {
             service.toUpperCase();  //GET/PUT/POST
             if (strcmp(service.str(), "GET"))
-                throw MakeStringException(0, "HTTPCALL Only 'GET' http method currently supported");
+                throw MakeStringException(0, "HTTPCALL Only 'GET' http method currently explicitly supported");
             OwnedRoxieString acceptTypeSupplied(helper->getAcceptType()); // text/html, text/xml, etc
             acceptType.set(acceptTypeSupplied);
             acceptType.trim();
@@ -1121,6 +1133,7 @@ protected:
     StringAttr header;
     StringAttr footer;
     StringAttr xmlnamespace;
+    StringAttr reqPath;
     IXmlToRowTransformer * rowTransformer;
 };
 
@@ -1164,6 +1177,23 @@ void CWSCHelperThread::outputXmlRows(CommonXmlWriter &xmlWriter, ConstPointerArr
             xmlWriter.outputQuoted(itemtag);
             xmlWriter.outputQuoted(">");
         }
+
+        master->addUserLogMsg((const byte *)inputRows.item(idx));
+    }
+}
+
+void CWSCHelperThread::outputJsonRows(CommonXmlWriter &xmlWriter, ConstPointerArray &inputRows)
+{
+    ForEachItemIn(idx, inputRows)
+    {
+        if (master->header.get())   //OPTIONAL HEADER (specified by "HEADING" option)
+            xmlWriter.outputQuoted(master->header.get());
+
+                                    //JSON ROW CONTENT
+        master->toXML((const byte *)inputRows.item(idx), xmlWriter);
+
+        if (master->footer.get())   //OPTION FOOTER
+            xmlWriter.outputQuoted(master->footer.get());
 
         master->addUserLogMsg((const byte *)inputRows.item(idx));
     }
@@ -1255,6 +1285,17 @@ void CWSCHelperThread::createXmlSoapQuery(CommonXmlWriter &xmlWriter, ConstPoint
     xmlWriter.outputQuoted("</soap:Body></soap:Envelope>");
 }
 
+void CWSCHelperThread::createJsonQuery(CommonXmlWriter &xmlWriter, ConstPointerArray &inputRows)
+{
+    if (inputRows.ordinality() > 1)
+        xmlWriter.outputBeginArray("");
+
+    outputJsonRows(xmlWriter, inputRows);
+
+    if (inputRows.ordinality() > 1)
+        xmlWriter.outputEndArray("");
+}
+
 void CWSCHelperThread::processQuery(ConstPointerArray &inputRows)
 {
     unsigned xmlWriteFlags = 0;
@@ -1340,16 +1381,6 @@ IWSCHelper * createSoapCallHelper(IWSCRowProvider *r, IEngineRowAllocator * outp
 IWSCHelper * createHttpCallHelper(IWSCRowProvider *r, IEngineRowAllocator * outputAllocator, const char *authToken, WSCMode wscMode, ClientCertificate *clientCert, const IContextLogger &logctx, IRoxieAbortMonitor * roxieAbortMonitor)
 {
     return new CWSCHelper(r, outputAllocator, authToken, wscMode, clientCert, logctx, roxieAbortMonitor, SThttp);
-}
-
-IWSCHelper * createHttpJsonHelper(IWSCRowProvider *r, IEngineRowAllocator * outputAllocator, const char *authToken, WSCMode wscMode, ClientCertificate *clientCert, const IContextLogger &logctx, IRoxieAbortMonitor * roxieAbortMonitor)
-{
-    return new CWSCHelper(r, outputAllocator, authToken, wscMode, clientCert, logctx, roxieAbortMonitor, STjson);
-}
-
-IWSCHelper * createHttpXmlHelper(IWSCRowProvider *r, IEngineRowAllocator * outputAllocator, const char *authToken, WSCMode wscMode, ClientCertificate *clientCert, const IContextLogger &logctx, IRoxieAbortMonitor * roxieAbortMonitor)
-{
-    return new CWSCHelper(r, outputAllocator, authToken, wscMode, clientCert, logctx, roxieAbortMonitor, STxml);
 }
 
 //=================================================================================================
