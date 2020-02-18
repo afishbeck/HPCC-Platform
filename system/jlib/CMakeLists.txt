@@ -42,6 +42,11 @@ if(NOT TARGET libbase58)
   add_subdirectory(${HPCC_SOURCE_DIR}/system/libbase58 ${CMAKE_BINARY_DIR}/system/libbase58)
 endif(NOT TARGET libbase58)
 
+if(NOT TARGET libyaml)
+  set(BUILD_SHARED_LIBS ON)
+  add_subdirectory(${HPCC_SOURCE_DIR}/system/libyaml ${CMAKE_BINARY_DIR}/system/libyaml)
+endif(NOT TARGET libyaml)
+
 if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_CLANG)
   SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-switch -Wno-unused-parameter -Werror -Wno-error=delete-non-virtual-dtor")
 endif()
@@ -193,6 +198,7 @@ include_directories (
          ${HPCC_SOURCE_DIR}/system/lz4_sm/lz4/lib
          ${HPCC_SOURCE_DIR}/system/globalid
          ${HPCC_SOURCE_DIR}/system/security/cryptohelper
+         ${HPCC_SOURCE_DIR}/system/libyaml/include
          ${CMAKE_CURRENT_BINARY_DIR}  # for generated jelog.h file 
          ${CMAKE_BINARY_DIR}
          ${CMAKE_BINARY_DIR}/oss
@@ -205,6 +211,7 @@ target_link_libraries ( jlib
         lzma
         lz4
         libbase58
+        yaml
        )
 
 if ( ${HAVE_LIBDL} )

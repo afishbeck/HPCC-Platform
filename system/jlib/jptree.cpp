@@ -24,6 +24,7 @@
 #include "jlzw.hpp"
 #include "jregexp.hpp"
 #include "jstring.hpp"
+#include "yaml.h"
 
 #ifdef __APPLE__
 #include <crt_externs.h>
@@ -7732,10 +7733,7 @@ static IPropertyTree * loadConfiguration(const char * filename, const char * com
     const char * ext = pathExtension(filename);
     Owned<IPropertyTree> configTree;
     if (strieq(ext, ".yaml"))
-    {
-        throw makeStringExceptionV(99, "YAML Configuration file %s not yet supported", filename);
-        //MORE: Translate Tags to attributes if they start with a lower case letter
-    }
+        configTree.setown(createPTreeFromYAMLFile(filename, 0, ptr_ignoreWhiteSpace, nullptr));
     else if (strieq(ext, ".json"))
     {
         configTree.setown(createPTreeFromJSONFile(filename, 0, ptr_ignoreWhiteSpace, nullptr));
@@ -7804,7 +7802,7 @@ IPropertyTree * createPTreeFromYAML(const char * yaml)
     if (*yaml == '{')
         return createPTreeFromJSONString(yaml, 0, ptr_ignoreWhiteSpace, nullptr);
 
-    throw makeStringExceptionV(99, "Someone needs to implement a YAML parser");
+    return createPTreeFromYAMLString(yaml, 0, ptr_ignoreWhiteSpace, nullptr);
 }
 
 static const char * extractOption(const char * option, const char * cur)
@@ -7881,11 +7879,13 @@ jlib_decl IPropertyTree * loadConfiguration(const char * defaultYaml, const char
         componentDefault.set(defaultConfig->queryPropTree(componentTag));
         if (!componentDefault)
             throw makeStringExceptionV(99, "Default configuration does not contain the tag %s", componentTag);
+        if (*defaultYaml=='{')
+            componentDefault.setown(mapJsonToXmlConfig(componentDefault));
     }
     else
         componentDefault.setown(createPTree(componentTag));
 
-    Owned<IPropertyTree> config(mapJsonToXmlConfig(componentDefault));
+    Owned<IPropertyTree> config(componentDefault);
     const char * optConfig = nullptr;
     bool outputConfig = false;
     for (const char * * pArg = argv; *pArg; pArg++)
@@ -7960,4 +7960,373 @@ jlib_decl IPropertyTree * loadConfiguration(const char * defaultYaml, const char
     }
 
     return config.getClear();
+}
+
+
+/*
+int main(int argc, char *argv[])
+{
+
+    FILE *input;
+    yaml_parser_t parser;
+    yaml_event_t event;
+
+    if (argc == 1)
+        input = stdin;
+    else if (argc == 2)
+        input = fopen(argv[1], "rb");
+    else {
+        fprintf(stderr, "Usage: libyaml-parser [<input-file>]\n");
+        return 1;
+    }
+    assert(input);
+
+    if (!yaml_parser_initialize(&parser))
+        throw makeStringException(99, "Filed to initialize libyaml parser");
+
+    yaml_parser_set_input_string(&parser, input);
+
+    while (1) {
+        yaml_event_type_t type;
+        if (!yaml_parser_parse(&parser, &event)) {
+            fprintf(stderr, "Parse error: %s\n", parser.problem);
+            return 1;
+        }
+        type = event.type;
+
+        if (type == YAML_NO_EVENT)
+            printf("???\n");
+        else if (type == YAML_STREAM_START_EVENT)
+            printf("+STR\n");
+        else if (type == YAML_STREAM_END_EVENT)
+            printf("-STR\n");
+        else if (type == YAML_DOCUMENT_START_EVENT) {
+            printf("+DOC");
+            if (!event.data.document_start.implicit)
+                printf(" ---");
+            printf("\n");
+        }
+        else if (type == YAML_DOCUMENT_END_EVENT) {
+            printf("-DOC");
+            if (!event.data.document_end.implicit)
+                printf(" ...");
+            printf("\n");
+        }
+        else if (type == YAML_MAPPING_START_EVENT) {
+            printf("+MAP");
+            if (event.data.mapping_start.anchor)
+                printf(" &%s", event.data.mapping_start.anchor);
+            if (event.data.mapping_start.tag)
+                printf(" <%s>", event.data.mapping_start.tag);
+            printf("\n");
+        }
+        else if (type == YAML_MAPPING_END_EVENT)
+            printf("-MAP\n");
+        else if (type == YAML_SEQUENCE_START_EVENT) {
+            printf("+SEQ");
+            if (event.data.sequence_start.anchor)
+                printf(" &%s", event.data.sequence_start.anchor);
+            if (event.data.sequence_start.tag)
+                printf(" <%s>", event.data.sequence_start.tag);
+            printf("\n");
+        }
+        else if (type == YAML_SEQUENCE_END_EVENT)
+            printf("-SEQ\n");
+        else if (type == YAML_SCALAR_EVENT) {
+            printf("=VAL");
+            if (event.data.scalar.anchor)
+                printf(" &%s", event.data.scalar.anchor);
+            if (event.data.scalar.tag)
+                printf(" <%s>", event.data.scalar.tag);
+            switch (event.data.scalar.style) {
+            case YAML_PLAIN_SCALAR_STYLE:
+                printf(" :");
+                break;
+            case YAML_SINGLE_QUOTED_SCALAR_STYLE:
+                printf(" '");
+                break;
+            case YAML_DOUBLE_QUOTED_SCALAR_STYLE:
+                printf(" \"");
+                break;
+            case YAML_LITERAL_SCALAR_STYLE:
+                printf(" |");
+                break;
+            case YAML_FOLDED_SCALAR_STYLE:
+                printf(" >");
+                break;
+            case YAML_ANY_SCALAR_STYLE:
+                abort();
+            }
+            print_escaped(event.data.scalar.value, event.data.scalar.length);
+            printf("\n");
+        }
+        else if (type == YAML_ALIAS_EVENT)
+            printf("=ALI *%s\n", event.data.alias.anchor);
+        else
+            abort();
+
+        yaml_event_delete(&event);
+
+        if (type == YAML_STREAM_END_EVENT)
+            break;
+    }
+
+    assert(!fclose(input));
+    yaml_parser_delete(&parser);
+    fflush(stdout);
+
+    return 0;
+}
+*/
+
+class CYAMLBufferReader : public CInterfaceOf<IPTreeReader>
+{
+protected:
+    Linked<IPTreeNotifyEvent> iEvent;
+    yaml_parser_t parser;
+    StringAttr rootTag;
+    PTreeReaderOptions readerOptions = ptr_none;
+    bool noRoot = false;
+
+public:
+    CYAMLBufferReader(const void *buf, size32_t bufLength, IPTreeNotifyEvent &_iEvent, PTreeReaderOptions _readerOptions) :
+        iEvent(&_iEvent), readerOptions(_readerOptions)
+    {
+        if (!yaml_parser_initialize(&parser))
+            throw makeStringException(99, "Filed to initialize libyaml parser");
+        yaml_parser_set_input_string(&parser, (const unsigned char *)buf, bufLength);
+        noRoot = 0 != ((unsigned)readerOptions & (unsigned)ptr_noRoot);
+        if (!noRoot)
+            rootTag.set("_object_"); //may support _array_ option later
+    }
+    ~CYAMLBufferReader()
+    {
+        yaml_parser_delete(&parser);
+    }
+
+    yaml_event_type_t nextEvent(yaml_event_t &event, yaml_event_type_t final=YAML_NO_EVENT, yaml_event_type_t expected=YAML_NO_EVENT, const char *error="")
+    {
+        if (!yaml_parser_parse(&parser, &event))
+            throw makeStringExceptionV(99, "libyaml parser error %s", parser.problem);
+        if (event.type!=final && expected!=YAML_NO_EVENT && event.type!=expected)
+            throw makeStringExceptionV(99, "libyaml parser %s", error);
+        return event.type;
+    }
+
+    virtual void loadSequence(const char *tagname)
+    {
+        if (!tagname || !*tagname) //if unmapped (unnamed) sequences are possible have to decide how to name them in the ptree, later
+            throw makeStringException(99, "libyaml parser expected sequence name");
+
+        yaml_event_t event;
+        yaml_event_type_t eventType = YAML_NO_EVENT;
+
+        while (eventType!=YAML_SEQUENCE_END_EVENT)
+        {
+            eventType = nextEvent(event);
+
+            switch (eventType)
+            {
+            case YAML_MAPPING_START_EVENT: //child map
+                loadMap(tagname);
+                break;
+            case YAML_SEQUENCE_START_EVENT:
+                //todo
+                break;
+            case YAML_SCALAR_EVENT:
+                iEvent->beginNode(tagname, parser.offset);
+                iEvent->endNode(tagname, event.data.scalar.length, (const void *)event.data.scalar.value, false, parser.offset);
+                break;
+            case YAML_ALIAS_EVENT: //reference to an anchor, ignore for now
+                iEvent->beginNode(tagname, parser.offset);
+                iEvent->endNode(tagname, 0, nullptr, false, parser.offset);
+                break;
+            case YAML_SEQUENCE_END_EVENT: //done
+                break;
+            case YAML_NO_EVENT:
+            case YAML_MAPPING_END_EVENT:
+            case YAML_STREAM_START_EVENT:
+            case YAML_STREAM_END_EVENT:
+            case YAML_DOCUMENT_START_EVENT:
+            case YAML_DOCUMENT_END_EVENT:
+            default:
+                //shouldn't be here
+                break;
+            }
+
+            yaml_event_delete(&event);
+        }
+    }
+    virtual void loadMap(const char *tagname)
+    {
+        StringBuffer content;
+        if (tagname && *tagname)
+            iEvent->beginNode(tagname, parser.offset);
+
+        yaml_event_t event;
+        yaml_event_type_t eventType = YAML_NO_EVENT;
+
+        while (eventType!=YAML_MAPPING_END_EVENT)
+        {
+            eventType = nextEvent(event, YAML_MAPPING_END_EVENT, YAML_SCALAR_EVENT, "expected map to start with scalar name");
+            if (eventType==YAML_MAPPING_END_EVENT)
+                continue;
+            StringBuffer name(event.data.scalar.length, (const char *)event.data.scalar.value);
+            yaml_event_delete(&event);
+
+            eventType = nextEvent(event);
+
+            switch (eventType)
+            {
+            case YAML_MAPPING_START_EVENT: //child map
+                loadMap(name.str());
+                break;
+            case YAML_SEQUENCE_START_EVENT:
+                loadSequence(name);
+                break;
+            case YAML_SCALAR_EVENT:
+                if (streq(name, "#text"))
+                    content.append(event.data.scalar.length, (const char *) event.data.scalar.value);
+                else if (islower(*name.str()))
+                {
+                    name.insert(0, '@');
+                    StringAttr value((const char *) event.data.scalar.value, event.data.scalar.length);
+                    iEvent->newAttribute(name, value);
+                }
+                else
+                {
+                    iEvent->beginNode(name.str(), parser.offset);
+                    iEvent->endNode(name.str(), event.data.scalar.length, (const void *) event.data.scalar.value, false, parser.offset);
+                }
+                break;
+            case YAML_ALIAS_EVENT: //reference to an anchor, ignore for now
+                iEvent->beginNode(name.str(), parser.offset);
+                iEvent->endNode(name.str(), 0, nullptr, false, parser.offset);
+                break;
+            case YAML_MAPPING_END_EVENT: //done
+                break;
+            case YAML_NO_EVENT:
+            case YAML_SEQUENCE_END_EVENT:
+            case YAML_STREAM_START_EVENT:
+            case YAML_STREAM_END_EVENT:
+            case YAML_DOCUMENT_START_EVENT:
+            case YAML_DOCUMENT_END_EVENT:
+            default:
+                //shouldn't be here
+                break;
+            }
+
+            yaml_event_delete(&event);
+        }
+        if (tagname && *tagname)
+            iEvent->endNode(tagname, content.length(), content, false, parser.offset);
+    }
+    virtual void load() override
+    {
+        yaml_event_t event;
+        yaml_event_type_t eventType = YAML_NO_EVENT;
+        bool doc = false;
+        bool content = false;
+
+        while (eventType!=YAML_STREAM_END_EVENT)
+        {
+            eventType = nextEvent(event);
+
+            switch (eventType)
+            {
+            case YAML_MAPPING_START_EVENT:
+                //root content, the start of all mappings, should be only one at the root
+                if (content)
+                    throw makeStringException(99, "YAML: Currently only support one content section (map) per stream");
+                loadMap(rootTag); //root map
+                content=true;
+                break;
+            case YAML_SEQUENCE_START_EVENT:
+                //root content, sequence (array), should be only one at the root and can't mix with mappings
+                if (content)
+                    throw makeStringException(99, "YAML: Currently only support one content section (sequence) per stream");
+                if (rootTag.length())
+                    iEvent->beginNode(rootTag, 0);
+                loadSequence("Row");
+                if (rootTag.length())
+                    iEvent->endNode(rootTag, 0, nullptr, false, parser.offset);
+                content=true;
+                break;
+            case YAML_STREAM_START_EVENT:
+            case YAML_STREAM_END_EVENT:
+                //don't think we need to do anything... unless we start saving hints
+                break;
+            case YAML_DOCUMENT_START_EVENT:
+                //should only support one?  multiple documents would imply an extra level of nesting (future flag?)
+                if (doc)
+                    throw makeStringException(99, "YAML: Currently only support one document per stream");
+                doc=true;
+                break;
+            case YAML_DOCUMENT_END_EVENT:
+                break;
+            case YAML_NO_EVENT:
+            case YAML_ALIAS_EVENT: //root alias?
+            case YAML_MAPPING_END_EVENT:
+            case YAML_SCALAR_EVENT: //root unmapped (unnamed) scalars?
+            case YAML_SEQUENCE_END_EVENT:
+                //shouldn't be here
+                break;
+            default:
+                break;
+            }
+
+            yaml_event_delete(&event);
+        }
+    }
+    virtual offset_t queryOffset() override
+    {
+        return parser.offset;
+    }
+
+};
+
+
+IPTreeReader *createYAMLBufferReader(const void *buf, size32_t bufLength, IPTreeNotifyEvent &iEvent, PTreeReaderOptions readerOptions)
+{
+    return new CYAMLBufferReader(buf, bufLength, iEvent, readerOptions);
+}
+
+
+IPropertyTree *createPTreeFromYAMLString(unsigned len, const char *yaml, byte flags, PTreeReaderOptions readFlags, IPTreeMaker *iMaker)
+{
+    Owned<IPTreeMaker> _iMaker;
+    if (!iMaker)
+    {
+        iMaker = createDefaultPTreeMaker(flags, readFlags);
+        _iMaker.setown(iMaker);
+    }
+    Owned<IPTreeReader> reader = createYAMLBufferReader(yaml, len, *iMaker, readFlags);
+    reader->load();
+    return LINK(iMaker->queryRoot());
+}
+
+IPropertyTree *createPTreeFromYAMLString(const char *yaml, byte flags, PTreeReaderOptions readFlags, IPTreeMaker *iMaker)
+{
+    createPTreeFromYAMLString(strlen(yaml), yaml, flags, readFlags, iMaker);
+}
+
+IPropertyTree *createPTreeFromYAMLFile(const char *filename, byte flags, PTreeReaderOptions readFlags, IPTreeMaker *iMaker)
+{
+    Owned<IFile> in = createIFile(filename);
+    if (!in->exists())
+        return nullptr;
+
+    StringBuffer contents;
+    try
+    {
+        contents.loadFile(in);
+    }
+    catch (IException * e)
+    {
+        EXCLOG(e);
+        e->Release();
+        return nullptr;
+    }
+
+    return createPTreeFromYAMLString(contents.length(), contents.str(), flags, readFlags, iMaker);
 }

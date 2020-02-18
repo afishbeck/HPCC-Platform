@@ -1657,6 +1657,10 @@ public:
     }
     virtual int processCMD()
     {
+        Owned<IPropertyTree> pt = createPTreeFromYAMLFile("cloud.yaml");
+        printXML(pt, 2, XML_Format);
+        return 0;
+
         Owned<IClientWsWorkunits> client = createCmdClient(WsWorkunits, *this);
         Owned<IClientWUQueryRequest> req = client->createWUQueryRequest();
         setCmdRequestTimeouts(req->rpc(), 0, optWaitConnectMs, optWaitReadSec);
