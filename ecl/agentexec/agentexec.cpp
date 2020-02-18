@@ -241,17 +241,16 @@ bool ControlHandler()
 
 //---------------------------------------------------------------------------------
 
-static constexpr const char * defaultJson = R"!!({
-"version": "1.0",
-"EclAgent": {
-    "analyzeWorkunit": true,
-    "daliServers": "dali",
-    "defaultMemoryLimitMB": 300,
-    "name": "myeclagent",
-    "thorConnectTimeout":600,
-    "traceLevel": 0
-}
-})!!";
+static constexpr const char * defaultYaml = R"!!(
+version: "1.0"
+EclAgent:
+    analyzeWorkunit: true
+    daliServers: dali
+    defaultMemoryLimitMB: 300
+    name: myeclagent
+    thorConnectTimeout: 600
+    traceLevel: 0
+)!!";
 
 
 int main(int argc, const char *argv[]) 
@@ -273,7 +272,7 @@ int main(int argc, const char *argv[])
     try
     {
         DBGLOG("AgentExec: Loading config file 'agentexec.xml'");
-        config.setown(loadConfiguration(defaultJson, argv, "EclAgent", "ECLAGENT", "agentexec.xml", nullptr));
+        config.setown(loadConfiguration(defaultYaml, argv, "EclAgent", "ECLAGENT", "agentexec.xml", nullptr));
     }
     catch (IException *e) 
     {
