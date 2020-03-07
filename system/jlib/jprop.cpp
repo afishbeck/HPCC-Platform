@@ -420,6 +420,34 @@ extern jlib_decl IProperties *getSystemProperties()
     return p;
 }
 
+extern jlib_decl IProperties *createHttpHeaderMap(const char *headers)
+{
+    Owned<IProperties> p = createProperties();
+    while (*headers)
+    {
+        StringBuffer prop, val;
+        while (*headers && *headers != '\r' && *headers != ':')
+            prop.append(*headers++);
+        if (*headers && *headers != '\r')
+        {
+            headers++;
+            while (isspace(*headers) && *headers != '\r')
+                headers++;
+            while (*headers && *headers != '\r')
+                val.append(*headers++);
+            prop.clip();
+            val.clip();
+            if (prop.length())
+                p->setProp(prop.str(), val.str());
+        }
+        if (*headers)
+            headers++;
+        if (*headers=='\n')
+            headers++;
+    }
+    return p.getClear();
+}
+
 MODULE_INIT(INIT_PRIORITY_JPROP)
 {
     return true;

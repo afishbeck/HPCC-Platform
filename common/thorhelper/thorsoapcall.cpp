@@ -18,6 +18,7 @@
 #include "jliball.hpp"
 #include "jqueue.tpp"
 #include "jisem.hpp"
+#include "jprop.hpp"
 
 #include "rtlformat.hpp"
 
@@ -858,7 +859,10 @@ public:
             timeLimitMS = (unsigned)(dval * 1000);
 
         if (flags & SOAPFhttpheaders)
+        {
             httpHeaders.set(s.setown(helper->getHttpHeaders()));
+            httpHeaderMap.setown(createHttpHeaderMap(helper->getHttpHeaders()));
+        }
         if (flags & SOAPFxpathhints)
         {
             s.setown(helper->getXpathHintsXml());
@@ -1140,6 +1144,7 @@ protected:
     IHThorWebServiceCallArg *   callHelper;
     Linked<IEngineRowAllocator> outputAllocator;
     Owned<IException> error;
+    Owned<IProperties> httpHeaderMap;
     UrlArray urlArray;
     UrlArray proxyUrlArray;
     unsigned numRecordsPerBatch;
@@ -1403,17 +1408,20 @@ IWSCHelper * createHttpCallHelper(IWSCRowProvider *r, IEngineRowAllocator * outp
 }
 
 //=================================================================================================
-bool httpHeaderBlockContainsHeader(const char *httpheaders, const char *header)
+inline void appendHttpHeader(StringBuffer &s, const char *name, const char *value)
 {
-    if (!httpheaders || !*httpheaders)
-        return false;
-    VStringBuffer match("\n%s:", header);
-    const char *matchStart = match.str()+1;
-    if (!strncmp(httpheaders, matchStart, strlen(matchStart)))
-        return true;
-    if (strstr(httpheaders, match))
-        return true;
-    return false;
+    if (!isEmptyString(value))
+        s.append(name).append(": ").append(value).append("\r\n");
+}
+inline bool isHeaderInHeaderMap(IProperties *httpHeaderMap, const char *name)
+{
+    return (httpHeaderMap && httpHeaderMap->hasProp(name));
+}
+void appendHttpHeaderIfNotInMap(StringBuffer &s, IProperties *httpHeaderMap, const char *name, const char *value)
+{
+    if (isHeaderInHeaderMap(httpHeaderMap, name))
+        return;
+    appendHttpHeader(s, name, value);
 }
 
 bool getHTTPHeader(const char *httpheaders, const char *header, StringBuffer& value)
@@ -1623,7 +1631,7 @@ private:
             request.append(httpheaders);
         }
 
-        if (!httpHeaderBlockContainsHeader(httpheaders, "Authorization"))
+        if (!isHeaderInHeaderMap(master->httpHeaderMap, "Authorization"))
         {
             if (url.userPasswordPair.length() > 0)
             {
@@ -1638,40 +1646,32 @@ private:
         }
 
 #ifdef _USE_ZLIB
-        if (!httpHeaderBlockContainsHeader(httpheaders, ACCEPT_ENCODING))
-            request.appendf("%s: gzip, deflate\r\n", ACCEPT_ENCODING);
+        appendHttpHeaderIfNotInMap(request, master->httpHeaderMap, ACCEPT_ENCODING, "gzip, deflate");
 #endif
         if (!isEmptyString(master->logctx.queryGlobalId()))
         {
-            request.append(master->logctx.queryGlobalIdHttpHeader()).append(": ").append(master->logctx.queryGlobalId()).append("\r\n");
-            if (!isEmptyString(master->logctx.queryLocalId()))
-                request.append(master->logctx.queryCallerIdHttpHeader()).append(": ").append(master->logctx.queryLocalId()).append("\r\n");  //our localId is reciever's callerId
+            appendHttpHeaderIfNotInMap(request, master->httpHeaderMap, master->logctx.queryGlobalIdHttpHeader(), master->logctx.queryGlobalId());
+            appendHttpHeaderIfNotInMap(request, master->httpHeaderMap, master->logctx.queryCallerIdHttpHeader(), master->logctx.queryLocalId());
         }
 
         if (master->wscType == STsoap)
         {
             if (master->soapaction.get())
-                request.append("SOAPAction: ").append(master->soapaction.get()).append("\r\n");
+                appendHttpHeaderIfNotInMap(request, master->httpHeaderMap, "SOAPAction", master->soapaction.get());
             if (master->httpHeaders.isEmpty() && master->httpHeaderName.get() && master->httpHeaderValue.get())
             {
                 //backward compatibility
-                StringBuffer hdr(master->httpHeaderName.get());
-                hdr.append(": ").append(master->httpHeaderValue);
                 if (soapTraceLevel > 6 || master->logXML)
-                    multiLog(master->logctx, "SOAPCALL: Adding HTTP Header(%s)", hdr.str());
-                request.append(hdr.append("\r\n"));
+                    multiLog(master->logctx, "SOAPCALL: Adding HTTP Header(%s: %s)", master->httpHeaderName.str(), master->httpHeaderValue.str());
+                appendHttpHeader(request, master->httpHeaderName, master->httpHeaderValue);
             }
-            if (!httpHeaderBlockContainsHeader(httpheaders, "Content-Type"))
-            {
-                bool isJson = ((master->flags & SOAPFmarkupinfo) && (master->flags & SOAPFjson));
-                if (isJson)
-                    request.append("Content-Type: application/json\r\n");
-                else
-                    request.append("Content-Type: text/xml\r\n");
-            }
+            if ((master->flags & SOAPFmarkupinfo) && (master->flags & SOAPFjson))
+                appendHttpHeaderIfNotInMap(request, master->httpHeaderMap, "Content-Type", "application/json");
+            else
+                appendHttpHeaderIfNotInMap(request, master->httpHeaderMap, "Content-Type", "text/xml");
         }
         else if(master->wscType == SThttp)
-            request.append("Accept: ").append(master->acceptType).append("\r\n");
+            appendHttpHeader(request, "Accept", master->acceptType);
         else
             assertex(false);
 

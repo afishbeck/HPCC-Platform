@@ -74,6 +74,7 @@ extern jlib_decl IProperties *createProperties(bool nocase = false);
 extern jlib_decl IProperties *createProperties(const char *filename, bool nocase = false);
 extern jlib_decl IProperties *querySystemProperties();
 extern jlib_decl IProperties *getSystemProperties();
+extern jlib_decl IProperties *createHttpHeaderMap(const char *headers);
 
 #endif
 
