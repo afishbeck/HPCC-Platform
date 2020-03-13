@@ -126,7 +126,9 @@ interface jlib_decl IPropertyTree : extends serializable
     virtual bool IsShared() const = 0;
     virtual void localizeElements(const char *xpath, bool allTail=false) = 0;
     virtual unsigned getCount(const char *xpath) = 0;
-    
+    virtual IPropertyTree *addPropTreeArrayItem(const char *xpath, IPropertyTree *val) = 0;
+    virtual bool isArray(const char *xpath=NULL) const = 0;
+
 private:
     void setProp(const char *, int); // dummy to catch accidental use of setProp when setPropInt() intended
     void addProp(const char *, int); // likewise
@@ -136,7 +138,7 @@ jlib_decl bool validateXMLTag(const char *name);
 
 interface IPTreeNotifyEvent : extends IInterface
 {
-    virtual void beginNode(const char *tag, offset_t startOffset) = 0;
+    virtual void beginNode(const char *tag, bool sequence, offset_t startOffset) = 0;
     virtual void newAttribute(const char *name, const char *value) = 0;
     virtual void beginNodeContent(const char *tag) = 0; // attributes parsed
     virtual void endNode(const char *tag, unsigned length, const void *value, bool binary, offset_t endOffset) = 0;

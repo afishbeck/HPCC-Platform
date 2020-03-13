@@ -1580,7 +1580,83 @@ IPropertyTree *PTree::setPropTree(const char *xpath, IPropertyTree *val)
     }
 }
 
-IPropertyTree *PTree::addPropTree(const char *xpath, IPropertyTree *val)
+bool PTree::isArray(const char *xpath) const
+{
+    if (!xpath) //item in an array child of parent? I don't think callers ever access array container directly
+        return (parent && parent->isArray(queryName()));
+    else if (isAttribute(xpath))
+        return false;
+    else
+    {
+        StringBuffer path;
+        const char *prop = splitXPath(xpath, path);
+        assertex(prop);
+        if (!isAttribute(prop))
+        {
+            if (path.length())
+            {
+                Owned<IPropertyTreeIterator> iter = getElements(path.str());
+                if (!iter->first())
+                    return false;
+                IPropertyTree &branch = iter->query();
+                if (iter->next())
+                    AMBIGUOUS_PATH("isArray", xpath);
+                return branch.isArray(prop);
+            }
+            else
+            {
+                IPropertyTree *child = children->query(xpath);
+                if (child)
+                {
+                    PTree *tree = static_cast<PTree *>(child);
+                    return (tree && tree->value && tree->value->isArray());
+                }
+            }
+        }
+    }
+    return false;
+}
+
+void PTree::addPTreeArrayItem(IPropertyTree *existing, const char *xpath, PTree *val, aindex_t pos)
+{
+    IPropertyTree *iptval = static_cast<IPropertyTree *>(val);
+    PTree *tree = nullptr;
+    val->setParent(this);
+    if (existing)
+    {
+        dbgassertex(QUERYINTERFACE(existing, PTree));
+        tree = static_cast<PTree *>(existing);
+        if (tree->value && tree->value->isArray())
+        {
+            if ((aindex_t) -1 == pos)
+                tree->value->addElement(iptval);
+            else
+                tree->value->setElement(pos, iptval);
+            return;
+        }
+    }
+
+    IPTArrayValue *array = new CPTArray();
+    IPropertyTree *container = create(xpath, array);
+    if (existing)
+    {
+        array->addElement(LINK(existing));
+        assertex((aindex_t) -1 == pos || 0 == pos);
+        if ((aindex_t) -1 == pos)
+            array->addElement(iptval);
+        else
+            array->setElement(0, iptval);
+        tree->setParent(this);
+        children->replace(xpath, container);
+    }
+    else
+    {
+        array->addElement(iptval);
+        children->set(xpath, container);
+    }
+}
+
+IPropertyTree *PTree::addPropTree(const char *xpath, IPropertyTree *val, bool alwaysUseArray)
 {
     if (!xpath || '\0' == *xpath)
         throw MakeIPTException(PTreeExcpt_InvalidTagName, "Invalid xpath for property tree insertion specified");
@@ -1608,26 +1684,16 @@ IPropertyTree *PTree::addPropTree(const char *xpath, IPropertyTree *val)
                     IPropertyTree *child = children->query(xpath);
                     if (child)
                     {
-                        __val->setParent(this);
-                        dbgassertex(QUERYINTERFACE(child, PTree));
-                        PTree *tree = static_cast<PTree *>(child);
-                        if (tree->value && tree->value->isArray())
-                            tree->value->addElement(_val);
-                        else
-                        {
-                            IPTArrayValue *array = new CPTArray();
-                            array->addElement(LINK(child));
-                            array->addElement(_val);
-                            IPropertyTree *container = create(xpath, array);
-                            tree->setParent(this);
-                            children->replace(xpath, container);
-                        }
+                        addPTreeArrayItem(child, xpath, __val);
                         return _val;
                     }
                 }
                 else
                     createChildMap();
-                children->set(xpath, _val);
+                if (alwaysUseArray)
+                    addPTreeArrayItem(nullptr, xpath, __val);
+                else
+                    children->set(xpath, _val);
                 return _val;
             }
             if ('/' == *x || '[' == *x)
@@ -1654,38 +1720,30 @@ IPropertyTree *PTree::addPropTree(const char *xpath, IPropertyTree *val)
             addingNewElement(*_val, pos);
             if (child)
             {
-                __val->setParent(this);
-                dbgassertex(QUERYINTERFACE(child, PTree));
-                PTree *tree = static_cast<PTree *>(child);
-                if (tree->value && tree->value->isArray())
-                {
-                    if ((aindex_t) -1 == pos)
-                        tree->value->addElement(_val);
-                    else
-                        tree->value->setElement(pos, _val);
-                }
-                else
-                {
-                    IPTArrayValue *array = new CPTArray();
-                    array->addElement(LINK(child));
-                    assertex((aindex_t) -1 == pos || 0 == pos);
-                    if ((aindex_t) -1 == pos)
-                        array->addElement(_val);
-                    else
-                        array->setElement(0, _val);
-                    IPropertyTree *container = create(path, array);
-                    tree->setParent(this);
-                    children->replace(path, container);         
-                }
+                addPTreeArrayItem(child, path, __val, pos);
             }
             else
             {
                 if (!checkChildren()) createChildMap();
+                if (alwaysUseArray)
+                    addPTreeArrayItem(nullptr, path, __val);
+                else
+                    children->set(path, _val);
                 children->set(path, _val);
             }
             return _val;
         }
     }
+}
+
+IPropertyTree *PTree::addPropTree(const char *xpath, IPropertyTree *val)
+{
+    return addPropTree(xpath, val, false);
+}
+
+IPropertyTree *PTree::addPropTreeArrayItem(const char *xpath, IPropertyTree *val)
+{
+    return addPropTree(xpath, val, true);
 }
 
 bool PTree::removeTree(IPropertyTree *child)
@@ -4664,7 +4722,7 @@ restart:
             if ((colon = strchr(tagName.str(), ':')) != NULL)
                 tagName.remove(0, (size32_t)(colon - tagName.str() + 1));
         }
-        iEvent->beginNode(tagName.str(), startOffset);
+        iEvent->beginNode(tagName.str(), false, startOffset);
         skipWS();
         bool endTag = false;
         bool base64 = false;
@@ -4979,7 +5037,7 @@ public:
                 endOfRoot = false;
                 try
                 {
-                    iEvent->beginNode(stateInfo->wnsTag, startOffset);
+                    iEvent->beginNode(stateInfo->wnsTag, false, startOffset);
                 }
                 catch (IPTreeException *pe)
                 {
@@ -6727,7 +6785,7 @@ public:
             }
         }
 
-        iEvent->beginNode(name, startOffset);
+        iEvent->beginNode(name, false, startOffset);
         iEvent->beginNodeContent(name);
         iEvent->endNode(name, value.length(), value.str(), false, curOffset);
     }
@@ -6742,7 +6800,7 @@ public:
             switch (nextChar)
             {
             case '[':
-                iEvent->beginNode(name, curOffset);
+                iEvent->beginNode(name, true, curOffset);
                 iEvent->beginNodeContent(name);
                 readArray(name);
                 iEvent->endNode(name, 0, "", false, curOffset);
@@ -6790,7 +6848,7 @@ public:
     {
         if ('@'==*name)
             name++;
-        iEvent->beginNode(name, curOffset);
+        iEvent->beginNode(name, false, curOffset);
         readNext();
         skipWS();
         bool attributesFinalized=false;
@@ -6839,7 +6897,7 @@ public:
                     readObject("__object__");
                     break;
                 case '[':  //treat unnamed arrays like we're in a noroot array
-                    iEvent->beginNode("__array__", curOffset);
+                    iEvent->beginNode("__array__", false, curOffset);
                     readArray("__item__");
                     iEvent->endNode("__array__", 0, "", false, curOffset);
                     break;
@@ -6869,7 +6927,7 @@ public:
                 readObject("__object__");
             else if ('[' == nextChar)
             {
-                iEvent->beginNode("__array__", curOffset);
+                iEvent->beginNode("__array__", false, curOffset);
                 readArray("__item__");
                 iEvent->endNode("__array__", 0, "", false, curOffset);
             }
@@ -7025,7 +7083,7 @@ public:
             return;
         try
         {
-            iEvent->beginNode(stateInfo->wnsTag, offset);
+            iEvent->beginNode(stateInfo->wnsTag, false, offset); //TONY
         }
         catch (IPTreeException *pe)
         {
@@ -7997,11 +8055,11 @@ public:
                 //todo
                 break;
             case YAML_SCALAR_EVENT:
-                iEvent->beginNode(tagname, parser.offset);
+                iEvent->beginNode(tagname, true, parser.offset);
                 iEvent->endNode(tagname, event.data.scalar.length, (const void *)event.data.scalar.value, false, parser.offset);
                 break;
             case YAML_ALIAS_EVENT: //reference to an anchor, ignore for now
-                iEvent->beginNode(tagname, parser.offset);
+                iEvent->beginNode(tagname, true, parser.offset);
                 iEvent->endNode(tagname, 0, nullptr, false, parser.offset);
                 break;
             case YAML_SEQUENCE_END_EVENT: //done
@@ -8025,7 +8083,7 @@ public:
         bool binaryContent = false;
         StringBuffer content;
         if (tagname && *tagname)
-            iEvent->beginNode(tagname, parser.offset);
+            iEvent->beginNode(tagname, false, parser.offset);
 
         yaml_event_t event;
         yaml_event_type_t eventType = YAML_NO_EVENT;
@@ -8069,7 +8127,7 @@ public:
                     {
                         StringBuffer decoded;
                         JBASE64_Decode((const char *) event.data.scalar.value, decoded);
-                        iEvent->beginNode(elname, parser.offset);
+                        iEvent->beginNode(elname, false, parser.offset);
                         iEvent->endNode(elname, decoded.length(), (const void *) decoded.str(), true, parser.offset);
                     }
                 }
@@ -8079,7 +8137,7 @@ public:
                         content.set((const char *) event.data.scalar.value);
                     else
                     {
-                        iEvent->beginNode(elname, parser.offset);
+                        iEvent->beginNode(elname, false, parser.offset);
                         iEvent->endNode(elname, event.data.scalar.length, (const void *) event.data.scalar.value, false, parser.offset);
                     }
                 }
@@ -8090,7 +8148,7 @@ public:
                 break;
             }
             case YAML_ALIAS_EVENT: //reference to an anchor, ignore for now
-                iEvent->beginNode(elname, parser.offset);
+                iEvent->beginNode(elname, false, parser.offset);
                 iEvent->endNode(elname, 0, nullptr, false, parser.offset);
                 break;
             case YAML_MAPPING_END_EVENT: //done
@@ -8136,7 +8194,7 @@ public:
                 if (content)
                     throw makeStringException(99, "YAML: Currently only support one content section (sequence) per stream");
                 if (!noRoot)
-                    iEvent->beginNode("__array__", 0);
+                    iEvent->beginNode("__array__", false, 0);
                 loadSequence("__item__");
                 if (!noRoot)
                     iEvent->endNode("__array__", 0, nullptr, false, parser.offset);
@@ -8408,34 +8466,30 @@ static void _toYAML(const IPropertyTree *tree, YAMLEmitter &yaml, byte flags, bo
     //note that detection of repeating elements relies on the fact that ptree elements
     //of the same name will be grouped together
     bool repeatingElement = false;
+    StringBuffer arrayName;
     sub->first();
     while(sub->isValid())
     {
         Linked<IPropertyTree> element = &sub->query();
         const char *name = element->queryName();
-        sub->next();
-        if (!repeatingElement)
+        if (!streq(arrayName, name))
         {
-            if (hiddenRootArrayObject)
+            if (repeatingElement)
+                yaml.endSequence();
+            repeatingElement = element->isArray(nullptr);
+            if (!repeatingElement)
+                arrayName.clear();
+            else
             {
-                yaml.beginSequence(nullptr);
-                repeatingElement = true;
-            }
-            else if (sub->isValid() && streq(name, sub->query().queryName()))
-            {
-                yaml.beginSequence(name);
-                repeatingElement = true;
+                arrayName.set(name);
+                yaml.beginSequence(hiddenRootArrayObject ? nullptr : name);
             }
         }
 
         _toYAML(element, yaml, flags, false, repeatingElement);
-
-        if (repeatingElement && (!sub->isValid() || !streq(name, sub->query().queryName())))
-        {
-            yaml.endSequence();
-            repeatingElement = false;
-        }
     }
+    if (repeatingElement)
+        yaml.endSequence();
 
     if (!isNull)
     {

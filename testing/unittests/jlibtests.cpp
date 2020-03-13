@@ -1224,9 +1224,21 @@ class JlibIPTTest : public CppUnit::TestFixture
         CPPUNIT_TEST(test);
         CPPUNIT_TEST(testMarkup);
         CPPUNIT_TEST(testRootArrayMarkup);
+        CPPUNIT_TEST(testOneItemArrayMarkup);
     CPPUNIT_TEST_SUITE_END();
 
 public:
+    void testOneItemArrayMarkup()
+    {
+        static constexpr const char * yamlMarkup = R"!!(a:
+  b: [valx]
+)!!";
+
+        Owned<IPropertyTree> yaml = createPTreeFromYAMLString(yamlMarkup, ipt_none, ptr_ignoreWhiteSpace, nullptr);
+
+        StringBuffer ml;
+        printYAML(yaml);
+    }
     void testRootArrayMarkup()
     {
         static constexpr const char * xmlMarkup = R"!!(<__array__>

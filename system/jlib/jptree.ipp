@@ -651,6 +651,9 @@ public:
     virtual unsigned numChildren() override;
     virtual bool isCaseInsensitive() const override { return isnocase(); }
     virtual unsigned getCount(const char *xpath) override;
+    virtual IPropertyTree *addPropTreeArrayItem(const char *xpath, IPropertyTree *val) override;
+    virtual bool isArray(const char *xpath=NULL) const override;
+
 // serializable impl.
     virtual void serialize(MemoryBuffer &tgt) override;
     virtual void deserialize(MemoryBuffer &src) override;
@@ -680,6 +683,8 @@ private:
     void addLocal(size32_t l, const void *data, bool binary=false, int pos=-1);
     void resolveParentChild(const char *xpath, IPropertyTree *&parent, IPropertyTree *&child, StringAttr &path, StringAttr &qualifier);
     void replaceSelf(IPropertyTree *val);
+    void addPTreeArrayItem(IPropertyTree *peer, const char *xpath, PTree *val, aindex_t pos = (aindex_t) -1);
+    IPropertyTree *addPropTree(const char *xpath, IPropertyTree *val, bool array);
 
 protected: // data
     /* NB: the order of the members here is important to reduce the size of the objects, because very large numbers of these are created.
@@ -932,7 +937,7 @@ public:
     }
 
 // IPTreeMaker
-    virtual void beginNode(const char *tag, offset_t startOffset) override
+    virtual void beginNode(const char *tag, bool arrayitem, offset_t startOffset) override
     {
         if (rootProvided)
         {
@@ -949,10 +954,15 @@ public:
             }
             else
                 currentNode = nodeCreator->create(NULL);
+            if (!parent && noRoot)
+                parent = root;
             if (parent)
-                parent->addPropTree(tag, currentNode);
-            else if (noRoot)
-                root->addPropTree(tag, currentNode);
+            {
+                if (arrayitem)
+                    parent->addPropTreeArrayItem(tag, currentNode);
+                else
+                    parent->addPropTree(tag, currentNode);
+            }
         }
         ptreeStack.append(*currentNode);
     }
