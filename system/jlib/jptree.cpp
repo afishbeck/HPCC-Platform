@@ -8370,7 +8370,7 @@ public:
         if (name)
             writeName(name);
 
-        checkInit(yaml_sequence_start_event_initialize(&event, nullptr, nullptr, 0, YAML_BLOCK_SEQUENCE_STYLE), "yaml_sequence_start_event_initialize");
+        checkInit(yaml_sequence_start_event_initialize(&event, nullptr, nullptr, 0, YAML_ANY_SEQUENCE_STYLE), "yaml_sequence_start_event_initialize");
         emit();
     }
     void endSequence()
@@ -8476,7 +8476,7 @@ static void _toYAML(const IPropertyTree *tree, YAMLEmitter &yaml, byte flags, bo
         {
             if (repeatingElement)
                 yaml.endSequence();
-            repeatingElement = element->isArray(nullptr);
+            repeatingElement = tree->isArray(name);
             if (!repeatingElement)
                 arrayName.clear();
             else
@@ -8487,6 +8487,7 @@ static void _toYAML(const IPropertyTree *tree, YAMLEmitter &yaml, byte flags, bo
         }
 
         _toYAML(element, yaml, flags, false, repeatingElement);
+        sub->next();
     }
     if (repeatingElement)
         yaml.endSequence();

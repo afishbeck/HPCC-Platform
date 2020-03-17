@@ -1221,9 +1221,9 @@ CPPUNIT_TEST_SUITE_NAMED_REGISTRATION(JlibMapping, "JlibMapping");
 class JlibIPTTest : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE(JlibIPTTest);
-        CPPUNIT_TEST(test);
-        CPPUNIT_TEST(testMarkup);
-        CPPUNIT_TEST(testRootArrayMarkup);
+        //CPPUNIT_TEST(test);
+        //CPPUNIT_TEST(testMarkup);
+        //CPPUNIT_TEST(testRootArrayMarkup);
         CPPUNIT_TEST(testOneItemArrayMarkup);
     CPPUNIT_TEST_SUITE_END();
 
