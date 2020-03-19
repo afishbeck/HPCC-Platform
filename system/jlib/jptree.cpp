@@ -4722,7 +4722,7 @@ restart:
             if ((colon = strchr(tagName.str(), ':')) != NULL)
                 tagName.remove(0, (size32_t)(colon - tagName.str() + 1));
         }
-        iEvent->beginNode(tagName.str(), false, startOffset);
+        iEvent->beginNode(tagName.str(), iptn_none, startOffset);
         skipWS();
         bool endTag = false;
         bool base64 = false;
@@ -5037,7 +5037,7 @@ public:
                 endOfRoot = false;
                 try
                 {
-                    iEvent->beginNode(stateInfo->wnsTag, false, startOffset);
+                    iEvent->beginNode(stateInfo->wnsTag, iptn_none, startOffset);
                 }
                 catch (IPTreeException *pe)
                 {
@@ -6785,7 +6785,7 @@ public:
             }
         }
 
-        iEvent->beginNode(name, false, startOffset);
+        iEvent->beginNode(name, iptn_none, startOffset);
         iEvent->beginNodeContent(name);
         iEvent->endNode(name, value.length(), value.str(), false, curOffset);
     }
@@ -6848,7 +6848,7 @@ public:
     {
         if ('@'==*name)
             name++;
-        iEvent->beginNode(name, false, curOffset);
+        iEvent->beginNode(name, iptn_none, curOffset);
         readNext();
         skipWS();
         bool attributesFinalized=false;
@@ -6897,7 +6897,7 @@ public:
                     readObject("__object__");
                     break;
                 case '[':  //treat unnamed arrays like we're in a noroot array
-                    iEvent->beginNode("__array__", false, curOffset);
+                    iEvent->beginNode("__array__", iptn_none, curOffset);
                     readArray("__item__");
                     iEvent->endNode("__array__", 0, "", false, curOffset);
                     break;
@@ -6927,7 +6927,7 @@ public:
                 readObject("__object__");
             else if ('[' == nextChar)
             {
-                iEvent->beginNode("__array__", false, curOffset);
+                iEvent->beginNode("__array__", iptn_none, curOffset);
                 readArray("__item__");
                 iEvent->endNode("__array__", 0, "", false, curOffset);
             }
@@ -7083,7 +7083,7 @@ public:
             return;
         try
         {
-            iEvent->beginNode(stateInfo->wnsTag, false, offset); //TONY
+            iEvent->beginNode(stateInfo->wnsTag, iptn_none, offset); //TONY
         }
         catch (IPTreeException *pe)
         {
@@ -7670,6 +7670,77 @@ static constexpr const char * currentVersion = "1.0";
  *   Elements with a name attribute are matched by name.  If there is a match and the source element has an attribute
  *     '__remove__' then that element is removed, otherwise it is merged.  If there is no match it is added.
 */
+static bool isScalarElement(IPropertyTree *item)
+{
+    if (item->hasChildren())
+        return false;
+    PTree *tree = static_cast<PTree*>(item);
+    unsigned atcount = tree->getAttributeCount();
+    if (atcount>1)
+        return false;
+    if (atcount==1)
+        return item->hasProp("@__remove__") || item->hasProp("@__reset__");
+    return true;
+}
+
+class CMergeSequenceHelper : public CInterface
+{
+public:
+    IMPLEMENT_IINTERFACE;
+    CMergeSequenceHelper(IPropertyTree &_target, const char *_tag) : target(&_target), tag(_tag)
+    {
+        Owned<IPropertyTreeIterator> existing = target->getElements(tag);
+        ForEach(*existing)
+        {
+            IArrayOf<IPropertyTree> toremove;
+            IPropertyTree &cur = existing->query();
+            if (isScalarElement(&cur))
+            {
+                scalars.append(cur.queryProp(""));
+                toremove.append(*LINK(&cur));
+            }
+            ForEachItemIn(i, toremove)
+            {
+                target->removeTree(&toremove.item(i));
+            }
+        }
+    }
+    ~CMergeSequenceHelper()
+    {
+        ForEachItemIn(i, scalars)
+        {
+            target->addProp(tag, scalars.item(i));
+        }
+    }
+    bool checkProcessScalar(IPropertyTree &item)
+    {
+        if (!isScalarElement(&item))
+            return false;
+        if (item.queryProp("@__reset__"))
+        {
+            scalars.clear();
+            target->removeProp(tag); //both scalars and objects need to be reset
+        }
+        const char *val = item.queryProp("");
+        if (item.queryProp("@__remove__"))
+        {
+            aindex_t pos = scalars.find(val);
+            if (pos != NotFound)
+                scalars.remove(pos);
+        }
+        else
+            scalars.appendUniq(val); //should unique have to be explicit?
+        return true;
+    }
+    const char *queryName()
+    {
+        return tag;
+    }
+private:
+    Linked<IPropertyTree> target;
+    StringAttr tag;
+    StringArray scalars;
+};
 
 void mergeConfiguration(IPropertyTree & target, IPropertyTree & source)
 {
@@ -7678,6 +7749,7 @@ void mergeConfiguration(IPropertyTree & target, IPropertyTree & source)
         target.addProp(aiter->queryName(), aiter->queryValue());
 
     StringBuffer tempPath;
+    Owned<CMergeSequenceHelper> sequence;
     Owned<IPropertyTreeIterator> iter = source.getElements("*");
     ForEach(*iter)
     {
@@ -7693,13 +7765,27 @@ void mergeConfiguration(IPropertyTree & target, IPropertyTree & source)
             tempPath.clear().append(path).append("[@name=\'").append(name).append("']");
             path = tempPath;
         }
-        if (child.queryProp("@__remove__"))
+
+        if (!source.isArray(tag))
+            sequence.clear();
+        else if (!sequence || !streq(sequence->queryName(), tag))
+            sequence.setown(new CMergeSequenceHelper(target, tag));
+        if (sequence && sequence->checkProcessScalar(child))
+            continue;
+
+        if (child.queryProp("@__reset__"))
         {
-            target.removeProp(path);
+            target.removeProp(tag);  //remove entire existing target sequence
+        }
+        else if (child.queryProp("@__remove__"))
+        {
+            if (sequence && !name)
+                throw MakeStringException(99, "Cannot remove an unamed object from an array (%s)", path);
+            target.removeProp(path); //remove exact item
         }
         else
         {
-            IPropertyTree * match = target.queryPropTree(path);
+            IPropertyTree * match = (!sequence || name) ? target.queryPropTree(path) : nullptr;
             if (!match)
             {
                 match = target.addPropTree(tag);
@@ -8003,6 +8089,42 @@ jlib_decl IPropertyTree * loadConfiguration(const char * defaultYaml, const char
     return config.getClear();
 }
 
+enum yaml_mergetag_flags
+{
+    ymtf_none=0x00,
+    ymtf_reset = 0x04,
+    ymtf_remove = 0x08
+};
+
+static byte getYamlMergeFlags(const yaml_char_t *ytag)
+{
+    const char *tag = (const char *)ytag;
+    byte flags = 0;
+    if (!tag)
+        return 0;
+    while (*tag=='!')
+        tag++;
+    StringArray subtags;
+    subtags.appendListUniq(tag, "-", true);
+    ForEachItemIn(i, subtags)
+    {
+        const char *subtag = subtags.item(i);
+        if (streq(subtag, "reset"))
+            flags |= ymtf_reset;
+        else if (streq(subtag, "remove"))
+            flags |= ymtf_remove;
+    }
+    return flags;
+}
+
+static void addYamlMergeAttributes(IPTreeNotifyEvent *iEvent, byte seqflags)
+{
+    if (seqflags & ymtf_reset)
+        iEvent->newAttribute("@__reset__", "1");
+    if (seqflags & ymtf_remove)
+        iEvent->newAttribute("@__remove__", "1");
+}
+
 class CYAMLBufferReader : public CInterfaceOf<IPTreeReader>
 {
 protected:
@@ -8034,7 +8156,7 @@ public:
         return event.type;
     }
 
-    virtual void loadSequence(const char *tagname)
+    virtual void loadSequence(const char *tagname, byte mergeflags)
     {
         if (!tagname || !*tagname) //if unmapped (unnamed) sequences are possible have to decide how to name them in the ptree, later
             throw makeStringException(99, "libyaml parser expected sequence name");
@@ -8042,6 +8164,7 @@ public:
         yaml_event_t event;
         yaml_event_type_t eventType = YAML_NO_EVENT;
 
+        bool first = true;
         while (eventType!=YAML_SEQUENCE_END_EVENT)
         {
             eventType = nextEvent(event);
@@ -8049,17 +8172,18 @@ public:
             switch (eventType)
             {
             case YAML_MAPPING_START_EVENT: //child map
-                loadMap(tagname);
+                loadMap(tagname, iptn_sequence, mergeflags | getYamlMergeFlags(event.data.mapping_start.tag));
                 break;
             case YAML_SEQUENCE_START_EVENT:
                 //todo
                 break;
             case YAML_SCALAR_EVENT:
-                iEvent->beginNode(tagname, true, parser.offset);
+                iEvent->beginNode(tagname, iptn_sequence, parser.offset);
+                addYamlMergeAttributes(iEvent, mergeflags | getYamlMergeFlags(event.data.scalar.tag));
                 iEvent->endNode(tagname, event.data.scalar.length, (const void *)event.data.scalar.value, false, parser.offset);
                 break;
             case YAML_ALIAS_EVENT: //reference to an anchor, ignore for now
-                iEvent->beginNode(tagname, true, parser.offset);
+                iEvent->beginNode(tagname, iptn_sequence, parser.offset);
                 iEvent->endNode(tagname, 0, nullptr, false, parser.offset);
                 break;
             case YAML_SEQUENCE_END_EVENT: //done
@@ -8076,14 +8200,22 @@ public:
             }
 
             yaml_event_delete(&event);
+            if (first)
+            {
+                first = false;
+                mergeflags &= ~ymtf_reset; //only first in sequence inherits the reset flag
+            }
         }
     }
-    virtual void loadMap(const char *tagname)
+    virtual void loadMap(const char *tagname, byte nodeflags, byte mergeflags)
     {
         bool binaryContent = false;
         StringBuffer content;
         if (tagname && *tagname)
-            iEvent->beginNode(tagname, false, parser.offset);
+        {
+            iEvent->beginNode(tagname, nodeflags, parser.offset);
+            addYamlMergeAttributes(iEvent, mergeflags);
+        }
 
         yaml_event_t event;
         yaml_event_type_t eventType = YAML_NO_EVENT;
@@ -8106,10 +8238,10 @@ public:
             switch (eventType)
             {
             case YAML_MAPPING_START_EVENT: //child map
-                loadMap(elname);
+                loadMap(elname, iptn_none, getYamlMergeFlags(event.data.mapping_start.tag));
                 break;
             case YAML_SEQUENCE_START_EVENT:
-                loadSequence(elname);
+                loadSequence(elname, getYamlMergeFlags(event.data.sequence_start.tag));
                 break;
             case YAML_SCALAR_EVENT:
             {
@@ -8127,7 +8259,7 @@ public:
                     {
                         StringBuffer decoded;
                         JBASE64_Decode((const char *) event.data.scalar.value, decoded);
-                        iEvent->beginNode(elname, false, parser.offset);
+                        iEvent->beginNode(elname, iptn_none, parser.offset);
                         iEvent->endNode(elname, decoded.length(), (const void *) decoded.str(), true, parser.offset);
                     }
                 }
@@ -8137,7 +8269,7 @@ public:
                         content.set((const char *) event.data.scalar.value);
                     else
                     {
-                        iEvent->beginNode(elname, false, parser.offset);
+                        iEvent->beginNode(elname, iptn_none, parser.offset);
                         iEvent->endNode(elname, event.data.scalar.length, (const void *) event.data.scalar.value, false, parser.offset);
                     }
                 }
@@ -8148,7 +8280,7 @@ public:
                 break;
             }
             case YAML_ALIAS_EVENT: //reference to an anchor, ignore for now
-                iEvent->beginNode(elname, false, parser.offset);
+                iEvent->beginNode(elname, iptn_none, parser.offset);
                 iEvent->endNode(elname, 0, nullptr, false, parser.offset);
                 break;
             case YAML_MAPPING_END_EVENT: //done
@@ -8186,7 +8318,7 @@ public:
                 //root content, the start of all mappings, should be only one at the root
                 if (content)
                     throw makeStringException(99, "YAML: Currently only support one content section (map) per stream");
-                loadMap(noRoot ? nullptr : "__object__"); //root map
+                loadMap(noRoot ? nullptr : "__object__", iptn_none, ymtf_none); //root map
                 content=true;
                 break;
             case YAML_SEQUENCE_START_EVENT:
@@ -8194,8 +8326,8 @@ public:
                 if (content)
                     throw makeStringException(99, "YAML: Currently only support one content section (sequence) per stream");
                 if (!noRoot)
-                    iEvent->beginNode("__array__", false, 0);
-                loadSequence("__item__");
+                    iEvent->beginNode("__array__", iptn_none, 0);
+                loadSequence("__item__", ymtf_none);
                 if (!noRoot)
                     iEvent->endNode("__array__", 0, nullptr, false, parser.offset);
                 content=true;

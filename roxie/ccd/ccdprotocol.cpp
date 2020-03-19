@@ -1477,7 +1477,7 @@ public:
             name.set(nameStr.str(), nameStr.length() - strlen("Request"));
         }
     }
-    virtual void beginNode(const char *tag, bool arrayitem, offset_t startOffset) override
+    virtual void beginNode(const char *tag, byte nodeflags, offset_t startOffset) override
     {
         if (streq(tag, "__object__"))
             return;

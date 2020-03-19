@@ -195,7 +195,7 @@ public:
         }
         return;
     }
-    virtual void beginNode(const char *tag, bool arrayitem, offset_t startOffset) override
+    virtual void beginNode(const char *tag, byte nodeflags, offset_t startOffset) override
     {
         if (m_skipTag.length() > 0)
             return;

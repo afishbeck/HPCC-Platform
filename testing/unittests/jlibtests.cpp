@@ -1224,21 +1224,257 @@ class JlibIPTTest : public CppUnit::TestFixture
         //CPPUNIT_TEST(test);
         //CPPUNIT_TEST(testMarkup);
         //CPPUNIT_TEST(testRootArrayMarkup);
-        CPPUNIT_TEST(testOneItemArrayMarkup);
+        //CPPUNIT_TEST(testOneItemArrayMarkup);
+        CPPUNIT_TEST(testMergeConfig);
     CPPUNIT_TEST_SUITE_END();
 
 public:
     void testOneItemArrayMarkup()
     {
-        static constexpr const char * yamlMarkup = R"!!(a:
-  b: [valx]
+        static constexpr const char * yamlFlowMarkup = R"!!({a: {
+  b: valb,
+  c: [valc],
+  d: [vald1,vald2],
+  e: [{x: valex1, y: valey1}],
+  f: {x: valfx1, y: valfy1},
+  g: [{x: valgx1, y: valgy1},{x: valgx2, y: valgy2}],
+  h: !el valh,
+  i: {
+    j: {
+      b: valb,
+      c: [valc],
+      d: [vald1,vald2],
+      e: [{x: valex1, y: valey1}],
+      f: {x: valfx1, y: valfy1},
+      g: [{x: valgx1, y: valgy1},{x: valgx2, y: valgy2}],
+      h: !el valh,
+    },
+    k: [{
+      b: valb,
+      c: [valc],
+      d: [vald1,vald2],
+      e: [{x: valex1, y: valey1}],
+      f: {x: valfx1, y: valfy1},
+      g: [{x: valgx1, y: valgy1},{x: valgx2, y: valgy2}],
+      h: !el valh,
+      }],
+    l: [{
+          b: valb,
+          c: [valc],
+          d: [vald1,vald2],
+          e: [{x: valex1, y: valey1}],
+          f: {x: valfx1, y: valfy1},
+          g: [{x: valgx1, y: valgy1},{x: valgx2, y: valgy2}],
+          h: !el valh,
+      },
+      {
+          b: valb,
+          c: [valc],
+          d: [vald1,vald2],
+          e: [{x: valex1, y: valey1}],
+          f: {x: valfx1, y: valfy1},
+          g: [{x: valgx1, y: valgy1},{x: valgx2, y: valgy2}],
+          h: !el valh,
+      }],
+  }
+}
+}
 )!!";
 
-        Owned<IPropertyTree> yaml = createPTreeFromYAMLString(yamlMarkup, ipt_none, ptr_ignoreWhiteSpace, nullptr);
+        static constexpr const char * yamlBlockMarkup = R"!!(a:
+  b: valb
+  c:
+  - valc
+  d:
+  - vald1
+  - vald2
+  e:
+  - x: valex1
+    y: valey1
+  f:
+    x: valfx1
+    y: valfy1
+  g:
+  - x: valgx1
+    y: valgy1
+  - x: valgx2
+    y: valgy2
+  h: !el valh
+  i:
+    j:
+      b: valb
+      c:
+      - valc
+      d:
+      - vald1
+      - vald2
+      e:
+      - x: valex1
+        y: valey1
+      f:
+        x: valfx1
+        y: valfy1
+      g:
+      - x: valgx1
+        y: valgy1
+      - x: valgx2
+        y: valgy2
+      h: !el valh
+    k:
+    - b: valb
+      c:
+      - valc
+      d:
+      - vald1
+      - vald2
+      e:
+      - x: valex1
+        y: valey1
+      f:
+        x: valfx1
+        y: valfy1
+      g:
+      - x: valgx1
+        y: valgy1
+      - x: valgx2
+        y: valgy2
+      h: !el valh
+    l:
+    - b: valb
+      c:
+      - valc
+      d:
+      - vald1
+      - vald2
+      e:
+      - x: valex1
+        y: valey1
+      f:
+        x: valfx1
+        y: valfy1
+      g:
+      - x: valgx1
+        y: valgy1
+      - x: valgx2
+        y: valgy2
+      h: !el valh
+    - b: valb
+      c:
+      - valc
+      d:
+      - vald1
+      - vald2
+      e:
+      - x: valex1
+        y: valey1
+      f:
+        x: valfx1
+        y: valfy1
+      g:
+      - x: valgx1
+        y: valgy1
+      - x: valgx2
+        y: valgy2
+      h: !el valh
+)!!";
 
         StringBuffer ml;
-        printYAML(yaml);
+
+        Owned<IPropertyTree> yamlFlow = createPTreeFromYAMLString(yamlFlowMarkup, ipt_none, ptr_ignoreWhiteSpace, nullptr);
+        toYAML(yamlFlow, ml.clear(), 0, YAML_SortTags|YAML_HideRootArrayObject);
+        CPPUNIT_ASSERT(streq(ml, yamlBlockMarkup));
+
+        Owned<IPropertyTree> yamlBlock = createPTreeFromYAMLString(yamlBlockMarkup, ipt_none, ptr_ignoreWhiteSpace, nullptr);
+        toYAML(yamlFlow, ml.clear(), 0, YAML_SortTags|YAML_HideRootArrayObject);
+        CPPUNIT_ASSERT(streq(ml, yamlBlockMarkup));
+
+        mergeConfiguration(*yamlFlow, *yamlBlock);
+        printYAML(yamlFlow, 0, YAML_SortTags|YAML_HideRootArrayObject);
     }
+    void testMergeConfig()
+    {
+        static constexpr const char * yamlLeft = R"!!({a: {
+  b: l1,
+  c: [11],
+  d: [11,12],
+  e: [{name: one, x: l1, y: l1},{name: two, x: l2, y: l2}]
+  }
+}
+)!!";
+
+        static constexpr const char * yamlRight = R"!!({a: {
+  b: r1,
+  c: [r1],
+  d: [r1,r2],
+  e: [{name: one, x: r1, y: r1},{name: three, x: r3, y: r3}]
+  }
+}
+)!!";
+
+        static constexpr const char * yamlResetOnSeq = R"!!({a: {
+  b: r1,
+  c: !reset [r2],
+  d: !reset [r3,r4],
+  e: !reset [{name: three, x: r3, y: r3},{name: four, x: r4, y: r4}],
+  }
+}
+)!!";
+
+        static constexpr const char * yamlRemoveOnSeq = R"!!({a: {
+  b: r1,
+  c: !remove [r1],
+  d: !remove [r2],
+  e: !remove [{name: one, x: r1, y: r1},{name: three, x: r3, y: r3},{x: r0, y: r0}],
+  }
+}
+)!!";
+
+        static constexpr const char * yamlRemoveOnObj = R"!!({a: {
+  b: r1,
+  c: [!remove r1, r2],
+  d: [!remove r2, r3],
+  e: [!remove {name: one, x: r1, y: r1},{name: three, x: r3, y: r3},{x: r0, y: r0}],
+  }
+}
+)!!";
+
+
+        StringBuffer ml;
+
+        Owned<IPropertyTree> treeResetOnSeq = createPTreeFromYAMLString(yamlResetOnSeq, ipt_none, ptr_ignoreWhiteSpace, nullptr);
+        fputs("------yamlResetOnSeq\n", stdout);
+        printXML(treeResetOnSeq);
+
+        Owned<IPropertyTree> treeLeft = createPTreeFromYAMLString(yamlLeft, ipt_none, ptr_ignoreWhiteSpace, nullptr);
+        fputs("------\n", stdout);
+        printYAML(treeLeft, 0, YAML_SortTags|YAML_HideRootArrayObject);
+        fputs("------\n", stdout);
+        mergeConfiguration(*treeLeft, *treeResetOnSeq);
+        printYAML(treeLeft, 0, YAML_SortTags|YAML_HideRootArrayObject);
+
+
+        Owned<IPropertyTree> treeRemoveOnSeq = createPTreeFromYAMLString(yamlRemoveOnSeq, ipt_none, ptr_ignoreWhiteSpace, nullptr);
+        fputs("------yamlRemoveOnSeq\n", stdout);
+        printXML(treeRemoveOnSeq);
+
+        treeLeft.setown(createPTreeFromYAMLString(yamlLeft, ipt_none, ptr_ignoreWhiteSpace, nullptr));
+        fputs("------\n", stdout);
+        printYAML(treeLeft, 0, YAML_SortTags|YAML_HideRootArrayObject);
+        fputs("------\n", stdout);
+        mergeConfiguration(*treeLeft, *treeRemoveOnSeq);
+        printYAML(treeLeft, 0, YAML_SortTags|YAML_HideRootArrayObject);
+
+        Owned<IPropertyTree> treeRemoveOnObj = createPTreeFromYAMLString(yamlRemoveOnObj, ipt_none, ptr_ignoreWhiteSpace, nullptr);
+        fputs("------yamlRemoveOnObj\n", stdout);
+        printXML(treeRemoveOnObj);
+
+        treeLeft.setown(createPTreeFromYAMLString(yamlLeft, ipt_none, ptr_ignoreWhiteSpace, nullptr));
+        fputs("------\n", stdout);
+        printYAML(treeLeft, 0, YAML_SortTags|YAML_HideRootArrayObject);
+        fputs("------\n", stdout);
+        mergeConfiguration(*treeLeft, *treeRemoveOnObj);
+        printYAML(treeLeft, 0, YAML_SortTags|YAML_HideRootArrayObject);
+}
     void testRootArrayMarkup()
     {
         static constexpr const char * xmlMarkup = R"!!(<__array__>

@@ -2400,7 +2400,7 @@ class CXMLSizesParser : public CInterface
         }
 
 // IPTreeNotifyEvent
-        virtual void beginNode(const char *tag, bool arrayitem, offset_t startOffset) override
+        virtual void beginNode(const char *tag, byte nodeflags, offset_t startOffset) override
         {
             String *tail = levtail;
             if (levtail&&(0 == strcmp(tag, levtail->str())))

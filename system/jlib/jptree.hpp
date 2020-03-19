@@ -136,9 +136,17 @@ private:
 
 jlib_decl bool validateXMLTag(const char *name);
 
+
+enum iptnotify_node_flags
+{
+    iptn_none=0x00,
+    iptn_sequence=0x01,
+    iptn_clear_sequence  = 0x02 //clear current sequence and remember to clear when merging left
+};
+
 interface IPTreeNotifyEvent : extends IInterface
 {
-    virtual void beginNode(const char *tag, bool sequence, offset_t startOffset) = 0;
+    virtual void beginNode(const char *tag, byte flags, offset_t startOffset) = 0;
     virtual void newAttribute(const char *name, const char *value) = 0;
     virtual void beginNodeContent(const char *tag) = 0; // attributes parsed
     virtual void endNode(const char *tag, unsigned length, const void *value, bool binary, offset_t endOffset) = 0;
@@ -294,6 +302,8 @@ inline static bool isValidXPathChr(char c)
 {
     return ('\0' != c && (isalnum(c) || strchr(validChrs, c)));
 }
+
+jlib_decl void mergeConfiguration(IPropertyTree & target, IPropertyTree & source);
 
 jlib_decl IPropertyTree * loadArgsIntoConfiguration(IPropertyTree *config, const char * * argv);
 jlib_decl IPropertyTree * loadConfiguration(const char * defaultYaml, const char * * argv, const char * componentTag, const char * envPrefix, const char * legacyFilename, IPropertyTree * (mapper)(IPropertyTree *));

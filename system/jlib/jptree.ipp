@@ -591,6 +591,7 @@ public:
     IPTArrayValue *detachValue() { IPTArrayValue *v = value; value = NULL; return v; }
     void setValue(IPTArrayValue *_value, bool binary) { if (value) delete value; value = _value; if (binary) IptFlagSet(flags, ipt_binary); }
     bool checkPattern(const char *&xxpath) const;
+    unsigned getAttributeCount() const;
     IPropertyTree *detach()
     {
         IPropertyTree *tree = create(queryName(), value, children, true);
@@ -676,7 +677,6 @@ protected:
 
     AttrValue *findAttribute(const char *k) const;
     const char *getAttributeValue(const char *k) const;
-    unsigned getAttributeCount() const;
     AttrValue *getNextAttribute(AttrValue *cur) const;
 
 private:
@@ -937,7 +937,7 @@ public:
     }
 
 // IPTreeMaker
-    virtual void beginNode(const char *tag, bool arrayitem, offset_t startOffset) override
+    virtual void beginNode(const char *tag, byte nodeflags, offset_t startOffset) override
     {
         if (rootProvided)
         {
@@ -958,7 +958,7 @@ public:
                 parent = root;
             if (parent)
             {
-                if (arrayitem)
+                if (nodeflags & iptn_sequence)
                     parent->addPropTreeArrayItem(tag, currentNode);
                 else
                     parent->addPropTree(tag, currentNode);
