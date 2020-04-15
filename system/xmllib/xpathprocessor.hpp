@@ -38,8 +38,13 @@ public:
     virtual bool evaluateAsString(const char * xpath, StringBuffer & evaluated) = 0;
     virtual bool evaluateAsBoolean(ICompiledXpath * compiledXpath) = 0;
     virtual const char * evaluateAsString(ICompiledXpath * compiledXpath, StringBuffer & evaluated) = 0;
+    virtual double evaluateAsNumber(ICompiledXpath * compiledXpath) = 0;
     virtual const char * getXpath() = 0;
     virtual bool setXmlDoc(const char * xmldoc) = 0;
+    virtual void setUserData(void *) = 0;
+    virtual void *getUserData() = 0;
+    virtual void registerFunction(const char *xmlns, const char * name, void *f) = 0;
+    virtual void registerNamespace(const char *prefix, const char *uri) = 0;
 };
 
 extern "C" XMLLIB_API ICompiledXpath* compileXpath(const char * xpath);

@@ -417,7 +417,7 @@ void EsdlServiceImpl::addServiceLevelRequestTransform(IPropertyTree *customReque
 
     try
     {
-        m_serviceLevelRequestTransform.setown(new CEsdlCustomTransform(*customRequestTransform));
+        m_serviceLevelRequestTransform.setown(createEsdlCustomTransform(*customRequestTransform));
     }
     catch(IException* e)
     {
@@ -441,7 +441,7 @@ void EsdlServiceImpl::addMethodLevelRequestTransform(const char *method, IProper
 
     try
     {
-        Owned<CEsdlCustomTransform> crt = new CEsdlCustomTransform(*customRequestTransform);
+        Owned<IEsdlCustomTransform> crt = createEsdlCustomTransform(*customRequestTransform);
         m_customRequestTransformMap.setValue(method, crt.get());
     }
     catch(IException* e)
@@ -1114,7 +1114,7 @@ void EsdlServiceImpl::handleFinalRequest(IEspContext &context,
         if (serviceCrt || methodCrt)
         {
             context.addTraceSummaryTimeStamp(LogNormal, "srt-custreqtrans");
-            processServiceAndMethodTransforms({serviceCrt, methodCrt}, &context, tgtcfg.get(), tgtctx.get(), srvdef, mthdef, soapmsg, m_oEspBindingCfg.get());
+            processServiceAndMethodTransforms({serviceCrt, methodCrt}, &context, tgtcfg.get(), srvdef, mthdef, soapmsg, m_oEspBindingCfg.get());
             context.addTraceSummaryTimeStamp(LogNormal, "end-custreqtrans");
         }
 

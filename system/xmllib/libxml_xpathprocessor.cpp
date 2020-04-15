@@ -91,6 +91,29 @@ public:
         DBGLOG("k/v == [%s,%s]\n", (char *) name, (char *) payload);
     }
 
+    virtual void registerNamespace(const char *prefix, const char * uri) override
+    {
+        if (m_xpathContext)
+            xmlXPathRegisterNs(m_xpathContext, (const xmlChar *) prefix, (const xmlChar *) uri);
+    }
+
+    virtual void registerFunction(const char *xmlns, const char * name, void *f) override
+    {
+        if (m_xpathContext)
+            xmlXPathRegisterFuncNS(m_xpathContext, (const xmlChar *) name, (const xmlChar *) xmlns, (xmlXPathFunction) f);
+    }
+
+    virtual void setUserData(void *userdata) override
+    {
+        if (m_xpathContext)
+            m_xpathContext->userData = userdata;
+    }
+
+    virtual void *getUserData() override
+    {
+        return (m_xpathContext) ? m_xpathContext->userData : nullptr;
+    }
+
     virtual const char * getXpath() override
     {
         return m_xpath.str();
@@ -120,13 +143,13 @@ public:
             return nullptr;
     }
 
-    virtual bool evaluateAsBoolean(const char * xpath)
+    virtual bool evaluateAsBoolean(const char * xpath) override
     {
         if (!xpath || !*xpath)
             throw MakeStringException(XPATHERR_MissingInput,"XpathProcessor:evaluateAsBoolean: Error: Could not evaluate empty XPATH");
         return evaluateAsBoolean(evaluate(xpath), xpath);
     }
-    virtual bool evaluateAsString(const char * xpath, StringBuffer & evaluated)
+    virtual bool evaluateAsString(const char * xpath, StringBuffer & evaluated) override
     {
         if (!xpath || !*xpath)
             throw MakeStringException(XPATHERR_MissingInput,"XpathProcessor:evaluateAsString: Error: Could not evaluate empty XPATH");
@@ -147,6 +170,14 @@ public:
         if (!clibCompiledXpath)
             throw MakeStringException(XPATHERR_MissingInput,"XpathProcessor:evaluateAsString: Error: Missing compiled XPATH");
         return evaluateAsString(evaluate(clibCompiledXpath->getCompiledXPathExpression(), compiledXpath->getXpath()), evaluated, compiledXpath->getXpath());
+    }
+
+    virtual double evaluateAsNumber(ICompiledXpath * compiledXpath) override
+    {
+        CLibCompiledXpath * clibCompiledXpath = static_cast<CLibCompiledXpath *>(compiledXpath);
+        if (!clibCompiledXpath)
+            throw MakeStringException(XPATHERR_MissingInput,"XpathProcessor:evaluateAsNumber: Error: Missing compiled XPATH");
+        return evaluateAsNumber(evaluate(clibCompiledXpath->getCompiledXPathExpression(), compiledXpath->getXpath()), compiledXpath->getXpath());
     }
 
 private:
@@ -235,6 +266,13 @@ private:
         }
         xmlXPathFreeObject(evaluatedXpathObj);
         return evaluated.str();
+    }
+
+    double evaluateAsNumber(xmlXPathObjectPtr evaluatedXpathObj, const char* xpath)
+    {
+        if (!evaluatedXpathObj)
+            throw MakeStringException(XPATHERR_InvalidInput,"XpathProcessor:evaluateAsNumber: Error: Could not evaluate XPATH '%s'", xpath);
+        return xmlXPathCastToNumber(evaluatedXpathObj);
     }
 
     virtual xmlXPathObjectPtr evaluate(xmlXPathCompExprPtr compiledXpath, const char* xpath)
