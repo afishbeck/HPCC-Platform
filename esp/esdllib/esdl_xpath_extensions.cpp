@@ -103,9 +103,94 @@ static void validateFeaturesAccessFunction (xmlXPathParserContextPtr ctxt, int n
     xmlXPathReturnBoolean(ctxt, ok ? 1 : 0);
 }
 
+/**
+ * evaluateSecAccessFlagsFunction
+ * @ctxt:  an XPath parser context
+ * @nargs:  the number of arguments
+ *
+ */
+static void evaluateSecAccessFlagsFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
+    if (!ctxt || !ctxt->context || !ctxt->context->userData)
+    {
+        xmlXPathSetError((ctxt), XPATH_INVALID_CTXT);
+        return;
+    }
+
+    IEspContext *espContext = (IEspContext *)ctxt->context->userData;
+
+    if (nargs == 0)
+    {
+        xmlXPathSetArityError(ctxt);
+        return;
+    }
+
+    unsigned flags = 0;
+    while(nargs--)
+    {
+        xmlChar *s = xmlXPathPopString(ctxt);
+        if (xmlXPathCheckError(ctxt))
+            return;
+        if (s == nullptr)
+        {
+            xmlXPathSetArityError(ctxt);
+            return;
+        }
+        SecAccessFlags f = getSecAccessFlagValue((const char *)s);
+        xmlFree(s);
+        if (f < SecAccess_None)
+        {
+            xmlXPathSetArityError(ctxt);
+            return;
+        }
+        flags |= (unsigned)f;
+    }
+
+    xmlXPathReturnNumber(ctxt, flags);
+}
+/**
+ * getFeatureSecAccessFlags
+ * @ctxt:  an XPath parser context
+ * @nargs:  the number of arguments
+ *
+ */
+static void getFeatureSecAccessFlagsFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
+    if (!ctxt || !ctxt->context || !ctxt->context->userData)
+    {
+        xmlXPathSetError((ctxt), XPATH_INVALID_CTXT);
+        return;
+    }
+
+    IEspContext *espContext = (IEspContext *)ctxt->context->userData;
+
+    if (nargs != 1)
+    {
+        xmlXPathSetArityError(ctxt);
+        return;
+    }
+
+    xmlChar *authstring = xmlXPathPopString(ctxt);
+    if (xmlXPathCheckError(ctxt))
+        return;
+    if (authstring == nullptr)
+    {
+        xmlXPathSetArityError(ctxt);
+        return;
+    }
+
+    SecAccessFlags access = SecAccess_None;
+    espContext->authorizeFeature((const char *)authstring, access);
+    xmlFree(authstring);
+
+    xmlXPathReturnNumber(ctxt, access);
+}
+
 void registerEsdlXPathExtensions(IXpathContext *xpathContext, IEspContext *context)
 {
     xpathContext->setUserData(context);
-    xpathContext->registerNamespace("esdl", "urn:hpcc:esdl");
-    xpathContext->registerFunction("urn:hpcc:esdl", "validateFeaturesAccess", (void  *)validateFeaturesAccessFunction);
+    xpathContext->registerNamespace("xsdl", "urn:hpcc:xsdl");
+    xpathContext->registerFunction("urn:hpcc:xsdl", "validateFeaturesAccess", (void  *)validateFeaturesAccessFunction);
+    xpathContext->registerFunction("urn:hpcc:xsdl", "evaluateSecAccessFlags", (void  *)evaluateSecAccessFlagsFunction);
+    xpathContext->registerFunction("urn:hpcc:xsdl", "getFeatureSecAccessFlags", (void  *)getFeatureSecAccessFlagsFunction);
 }

@@ -63,57 +63,268 @@ static constexpr const char * soapRequest = R"!!(<?xml version="1.0" encoding="U
 )!!";
 
 static constexpr const char * esdlScript = R"!!(<xsdl:CustomRequestTransform target="soap:Body/extra/{$query}/{$request}">
-   <xsdl:SetValue target="TransformValue"  value="'here'"/>
+   <xsdl:SetValue target="TestCase"  value="$testcase"/>
    <xsdl:choose>
-      <xsdl:when test="not(esdl:validateFeaturesAccess('AllowSomething : Read, AllowAnother : Full'))">
+      <xsdl:when test="not(xsdl:validateFeaturesAccess('AllowSomething : Read, AllowAnother : Full'))">
          <xsdl:Fail code="401" message="concat('authorization failed for something or other (', $clientversion, ')')"/>
       </xsdl:when>
+      <xsdl:when test="not(xsdl:getFeatureSecAccessFlags('AllowSomething')=xsdl:evaluateSecAccessFlags('Full'))">
+         <xsdl:Fail code="401" message="concat('auth flag check failed for something (', $clientversion, ')')"/>
+      </xsdl:when>
+      <xsdl:when test="('1'=$FailLevel1A)">
+         <xsdl:Fail code="11" message="'FailLevel1A'"/>
+      </xsdl:when>
+      <xsdl:when test="('1'=$FailLevel1B)">
+        <xsdl:if test="('1'=$FailLevel1B)">
+           <xsdl:Fail code="12" message="'FailLevel1B'"/>
+        </xsdl:if>
+      </xsdl:when>
+      <xsdl:when test="('1'=$AssertLevel1C)">
+         <xsdl:Assert test="('0'=$AssertLevel1C)" code="13" message="'AssertLevel1C'"/>
+      </xsdl:when>
       <xsdl:otherwise>
-         <xsdl:SetValue target="test"  value="'auth success'"/>
-         <xsdl:SetValue target="Row/Name/Last" value="'XXX'"/>
-         <xsdl:SetValue target="Row/Name/Last" value="'POE'"/>
-         <xsdl:AppendValue target="Row/AppendTo"  value="'This'"/>
-         <xsdl:AppendValue target="Row/AppendTo"  value="'One'"/>
-         <xsdl:AppendValue target="Row/AppendTo"  value="'String'"/>
-         <xsdl:AddValue target="Row/Name/Aliases/Alias"  value="'moe'"/>
-         <xsdl:AddValue target="Row/Name/Aliases/Alias"  value="'poe'"/>
-         <xsdl:AddValue target="Row/Name/Aliases/Alias"  value="'roe'"/>
+         <xsdl:SetValue target="InnerTestCase"  value="$testcase"/>
+         <xsdl:choose>
+            <xsdl:when test="('1'=$FailLevel2A)">
+               <xsdl:Fail code="21" message="'FailLevel2A'"/>
+            </xsdl:when>
+            <xsdl:when test="('1'=$FailLevel2B)">
+              <xsdl:if test="('1'=$FailLevel2B)">
+                 <xsdl:Fail code="22" message="'FailLevel2B'"/>
+              </xsdl:if>
+            </xsdl:when>
+            <xsdl:when test="('1'=$AssertLevel2C)">
+               <xsdl:Assert test="('0'=$AssertLevel2C)" code="23" message="'AssertLevel2C'"/>
+            </xsdl:when>
+            <xsdl:otherwise>
+               <xsdl:SetValue target="test"  value="'auth success'"/>
+               <xsdl:SetValue target="Row/Name/Last" value="'XXX'"/>
+               <xsdl:SetValue target="Row/Name/Last" value="'POE'"/>
+               <xsdl:AppendValue target="Row/AppendTo"  value="'This'"/>
+               <xsdl:AppendValue target="Row/AppendTo"  value="'One'"/>
+               <xsdl:AppendValue target="Row/AppendTo"  value="'String'"/>
+               <xsdl:AddValue target="Row/Name/Aliases/Alias"  value="'moe'"/>
+               <xsdl:AddValue target="Row/Name/Aliases/Alias"  value="'poe'"/>
+               <xsdl:AddValue target="Row/Name/Aliases/Alias"  value="'roe'"/>
+            </xsdl:otherwise>
+         </xsdl:choose>
       </xsdl:otherwise>
    </xsdl:choose>
 </xsdl:CustomRequestTransform>
 )!!";
 
-static const char *tgtcfg = "<method queryname='EchoPersonInfo'/>";
+static const char *target_config = "<method queryname='EchoPersonInfo'/>";
 
 class ESDLTests : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE( ESDLTests );
         CPPUNIT_TEST(testEsdlTransformScripts);
+        CPPUNIT_TEST(testEsdlTransformFailLevel1A);
+        CPPUNIT_TEST(testEsdlTransformFailLevel1B);
+        CPPUNIT_TEST(testEsdlTransformFailLevel1C);
+        CPPUNIT_TEST(testEsdlTransformFailLevel2A);
+        CPPUNIT_TEST(testEsdlTransformFailLevel2B);
+        CPPUNIT_TEST(testEsdlTransformFailLevel2C);
     CPPUNIT_TEST_SUITE_END();
 
 public:
     ESDLTests(){}
 
-    void testEsdlTransformScripts()
+    void runTest(const char *config, const char *result, int code)
     {
+        StringBuffer request(soapRequest);
         try
         {
-            Owned<IPropertyTree> cfg = createPTreeFromXMLString(tgtcfg);
+            Owned<IPropertyTree> cfg = createPTreeFromXMLString(config);
+            Owned<IPropertyTree> target = createPTreeFromXMLString(target_config);
             Owned<IPropertyTree> script = createPTreeFromXMLString(esdlScript);
             Owned<IEsdlCustomTransform> tf = createEsdlCustomTransform(*script);
 
             Owned<IEspContext> ctx = createEspContext(nullptr);//createHttpSecureContext(m_request.get()));
-
-            StringBuffer request(soapRequest);
-            tf->processTransform(ctx, cfg, "EsdlExample", "EchoPersonInfo", "EchoPersonInfoRequest", request, nullptr);
-            fputs(request.str(), stdout);
+            tf->processTransform(ctx, target, "EsdlExample", "EchoPersonInfo", "EchoPersonInfoRequest", request, cfg);
+            if (code)
+                throw MakeStringException(99, "Test failed: expected an explicit exception %d", code);
+            if (result && !streq(result, request.str()))
+            {
+                fputs(request.str(), stdout);
+                throw MakeStringException(100, "Test failed");
+            }
         }
-        catch (IWsException *E)
+        catch (IException *E)
         {
-            StringBuffer msg;
-            fprintf(stdout, "Exception: %s", E->serialize(msg).str());
+            StringBuffer m;
+            if (code!=E->errorCode())
+            {
+                StringBuffer m;
+                fprintf(stdout, "\nExpected %d Exception %d - %s\n", code, E->errorCode(), E->errorMessage(m).str());
+                throw E;
+            }
             E->Release();
         }
+    }
+
+    void testEsdlTransformScripts()
+    {
+        constexpr const char *config = R"!!(<config>
+  <Transform>
+    <Param name='testcase' value="'operations'"/>
+    <Param name='FailLevel1A' value='0'/>
+    <Param name='FailLevel1B' value='0'/>
+    <Param name='AssertLevel1C' value='0'/>
+    <Param name='FailLevel2A' value='0'/>
+    <Param name='FailLevel2B' value='0'/>
+    <Param name='AssertLevel2C' value='0'/>
+  </Transform>
+</config>)!!";
+
+constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+ <soap:Body>
+  <extra>
+   <EchoPersonInfo>
+    <Context>
+     <Row>
+      <Common>
+       <TransactionId>1736623372_3126765312_1333296170</TransactionId>
+      </Common>
+     </Row>
+    </Context>
+    <_TransactionId>1736623372_3126765312_1333296170</_TransactionId>
+    <EchoPersonInfoRequest>
+     <TestCase>&apos;operations&apos;</TestCase>
+     <InnerTestCase>&apos;operations&apos;</InnerTestCase>
+     <Row>
+      <Addresses>
+       <Address>
+        <type>Home</type>
+        <Line2>Apt 202</Line2>
+        <Line1>101 Main street</Line1>
+        <City>Hometown</City>
+        <Zip>96703</Zip>
+        <State>HI</State>
+       </Address>
+      </Addresses>
+      <Name>
+       <Last>POE</Last>
+       <Aliases>
+        <Alias>moe</Alias>
+        <Alias>poe</Alias>
+        <Alias>roe</Alias>
+       </Aliases>
+       <First>Joe</First>
+      </Name>
+      <AppendTo>ThisOneString</AppendTo>
+     </Row>
+     <test>auth success</test>
+    </EchoPersonInfoRequest>
+   </EchoPersonInfo>
+  </extra>
+ </soap:Body>
+</soap:Envelope>
+)!!";
+
+        runTest(config, result, 0);
+    }
+
+    void testEsdlTransformFailLevel1A()
+    {
+        constexpr const char *config = R"!!(<config>
+  <Transform>
+    <Param name='testcase' value="'operations'"/>
+    <Param name='FailLevel1A' value='1'/>
+    <Param name='FailLevel1B' value='1'/>
+    <Param name='AssertLevel1C' value='1'/>
+    <Param name='FailLevel2A' value='1'/>
+    <Param name='FailLevel2B' value='1'/>
+    <Param name='AssertLevel2C' value='1'/>
+  </Transform>
+</config>)!!";
+
+        runTest(config, nullptr, 11);
+    }
+
+    void testEsdlTransformFailLevel1B()
+    {
+        constexpr const char *config = R"!!(<config>
+  <Transform>
+    <Param name='testcase' value="'operations'"/>
+    <Param name='FailLevel1A' value='0'/>
+    <Param name='FailLevel1B' value='1'/>
+    <Param name='AssertLevel1C' value='1'/>
+    <Param name='FailLevel2A' value='1'/>
+    <Param name='FailLevel2B' value='1'/>
+    <Param name='AssertLevel2C' value='1'/>
+  </Transform>
+</config>)!!";
+
+        runTest(config, nullptr, 12);
+    }
+
+    void testEsdlTransformFailLevel1C()
+    {
+        constexpr const char *config = R"!!(<config>
+  <Transform>
+    <Param name='testcase' value="'operations'"/>
+    <Param name='FailLevel1A' value='0'/>
+    <Param name='FailLevel1B' value='0'/>
+    <Param name='AssertLevel1C' value='1'/>
+    <Param name='FailLevel2A' value='1'/>
+    <Param name='FailLevel2B' value='1'/>
+    <Param name='AssertLevel2C' value='1'/>
+  </Transform>
+</config>)!!";
+
+        runTest(config, nullptr, 13);
+    }
+
+    void testEsdlTransformFailLevel2A()
+    {
+        constexpr const char *config = R"!!(<config>
+  <Transform>
+    <Param name='testcase' value="'operations'"/>
+    <Param name='FailLevel1A' value='0'/>
+    <Param name='FailLevel1B' value='0'/>
+    <Param name='AssertLevel1C' value='0'/>
+    <Param name='FailLevel2A' value='1'/>
+    <Param name='FailLevel2B' value='1'/>
+    <Param name='AssertLevel2C' value='1'/>
+  </Transform>
+</config>)!!";
+
+        runTest(config, nullptr, 21);
+    }
+
+    void testEsdlTransformFailLevel2B()
+    {
+        constexpr const char *config = R"!!(<config>
+  <Transform>
+    <Param name='testcase' value="'operations'"/>
+    <Param name='FailLevel1A' value='0'/>
+    <Param name='FailLevel1B' value='0'/>
+    <Param name='AssertLevel1C' value='0'/>
+    <Param name='FailLevel2A' value='0'/>
+    <Param name='FailLevel2B' value='1'/>
+    <Param name='AssertLevel2C' value='1'/>
+  </Transform>
+</config>)!!";
+
+        runTest(config, nullptr, 22);
+    }
+
+    void testEsdlTransformFailLevel2C()
+    {
+        constexpr const char *config = R"!!(<config>
+  <Transform>
+    <Param name='testcase' value="'operations'"/>
+    <Param name='FailLevel1A' value='0'/>
+    <Param name='FailLevel1B' value='0'/>
+    <Param name='AssertLevel1C' value='0'/>
+    <Param name='FailLevel2A' value='0'/>
+    <Param name='FailLevel2B' value='0'/>
+    <Param name='AssertLevel2C' value='1'/>
+  </Transform>
+</config>)!!";
+
+        runTest(config, nullptr, 23);
     }
 };
 
