@@ -109,7 +109,7 @@ static void validateFeaturesAccessFunction (xmlXPathParserContextPtr ctxt, int n
  * @nargs:  the number of arguments
  *
  */
-static void evaluateSecAccessFlagsFunction (xmlXPathParserContextPtr ctxt, int nargs)
+static void secureAccessFlagsFunction (xmlXPathParserContextPtr ctxt, int nargs)
 {
     if (!ctxt || !ctxt->context || !ctxt->context->userData)
     {
@@ -191,6 +191,6 @@ void registerEsdlXPathExtensions(IXpathContext *xpathContext, IEspContext *conte
     xpathContext->setUserData(context);
     xpathContext->registerNamespace("xsdl", "urn:hpcc:xsdl");
     xpathContext->registerFunction("urn:hpcc:xsdl", "validateFeaturesAccess", (void  *)validateFeaturesAccessFunction);
-    xpathContext->registerFunction("urn:hpcc:xsdl", "evaluateSecAccessFlags", (void  *)evaluateSecAccessFlagsFunction);
+    xpathContext->registerFunction("urn:hpcc:xsdl", "secureAccessFlags", (void  *)secureAccessFlagsFunction);
     xpathContext->registerFunction("urn:hpcc:xsdl", "getFeatureSecAccessFlags", (void  *)getFeatureSecAccessFlagsFunction);
 }

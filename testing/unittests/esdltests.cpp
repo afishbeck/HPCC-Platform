@@ -68,7 +68,7 @@ static constexpr const char * esdlScript = R"!!(<xsdl:CustomRequestTransform tar
       <xsdl:when test="not(xsdl:validateFeaturesAccess('AllowSomething : Read, AllowAnother : Full'))">
          <xsdl:Fail code="401" message="concat('authorization failed for something or other (', $clientversion, ')')"/>
       </xsdl:when>
-      <xsdl:when test="not(xsdl:getFeatureSecAccessFlags('AllowSomething')=xsdl:evaluateSecAccessFlags('Full'))">
+      <xsdl:when test="not(xsdl:getFeatureSecAccessFlags('AllowSomething')=xsdl:secureAccessFlags('Full'))">
          <xsdl:Fail code="401" message="concat('auth flag check failed for something (', $clientversion, ')')"/>
       </xsdl:when>
       <xsdl:when test="('1'=$FailLevel1A)">
