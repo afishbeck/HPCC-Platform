@@ -128,7 +128,56 @@ public:
         }
         return false;
     }
+    virtual bool addEvaluateVariable(const char * name, const char * xpath) override
+    {
+        if (isEmptyString(xpath))
+            addVariable(name, "");
+        if (m_xpathContext)
+        {
+            xmlXPathObjectPtr obj = evaluate(xpath);
+            if (!obj)
+                throw MakeStringException(-1, "addEvaluateVariable xpath error %s", xpath);
+            return xmlXPathRegisterVariable(m_xpathContext, (xmlChar *)name, obj) == 0;
+        }
 
+        return false;
+    }
+    virtual bool addEvaluateParam(const char * name, const char * xpath) override
+    {
+        xmlXPathObjectPtr ptr = xmlXPathVariableLookup(m_xpathContext, (const xmlChar *)name);
+        if (ptr) //parameter exists
+        {
+            xmlXPathFreeObject(ptr);
+            return true;
+        }
+        return addEvaluateVariable(name, xpath);
+    }
+
+    virtual bool addEvaluateCXVariable(const char * name, ICompiledXpath * compiled) override
+    {
+        if (!compiled)
+            addVariable(name, "");
+        if (m_xpathContext)
+        {
+            CLibCompiledXpath * clibCompiledXpath = static_cast<CLibCompiledXpath *>(compiled);
+            xmlXPathObjectPtr obj = evaluate(clibCompiledXpath->getCompiledXPathExpression(), clibCompiledXpath->getXpath());
+            if (!obj)
+                throw MakeStringException(-1, "addEvaluateVariable xpath error %s", clibCompiledXpath->getXpath());
+            return xmlXPathRegisterVariable(m_xpathContext, (xmlChar *)name, obj) == 0;
+        }
+
+        return false;
+    }
+    virtual bool addEvaluateCXParam(const char * name, ICompiledXpath * compiled) override
+    {
+        xmlXPathObjectPtr ptr = xmlXPathVariableLookup(m_xpathContext, (const xmlChar *)name);
+        if (ptr) //parameter exists
+        {
+            xmlXPathFreeObject(ptr);
+            return true;
+        }
+        return addEvaluateCXVariable(name, compiled);
+    }
     virtual const char * getVariable(const char * name, StringBuffer & variable) override
     {
         ReadLockBlock rblock(m_rwlock);

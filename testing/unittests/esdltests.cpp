@@ -63,7 +63,13 @@ static constexpr const char * soapRequest = R"!!(<?xml version="1.0" encoding="U
 )!!";
 
 static constexpr const char * esdlScript = R"!!(<xsdl:CustomRequestTransform target="soap:Body/extra/{$query}/{$request}">
+   <xsdl:variable name="var1"  select="'script'"/>
+   <xsdl:variable name="var2"  select="$var1"/>
+   <xsdl:param name="param1" select="'script'"/>
+   <xsdl:param name="param2" select="$param1"/>
    <xsdl:SetValue target="TestCase"  value="$testcase"/>
+   <xsdl:SetValue target="Var2"  value="$var2"/>
+   <xsdl:SetValue target="Param2"  value="$param2"/>
    <xsdl:choose>
       <xsdl:when test="not(xsdl:validateFeaturesAccess('AllowSomething : Read, AllowAnother : Full'))">
          <xsdl:Fail code="401" message="concat('authorization failed for something or other (', $clientversion, ')')"/>
@@ -118,7 +124,8 @@ static const char *target_config = "<method queryname='EchoPersonInfo'/>";
 class ESDLTests : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE( ESDLTests );
-        CPPUNIT_TEST(testEsdlTransformScripts);
+        CPPUNIT_TEST(testEsdlTransformScript);
+        CPPUNIT_TEST(testEsdlTransformScriptVarParam);
         CPPUNIT_TEST(testEsdlTransformFailLevel1A);
         CPPUNIT_TEST(testEsdlTransformFailLevel1B);
         CPPUNIT_TEST(testEsdlTransformFailLevel1C);
@@ -163,7 +170,7 @@ public:
         }
     }
 
-    void testEsdlTransformScripts()
+    void testEsdlTransformScript()
     {
         constexpr const char *config = R"!!(<config>
   <Transform>
@@ -192,6 +199,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     <EchoPersonInfoRequest>
      <TestCase>&apos;operations&apos;</TestCase>
      <InnerTestCase>&apos;operations&apos;</InnerTestCase>
+     <Var2>script</Var2>
      <Row>
       <Addresses>
        <Address>
@@ -214,6 +222,75 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
       </Name>
       <AppendTo>ThisOneString</AppendTo>
      </Row>
+     <Param2>script</Param2>
+     <test>auth success</test>
+    </EchoPersonInfoRequest>
+   </EchoPersonInfo>
+  </extra>
+ </soap:Body>
+</soap:Envelope>
+)!!";
+
+        runTest(config, result, 0);
+    }
+
+    void testEsdlTransformScriptVarParam()
+    {
+        constexpr const char *config = R"!!(<config>
+  <Transform>
+    <Param name='testcase' value="'operations'"/>
+    <Param name='FailLevel1A' value='0'/>
+    <Param name='FailLevel1B' value='0'/>
+    <Param name='AssertLevel1C' value='0'/>
+    <Param name='FailLevel2A' value='0'/>
+    <Param name='FailLevel2B' value='0'/>
+    <Param name='AssertLevel2C' value='0'/>
+    <Param name='param1' value='provided'/>
+    <Param name='param2' select="concat('produced and ', $param1)"/>
+    <Param name='var1' value='provided'/>
+    <Param name='var2' select="concat('produced and ', $var1)"/>
+  </Transform>
+</config>)!!";
+
+constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+ <soap:Body>
+  <extra>
+   <EchoPersonInfo>
+    <Context>
+     <Row>
+      <Common>
+       <TransactionId>1736623372_3126765312_1333296170</TransactionId>
+      </Common>
+     </Row>
+    </Context>
+    <_TransactionId>1736623372_3126765312_1333296170</_TransactionId>
+    <EchoPersonInfoRequest>
+     <TestCase>&apos;operations&apos;</TestCase>
+     <InnerTestCase>&apos;operations&apos;</InnerTestCase>
+     <Var2>script</Var2>
+     <Row>
+      <Addresses>
+       <Address>
+        <type>Home</type>
+        <Line2>Apt 202</Line2>
+        <Line1>101 Main street</Line1>
+        <City>Hometown</City>
+        <Zip>96703</Zip>
+        <State>HI</State>
+       </Address>
+      </Addresses>
+      <Name>
+       <Last>POE</Last>
+       <Aliases>
+        <Alias>moe</Alias>
+        <Alias>poe</Alias>
+        <Alias>roe</Alias>
+       </Aliases>
+       <First>Joe</First>
+      </Name>
+      <AppendTo>ThisOneString</AppendTo>
+     </Row>
+     <Param2>produced and provided</Param2>
      <test>auth success</test>
     </EchoPersonInfoRequest>
    </EchoPersonInfo>

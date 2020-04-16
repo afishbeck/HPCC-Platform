@@ -257,6 +257,72 @@ public:
     }
 };
 
+class CEsdlTransformOperationVariable : public CEsdlTransformOperationBase
+{
+protected:
+    StringAttr m_name;
+    Owned<ICompiledXpath> m_select;
+
+public:
+
+    CEsdlTransformOperationVariable(IPropertyTree *tree) : CEsdlTransformOperationBase(tree)
+    {
+        m_name.set(tree->queryProp("@name"));
+        if (tree->hasProp("@select"))
+            m_select.setown(compileXpath(tree->queryProp("@select")));
+    }
+
+    virtual ~CEsdlTransformOperationVariable()
+    {
+    }
+
+
+    virtual bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
+    {
+        return xpathContext->addEvaluateCXVariable(m_name, m_select);
+    }
+
+    virtual void toDBGLog() override
+    {
+#if defined(_DEBUG)
+        DBGLOG(">%s> Variable with select(%s)", m_name.str(), m_select.get() ? m_select->getXpath() : "");
+#endif
+    }
+};
+
+class CEsdlTransformOperationParameter : public CEsdlTransformOperationBase
+{
+protected:
+    StringAttr m_name;
+    Owned<ICompiledXpath> m_select;
+
+public:
+
+    CEsdlTransformOperationParameter(IPropertyTree *tree) : CEsdlTransformOperationBase(tree)
+    {
+        m_name.set(tree->queryProp("@name"));
+        if (tree->hasProp("@select"))
+            m_select.setown(compileXpath(tree->queryProp("@select")));
+    }
+
+    virtual ~CEsdlTransformOperationParameter()
+    {
+    }
+
+
+    virtual bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
+    {
+        return xpathContext->addEvaluateCXParam(m_name.str(), m_select.get());
+    }
+
+    virtual void toDBGLog() override
+    {
+#if defined(_DEBUG)
+        DBGLOG(">%s> Parameter with select(%s)", m_name.str(), m_select.get() ? m_select->getXpath() : "");
+#endif
+    }
+};
+
 class CEsdlTransformOperationConditional : public CEsdlTransformOperationBase
 {
 private:
@@ -324,7 +390,12 @@ private:
     {
         Owned<IPropertyTreeIterator> children = tree->getElements("*");
         ForEach(*children)
-            m_children.append(*createEsdlTransformOperation(&children->query()));
+        {
+            Owned<IEsdlTransformOperation> operation = createEsdlTransformOperation(&children->query());
+            if (operation)
+                m_children.append(*operation.getClear());
+        }
+
     }
 
     bool evaluate(IXpathContext * xpathContext)
@@ -490,7 +561,10 @@ void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransfor
             ForEach(*configParams)
             {
                 IPropertyTree & currentParam = configParams->query();
-                xpathContext->addVariable(currentParam.queryProp("@name"), currentParam.queryProp("@value"));
+                if (currentParam.hasProp("@select"))
+                    xpathContext->addEvaluateVariable(currentParam.queryProp("@name"), currentParam.queryProp("@select"));
+                else
+                    xpathContext->addVariable(currentParam.queryProp("@name"), currentParam.queryProp("@value"));
             }
         }
         Owned<IPropertyTree> theroot = createPTreeFromXMLString(request.str());
@@ -536,48 +610,6 @@ IEsdlTransformOperation *createEsdlTransformOperation(IPropertyTree *element)
     return nullptr;
 }
 
-class CEsdlCustomTransform : public CInterfaceOf<IEsdlCustomTransform>
-{
-private:
-    IArrayOf<IEsdlTransformOperation> m_operations;
-    StringAttr m_name;
-    StringAttr m_target;
-
-public:
-    CEsdlCustomTransform(){}
-    CEsdlCustomTransform(IPropertyTree &cfg);
-
-    virtual void toDBGLog() override
-    {
-#if defined(_DEBUG)
-        DBGLOG(">>>>>>>>>>>>>>>>transform: '%s'>>>>>>>>>>", m_name.str());
-        ForEachItemIn(i, m_operations)
-            m_operations.item(i).toDBGLog();
-        DBGLOG("<<<<<<<<<<<<<<<<transform<<<<<<<<<<<<");
-#endif
-      }
-
-    virtual ~CEsdlCustomTransform(){}
-
-    virtual void processTransform(IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & request, IPropertyTree * bindingCfg) override;
-    virtual void processTransform(IEspContext * context, IPropertyTree *theroot, IXpathContext *xpathContext, const char *defaultTarget) override;
-    virtual void processTransform(IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & request, IPropertyTree * bindingCfg) override;
-};
-
-CEsdlCustomTransform::CEsdlCustomTransform(IPropertyTree &tree)
-{
-    m_name.set(tree.queryProp("@name"));
-    m_target.set(tree.queryProp("@target"));
-
-    DBGLOG("Compiling custom ESDL Transform: '%s'", m_name.str());
-
-    Owned<IPropertyTreeIterator> children = tree.getElements("*");
-    ForEach(*children)
-        m_operations.append(*createEsdlTransformOperation(&children->query()));
-
-    toDBGLog();
-}
-
 static IPropertyTree *getTargetPTree(IPropertyTree *tree, IXpathContext *xpathContext, const char *target)
 {
     StringBuffer xpath(target);
@@ -597,7 +629,6 @@ static IPropertyTree *getTargetPTree(IPropertyTree *tree, IXpathContext *xpathCo
     }
     return tree;
 }
-
 static IPropertyTree *getOperationTargetPTree(MapStringToMyClass<IPropertyTree> &treeMap, IPropertyTree *currentTree, IEsdlTransformOperation &operation, IPropertyTree *tree, IXpathContext *xpathContext, const char *target)
 {
     const char *mergedTarget = operation.queryMergedTarget();
@@ -612,34 +643,82 @@ static IPropertyTree *getOperationTargetPTree(MapStringToMyClass<IPropertyTree> 
     return opTree;
 }
 
-void CEsdlCustomTransform::processTransform(IEspContext * context, IPropertyTree *theroot, IXpathContext *xpathContext, const char *target)
+class CEsdlCustomTransform : public CInterfaceOf<IEsdlCustomTransform>
 {
-    if (m_target.length())
-        target = m_target.str();
-    MapStringToMyClass<IPropertyTree> treeMap; //cache trees because when there are merged targets they are likely to repeat
-    IPropertyTree *txTree = getTargetPTree(theroot, xpathContext, target);
-    treeMap.setValue(target, LINK(txTree));
-    ForEachItemIn(i, m_operations)
+private:
+    IArrayOf<IEsdlTransformOperation> m_variables; //keep separate and only at top level for now
+    IArrayOf<IEsdlTransformOperation> m_operations;
+    StringAttr m_name;
+    StringAttr m_target;
+
+public:
+    CEsdlCustomTransform(){}
+    CEsdlCustomTransform(IPropertyTree &tree)
     {
-        IPropertyTree *opTree = getOperationTargetPTree(treeMap, txTree, m_operations.item(i), theroot, xpathContext, target);
-        m_operations.item(i).process(context, opTree, xpathContext);
+        m_name.set(tree.queryProp("@name"));
+        m_target.set(tree.queryProp("@target"));
+
+        DBGLOG("Compiling custom ESDL Transform: '%s'", m_name.str());
+
+        Owned<IPropertyTreeIterator> parameters = tree.getElements("xsdl:param");
+        ForEach(*parameters)
+            m_variables.append(*new CEsdlTransformOperationParameter(&parameters->query()));
+
+        Owned<IPropertyTreeIterator> variables = tree.getElements("xsdl:variable");
+        ForEach(*variables)
+            m_variables.append(*new CEsdlTransformOperationVariable(&variables->query()));
+
+        Owned<IEsdlTransformOperation> operation;
+        Owned<IPropertyTreeIterator> children = tree.getElements("*");
+        ForEach(*children)
+        {
+            operation.setown(createEsdlTransformOperation(&children->query()));
+            if (operation)
+                m_operations.append(*operation.getClear());
+        }
     }
-}
 
-void CEsdlCustomTransform::processTransform(IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & request, IPropertyTree * bindingCfg)
-{
-    processServiceAndMethodTransforms({static_cast<IEsdlCustomTransform*>(this)}, context, tgtcfg, srvdef, mthdef, request, bindingCfg);
-}
 
-void CEsdlCustomTransform::processTransform(IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & request, IPropertyTree * bindingCfg)
-{
-    processServiceAndMethodTransforms({static_cast<IEsdlCustomTransform*>(this)}, context, tgtcfg, service, method, reqtype, request, bindingCfg);
-}
+    virtual void toDBGLog() override
+    {
+#if defined(_DEBUG)
+        DBGLOG(">>>>>>>>>>>>>>>>transform: '%s'>>>>>>>>>>", m_name.str());
+        ForEachItemIn(i, m_operations)
+            m_operations.item(i).toDBGLog();
+        DBGLOG("<<<<<<<<<<<<<<<<transform<<<<<<<<<<<<");
+#endif
+      }
+
+    virtual ~CEsdlCustomTransform(){}
+
+    void processTransform(IEspContext * context, IPropertyTree *theroot, IXpathContext *xpathContext, const char *target) override
+    {
+        if (m_target.length())
+            target = m_target.str();
+        MapStringToMyClass<IPropertyTree> treeMap; //cache trees because when there are merged targets they are likely to repeat
+        IPropertyTree *txTree = getTargetPTree(theroot, xpathContext, target);
+        treeMap.setValue(target, LINK(txTree));
+        ForEachItemIn(v, m_variables)
+            m_variables.item(v).process(context, txTree, xpathContext);
+        ForEachItemIn(i, m_operations)
+        {
+            IPropertyTree *opTree = getOperationTargetPTree(treeMap, txTree, m_operations.item(i), theroot, xpathContext, target);
+            m_operations.item(i).process(context, opTree, xpathContext);
+        }
+    }
+
+    void processTransform(IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & request, IPropertyTree * bindingCfg) override
+    {
+        processServiceAndMethodTransforms({static_cast<IEsdlCustomTransform*>(this)}, context, tgtcfg, srvdef, mthdef, request, bindingCfg);
+    }
+
+    void processTransform(IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & request, IPropertyTree * bindingCfg) override
+    {
+        processServiceAndMethodTransforms({static_cast<IEsdlCustomTransform*>(this)}, context, tgtcfg, service, method, reqtype, request, bindingCfg);
+    }
+};
 
 IEsdlCustomTransform *createEsdlCustomTransform(IPropertyTree &tree)
 {
-    StringBuffer marshalled;
-    toXML(&tree, marshalled.clear());
-    DBGLOG("TFORM: %s", marshalled.str());
     return new CEsdlCustomTransform(tree);
 }
