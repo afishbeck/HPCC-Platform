@@ -49,6 +49,25 @@ public:
     virtual void *getUserData() = 0;
     virtual void registerFunction(const char *xmlns, const char * name, void *f) = 0;
     virtual void registerNamespace(const char *prefix, const char *uri) = 0;
+    virtual void beginScope(const char *name) = 0;
+    virtual void endScope() = 0;
+
+};
+
+class CXpathContextScope : CInterface
+{
+private:
+    Linked<IXpathContext> context;
+public:
+    IMPLEMENT_IINTERFACE;
+    CXpathContextScope(IXpathContext *ctx, const char *name) : context(ctx)
+    {
+        context->beginScope(name);
+    }
+    virtual ~CXpathContextScope()
+    {
+        context->endScope();
+    }
 };
 
 extern "C" XMLLIB_API ICompiledXpath* compileXpath(const char * xpath);

@@ -184,7 +184,6 @@ class CEsdlTransformOperationFail : public CEsdlTransformOperationBase
 protected:
     StringAttr m_traceName;
     Owned<ICompiledXpath> m_message;
-    Owned<ICompiledXpath> m_source;
     Owned<ICompiledXpath> m_code;
 
 public:
@@ -231,8 +230,9 @@ public:
 
     CEsdlTransformOperationAssert(IPropertyTree *tree) : CEsdlTransformOperationFail(tree)
     {
-        if (tree->hasProp("@test"))
-            m_test.setown(compileXpath(tree->queryProp("@test")));
+        if (!tree->hasProp("@test"))
+            esdlOperationError("Custom transform: ", "Assert without test", m_traceName.str(), true);
+        m_test.setown(compileXpath(tree->queryProp("@test")));
     }
 
     virtual ~CEsdlTransformOperationAssert()
@@ -251,7 +251,7 @@ public:
     virtual void toDBGLog() override
     {
 #if defined(_DEBUG)
-        const char *testXpath = m_test.get() ? m_test->getXpath() : "true()";
+        const char *testXpath = m_test.get() ? m_test->getXpath() : "SYNTAX ERROR IN test";
         DBGLOG(">%s> Assert if '%s' with message(%s)", m_traceName.str(), testXpath, m_message.get() ? m_message->getXpath() : "");
 #endif
     }
@@ -477,9 +477,11 @@ private:
 
 void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & request, IPropertyTree * bindingCfg)
 {
-    LogLevel level = LogMax;
+    LogLevel level = LogMin;
     if (!transforms.size())
         return;
+    if (tgtcfg)
+        level = (unsigned) tgtcfg->getPropInt("@traceLevel", level);
 
     if (request.length()!=0)
     {
@@ -581,7 +583,8 @@ void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransfor
 
         toXML(theroot, request.clear());
 
-        DBGLOG(1,"MODIFIED REQUEST: %s", request.str());
+        if (level >= LogMax)
+            DBGLOG(1,"MODIFIED REQUEST: %s", request.str());
     }
 }
 
@@ -693,6 +696,8 @@ public:
 
     void processTransform(IEspContext * context, IPropertyTree *theroot, IXpathContext *xpathContext, const char *target) override
     {
+        CXpathContextScope scope(xpathContext, "transform");
+
         if (m_target.length())
             target = m_target.str();
         MapStringToMyClass<IPropertyTree> treeMap; //cache trees because when there are merged targets they are likely to repeat
