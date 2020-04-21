@@ -77,30 +77,30 @@ static constexpr const char * esdlScript = R"!!(<xsdl:CustomRequestTransform tar
       <xsdl:when test="not(xsdl:getFeatureSecAccessFlags('AllowSomething')=xsdl:secureAccessFlags('Full'))">
          <xsdl:Fail code="401" message="concat('auth flag check failed for something (', $clientversion, ')')"/>
       </xsdl:when>
-      <xsdl:when test="('1'=$FailLevel1A)">
+      <xsdl:when test="$FailLevel1A">
          <xsdl:Fail code="11" message="'FailLevel1A'"/>
       </xsdl:when>
-      <xsdl:when test="('1'=$FailLevel1B)">
-        <xsdl:if test="('1'=$FailLevel1B)">
+      <xsdl:when test="$FailLevel1B">
+        <xsdl:if test="$FailLevel1B">
            <xsdl:Fail code="12" message="'FailLevel1B'"/>
         </xsdl:if>
       </xsdl:when>
-      <xsdl:when test="('1'=$AssertLevel1C)">
-         <xsdl:Assert test="('0'=$AssertLevel1C)" code="13" message="'AssertLevel1C'"/>
+      <xsdl:when test="$AssertLevel1C">
+         <xsdl:Assert test="not($AssertLevel1C)" code="13" message="'AssertLevel1C'"/>
       </xsdl:when>
       <xsdl:otherwise>
          <xsdl:SetValue target="InnerTestCase"  value="$testcase"/>
          <xsdl:choose>
-            <xsdl:when test="('1'=$FailLevel2A)">
+            <xsdl:when test="$FailLevel2A">
                <xsdl:Fail code="21" message="'FailLevel2A'"/>
             </xsdl:when>
-            <xsdl:when test="('1'=$FailLevel2B)">
-              <xsdl:if test="('1'=$FailLevel2B)">
+            <xsdl:when test="$FailLevel2B">
+              <xsdl:if test="$FailLevel2B">
                  <xsdl:Fail code="22" message="'FailLevel2B'"/>
               </xsdl:if>
             </xsdl:when>
-            <xsdl:when test="('1'=$AssertLevel2C)">
-               <xsdl:Assert test="('0'=$AssertLevel2C)" code="23" message="'AssertLevel2C'"/>
+            <xsdl:when test="$AssertLevel2C">
+               <xsdl:Assert test="not($AssertLevel2C)" code="23" message="'AssertLevel2C'"/>
             </xsdl:when>
             <xsdl:otherwise>
                <xsdl:SetValue target="test"  value="'auth success'"/>
@@ -174,13 +174,13 @@ public:
     {
         constexpr const char *config = R"!!(<config>
   <Transform>
-    <Param name='testcase' value="'operations'"/>
-    <Param name='FailLevel1A' value='0'/>
-    <Param name='FailLevel1B' value='0'/>
-    <Param name='AssertLevel1C' value='0'/>
-    <Param name='FailLevel2A' value='0'/>
-    <Param name='FailLevel2B' value='0'/>
-    <Param name='AssertLevel2C' value='0'/>
+    <Param name='testcase' value="operations"/>
+    <Param name='FailLevel1A' select='false()'/>
+    <Param name='FailLevel1B' select='false()'/>
+    <Param name='AssertLevel1C' select='false()'/>
+    <Param name='FailLevel2A' select='false()'/>
+    <Param name='FailLevel2B' select='false()'/>
+    <Param name='AssertLevel2C' select='false()'/>
   </Transform>
 </config>)!!";
 
@@ -197,8 +197,8 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     </Context>
     <_TransactionId>1736623372_3126765312_1333296170</_TransactionId>
     <EchoPersonInfoRequest>
-     <TestCase>&apos;operations&apos;</TestCase>
-     <InnerTestCase>&apos;operations&apos;</InnerTestCase>
+     <TestCase>operations</TestCase>
+     <InnerTestCase>operations</InnerTestCase>
      <Var2>script</Var2>
      <Row>
       <Addresses>
@@ -238,13 +238,13 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     {
         constexpr const char *config = R"!!(<config>
   <Transform>
-    <Param name='testcase' value="'operations'"/>
-    <Param name='FailLevel1A' value='0'/>
-    <Param name='FailLevel1B' value='0'/>
-    <Param name='AssertLevel1C' value='0'/>
-    <Param name='FailLevel2A' value='0'/>
-    <Param name='FailLevel2B' value='0'/>
-    <Param name='AssertLevel2C' value='0'/>
+    <Param name='testcase' value="operations"/>
+    <Param name='FailLevel1A' select='false()'/>
+    <Param name='FailLevel1B' select='false()'/>
+    <Param name='AssertLevel1C' select='false()'/>
+    <Param name='FailLevel2A' select='false()'/>
+    <Param name='FailLevel2B' select='false()'/>
+    <Param name='AssertLevel2C' select='false()'/>
     <Param name='param1' value='provided'/>
     <Param name='param2' select="concat('produced and ', $param1)"/>
     <Param name='var1' value='provided'/>
@@ -265,8 +265,8 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     </Context>
     <_TransactionId>1736623372_3126765312_1333296170</_TransactionId>
     <EchoPersonInfoRequest>
-     <TestCase>&apos;operations&apos;</TestCase>
-     <InnerTestCase>&apos;operations&apos;</InnerTestCase>
+     <TestCase>operations</TestCase>
+     <InnerTestCase>operations</InnerTestCase>
      <Var2>script</Var2>
      <Row>
       <Addresses>
@@ -306,13 +306,13 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     {
         constexpr const char *config = R"!!(<config>
   <Transform>
-    <Param name='testcase' value="'operations'"/>
-    <Param name='FailLevel1A' value='1'/>
-    <Param name='FailLevel1B' value='1'/>
-    <Param name='AssertLevel1C' value='1'/>
-    <Param name='FailLevel2A' value='1'/>
-    <Param name='FailLevel2B' value='1'/>
-    <Param name='AssertLevel2C' value='1'/>
+    <Param name='testcase' value="operations"/>
+    <Param name='FailLevel1A' select='true()'/>
+    <Param name='FailLevel1B' select='true()'/>
+    <Param name='AssertLevel1C' select='true()'/>
+    <Param name='FailLevel2A' select='true()'/>
+    <Param name='FailLevel2B' select='true()'/>
+    <Param name='AssertLevel2C' select='true()'/>
   </Transform>
 </config>)!!";
 
@@ -323,13 +323,13 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     {
         constexpr const char *config = R"!!(<config>
   <Transform>
-    <Param name='testcase' value="'operations'"/>
-    <Param name='FailLevel1A' value='0'/>
-    <Param name='FailLevel1B' value='1'/>
-    <Param name='AssertLevel1C' value='1'/>
-    <Param name='FailLevel2A' value='1'/>
-    <Param name='FailLevel2B' value='1'/>
-    <Param name='AssertLevel2C' value='1'/>
+    <Param name='testcase' value="operations"/>
+    <Param name='FailLevel1A' select='false()'/>
+    <Param name='FailLevel1B' select='true()'/>
+    <Param name='AssertLevel1C' select='true()'/>
+    <Param name='FailLevel2A' select='true()'/>
+    <Param name='FailLevel2B' select='true()'/>
+    <Param name='AssertLevel2C' select='true()'/>
   </Transform>
 </config>)!!";
 
@@ -340,13 +340,13 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     {
         constexpr const char *config = R"!!(<config>
   <Transform>
-    <Param name='testcase' value="'operations'"/>
-    <Param name='FailLevel1A' value='0'/>
-    <Param name='FailLevel1B' value='0'/>
-    <Param name='AssertLevel1C' value='1'/>
-    <Param name='FailLevel2A' value='1'/>
-    <Param name='FailLevel2B' value='1'/>
-    <Param name='AssertLevel2C' value='1'/>
+    <Param name='testcase' value="operations"/>
+    <Param name='FailLevel1A' select='false()'/>
+    <Param name='FailLevel1B' select='false()'/>
+    <Param name='AssertLevel1C' select='true()'/>
+    <Param name='FailLevel2A' select='true()'/>
+    <Param name='FailLevel2B' select='true()'/>
+    <Param name='AssertLevel2C' select='true()'/>
   </Transform>
 </config>)!!";
 
@@ -357,13 +357,13 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     {
         constexpr const char *config = R"!!(<config>
   <Transform>
-    <Param name='testcase' value="'operations'"/>
-    <Param name='FailLevel1A' value='0'/>
-    <Param name='FailLevel1B' value='0'/>
-    <Param name='AssertLevel1C' value='0'/>
-    <Param name='FailLevel2A' value='1'/>
-    <Param name='FailLevel2B' value='1'/>
-    <Param name='AssertLevel2C' value='1'/>
+    <Param name='testcase' value="operations"/>
+    <Param name='FailLevel1A' select='false()'/>
+    <Param name='FailLevel1B' select='false()'/>
+    <Param name='AssertLevel1C' select='false()'/>
+    <Param name='FailLevel2A' select='true()'/>
+    <Param name='FailLevel2B' select='true()'/>
+    <Param name='AssertLevel2C' select='true()'/>
   </Transform>
 </config>)!!";
 
@@ -374,13 +374,13 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     {
         constexpr const char *config = R"!!(<config>
   <Transform>
-    <Param name='testcase' value="'operations'"/>
-    <Param name='FailLevel1A' value='0'/>
-    <Param name='FailLevel1B' value='0'/>
-    <Param name='AssertLevel1C' value='0'/>
-    <Param name='FailLevel2A' value='0'/>
-    <Param name='FailLevel2B' value='1'/>
-    <Param name='AssertLevel2C' value='1'/>
+    <Param name='testcase' value="operations"/>
+    <Param name='FailLevel1A' select='false()'/>
+    <Param name='FailLevel1B' select='false()'/>
+    <Param name='AssertLevel1C' select='false()'/>
+    <Param name='FailLevel2A' select='false()'/>
+    <Param name='FailLevel2B' select='true()'/>
+    <Param name='AssertLevel2C' select='true()'/>
   </Transform>
 </config>)!!";
 
@@ -391,13 +391,13 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     {
         constexpr const char *config = R"!!(<config>
   <Transform>
-    <Param name='testcase' value="'operations'"/>
-    <Param name='FailLevel1A' value='0'/>
-    <Param name='FailLevel1B' value='0'/>
-    <Param name='AssertLevel1C' value='0'/>
-    <Param name='FailLevel2A' value='0'/>
-    <Param name='FailLevel2B' value='0'/>
-    <Param name='AssertLevel2C' value='1'/>
+    <Param name='testcase' value="operations"/>
+    <Param name='FailLevel1A' select='false()'/>
+    <Param name='FailLevel1B' select='false()'/>
+    <Param name='AssertLevel1C' select='false()'/>
+    <Param name='FailLevel2A' select='false()'/>
+    <Param name='FailLevel2B' select='false()'/>
+    <Param name='AssertLevel2C' select='true()'/>
   </Transform>
 </config>)!!";
 

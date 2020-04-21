@@ -111,7 +111,6 @@ public:
 
 typedef std::vector<std::unique_ptr<CLibXpathScope>> XPathScopeVector;
 
-
 class CLibXpathContext : public CInterface, public IXpathContext
 {
 private:

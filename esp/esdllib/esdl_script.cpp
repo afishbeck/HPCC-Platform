@@ -69,21 +69,19 @@ protected:
 public:
     CEsdlTransformOperationSetValue(IPropertyTree *tree) : CEsdlTransformOperationBase(tree)
     {
-        const char *op = tree->queryName();
-        m_append = (op && strieq(op, "xsdl:AppendValue"));
-
         m_traceName.set(tree->queryProp("@name"));
-        m_target.set(tree->queryProp("@target"));
         m_optional = tree->getPropBool("@optional", false);
 
-        if (m_target.isEmpty())
+        if (isEmptyString(tree->queryProp("@target")))
             esdlOperationError("Custom transform: ", "SetValue or AppendValue without target", m_traceName.str(), !m_optional);
 
-        StringAttr strValueXpath(tree->queryProp("@value"));
-        if (strValueXpath.length())
-            m_valueXpath.setown(compileXpath(strValueXpath));
-        else
+        if (isEmptyString(tree->queryProp("@value")))
             esdlOperationError("Custom transform: ", "SetValue or AppendValue without value", m_traceName.str(), !m_optional);
+
+        m_append = strieq(tree->queryName(), "xsdl:AppendValue");
+
+        m_target.set(tree->queryProp("@target"));
+        m_valueXpath.setown(compileXpath(tree->queryProp("@value")));
     }
 
     virtual void toDBGLog() override
@@ -187,14 +185,17 @@ protected:
     Owned<ICompiledXpath> m_code;
 
 public:
-
     CEsdlTransformOperationFail(IPropertyTree *tree) : CEsdlTransformOperationBase(tree)
     {
         m_traceName.set(tree->queryProp("@name"));
-        if (tree->hasProp("@code"))
-            m_code.setown(compileXpath(tree->queryProp("@code")));
-        if (tree->hasProp("@message"))
-            m_message.setown(compileXpath(tree->queryProp("@message")));
+
+        if (isEmptyString(tree->queryProp("@code")))
+            esdlOperationError("Custom transform: ", "Fail without code", m_traceName.str(), true);
+        if (isEmptyString(tree->queryProp("@message")))
+            esdlOperationError("Custom transform: ", "Fail without message", m_traceName.str(), true);
+
+        m_code.setown(compileXpath(tree->queryProp("@code")));
+        m_message.setown(compileXpath(tree->queryProp("@message")));
     }
 
     virtual ~CEsdlTransformOperationFail()
@@ -227,10 +228,9 @@ private:
     Owned<ICompiledXpath> m_test; //assert is like a conditional fail
 
 public:
-
     CEsdlTransformOperationAssert(IPropertyTree *tree) : CEsdlTransformOperationFail(tree)
     {
-        if (!tree->hasProp("@test"))
+        if (isEmptyString(tree->queryProp("@test")))
             esdlOperationError("Custom transform: ", "Assert without test", m_traceName.str(), true);
         m_test.setown(compileXpath(tree->queryProp("@test")));
     }
@@ -264,10 +264,13 @@ protected:
     Owned<ICompiledXpath> m_select;
 
 public:
-
     CEsdlTransformOperationVariable(IPropertyTree *tree) : CEsdlTransformOperationBase(tree)
     {
+        if (isEmptyString(tree->queryProp("@name")))
+            esdlOperationError("Custom transform: ", "Variable without name", "", true);
         m_name.set(tree->queryProp("@name"));
+        if (isEmptyString(tree->queryProp("@select")))
+            esdlOperationError("Custom transform: ", "Variable without select", m_name.str(), true);
         if (tree->hasProp("@select"))
             m_select.setown(compileXpath(tree->queryProp("@select")));
     }
@@ -275,7 +278,6 @@ public:
     virtual ~CEsdlTransformOperationVariable()
     {
     }
-
 
     virtual bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
@@ -297,7 +299,6 @@ protected:
     Owned<ICompiledXpath> m_select;
 
 public:
-
     CEsdlTransformOperationParameter(IPropertyTree *tree) : CEsdlTransformOperationBase(tree)
     {
         m_name.set(tree->queryProp("@name"));
@@ -336,35 +337,37 @@ public:
         if (tree)
         {
             const char *op = tree->queryName();
-            if (!op || streq(op, "xsdl:if"))
+            if (streq(op, "xsdl:if"))
                 m_op = 'i';
             else if (streq(op, "xsdl:when"))
                 m_op = 'w';
             else if (streq(op, "xsdl:otherwise"))
                 m_op = 'o';
-            StringBuffer test;
-            test.set(tree->queryProp("@test"));
-            if (test.length())
-                m_test.setown(compileXpath(test.str()));
+            if (m_op!='o')
+            {
+                if (isEmptyString(tree->queryProp("@test")))
+                    esdlOperationError("Custom transform: ", "conditional without test", "", true);
+                m_test.setown(compileXpath(tree->queryProp("@test")));
+            }
 
             loadChildren(tree);
         }
     }
 
-    ~CEsdlTransformOperationConditional(){}
+    virtual ~CEsdlTransformOperationConditional(){}
 
     const char *queryOperator()
     {
         switch(m_op)
         {
         case 'o':
-            return "OTHERWISE";
+            return "xsdl:otherwise";
         case 'w':
-            return "WHEN";
+            return "xsdl:when";
         default:
             break;
         }
-        return "IF";
+        return "xsdl:if";
     }
     bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
@@ -395,7 +398,6 @@ private:
             if (operation)
                 m_children.append(*operation.getClear());
         }
-
     }
 
     bool evaluate(IXpathContext * xpathContext)
@@ -436,7 +438,7 @@ public:
         }
     }
 
-    ~CEsdlTransformOperationChoose(){}
+    virtual ~CEsdlTransformOperationChoose(){}
 
     bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
