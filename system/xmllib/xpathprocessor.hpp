@@ -35,8 +35,6 @@ public:
     virtual bool addVariable(const char * name, const char * val) = 0;
     virtual bool addEvaluateCXVariable(const char * name, ICompiledXpath *xpath) = 0;
     virtual bool addEvaluateVariable(const char * name, const char * xpath) = 0;
-    virtual bool addEvaluateCXParam(const char * name, ICompiledXpath *xpath) = 0;
-    virtual bool addEvaluateParam(const char * name, const char * xpath) = 0;
     virtual const char * getVariable(const char * name, StringBuffer & variable) = 0;
     virtual bool evaluateAsBoolean(const char * xpath) = 0;
     virtual bool evaluateAsString(const char * xpath, StringBuffer & evaluated) = 0;
@@ -51,7 +49,7 @@ public:
     virtual void registerNamespace(const char *prefix, const char *uri) = 0;
     virtual void beginScope(const char *name) = 0;
     virtual void endScope() = 0;
-
+    virtual bool scopeHasVariable(const char *scope, const char *name, const char *ns_uri, const char *expectedScopeName) = 0;
 };
 
 class CXpathContextScope : CInterface

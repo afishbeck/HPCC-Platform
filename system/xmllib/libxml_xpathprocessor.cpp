@@ -194,6 +194,52 @@ public:
         return obj;
     }
 
+    CLibXpathScope *queryScope(const char *scope)
+    {
+        auto count = scopes.size();
+        if (!count)
+            return nullptr;
+        if (!*scope || streq(scope, "."))
+            return scopes.back().get();
+        if (streq(scope, ".."))
+        {
+            if (count<2)
+                return nullptr;
+            return scopes[count-2].get();
+        }
+        for (XPathScopeVector::reverse_iterator it=scopes.rbegin(); it!=scopes.rend(); ++it)
+        {
+            if (streq(it->get()->name, scope))
+                return it->get();
+        }
+        return nullptr;
+    }
+
+    CLibXpathScope *queryExpectedScope(const char *scope, const char *expected)
+    {
+        CLibXpathScope *found = queryScope(scope);
+        if (found)
+        {
+            if (!expected || streq(expected, found->name))
+                return found;
+        }
+        return nullptr;
+    }
+    virtual bool scopeHasVariable(const char *scope, const char *name, const char *ns_uri, const char *expected) override
+    {
+        if (isEmptyString(name))
+            return false;
+        const char *fullname = name;
+        StringBuffer s;
+        if (!isEmptyString(ns_uri))
+            fullname = s.append(ns_uri).append(':').append(name).str();
+        if (!scope)
+            return xmlHashLookup2(m_xpathContext->varHash, (const xmlChar *)name, (const xmlChar *)ns_uri)!=nullptr;
+        CLibXpathScope *found = queryExpectedScope(scope, expected);
+        if (!found)
+            return false;
+        return found->getObject(fullname)!=nullptr;
+    }
     virtual bool addObjectVariable(const char * name, xmlXPathObjectPtr obj)
     {
         if (isEmptyString(name))
@@ -245,28 +291,6 @@ public:
         }
 
         return false;
-    }
-
-    virtual bool addEvaluateParam(const char * name, const char * xpath) override
-    {
-        xmlXPathObjectPtr ptr = xmlXPathVariableLookupNS(m_xpathContext, (const xmlChar *)name, nullptr);
-        if (ptr) //over write externally defined variables but not params
-        {
-            xmlXPathFreeObject(ptr); //xmlXPathVariableLookup returns a copy
-            return true;
-        }
-        return addEvaluateVariable(name, xpath);
-    }
-
-    virtual bool addEvaluateCXParam(const char * name, ICompiledXpath * compiled) override
-    {
-        xmlXPathObjectPtr ptr = xmlXPathVariableLookup(m_xpathContext, (const xmlChar *)name);
-        if (ptr) //over write externally defined variables but not params
-        {
-            xmlXPathFreeObject(ptr); //xmlXPathVariableLookup returns a copy
-            return true;
-        }
-        return addEvaluateCXVariable(name, compiled);
     }
 
     virtual const char * getVariable(const char * name, StringBuffer & variable) override

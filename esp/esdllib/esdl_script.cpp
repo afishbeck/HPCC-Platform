@@ -341,7 +341,11 @@ public:
     virtual const char *queryOperationTag() override {return "parameter";}
     virtual bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
-        return xpathContext->addEvaluateCXParam(m_name.str(), m_select.get());
+        if (xpathContext->scopeHasVariable(".", m_name, nullptr, nullptr))
+            return true;
+        if (xpathContext->scopeHasVariable("..", m_name, nullptr, "external_parameters")) //are we in the immediate child scope of the external parameters?
+            return true;
+        return xpathContext->addEvaluateCXVariable(m_name, m_select.get());
     }
 
     virtual void toDBGLog() override
@@ -542,6 +546,8 @@ void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransfor
         }
 
         registerEsdlXPathExtensions(xpathContext, context, prefixes);
+
+        CXpathContextScope scope(xpathContext, "external_parameters");
 
         VStringBuffer ver("%g", context->getClientVersion());
         if(!xpathContext->addVariable("clientversion", ver.str()))
