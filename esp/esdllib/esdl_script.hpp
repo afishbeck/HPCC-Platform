@@ -45,13 +45,14 @@ interface IEsdlCustomTransform : extends IInterface
     virtual void processTransform(IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & request, IPropertyTree * bindingCfg) = 0;
     virtual void processTransform(IEspContext * context, IPropertyTree *theroot, IXpathContext *xpathContext, const char *defaultTarget) = 0;
     virtual void processTransform(IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & request, IPropertyTree * bindingCfg) = 0;
+    virtual void appendEsdlURIPrefixes(StringArray &prefixes) = 0;
     virtual void toDBGLog() = 0;
 };
 
 
 esdl_decl void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & request, IPropertyTree * bindingCfg);
-esdl_decl IEsdlCustomTransform *createEsdlCustomTransform(IPropertyTree &customRequestTransform);
+esdl_decl IEsdlCustomTransform *createEsdlCustomTransform(IPropertyTree &customRequestTransform, const char *ns_prefix);
 
-esdl_decl void registerEsdlXPathExtensions(IXpathContext *xpathCtx, IEspContext *espCtx);
+esdl_decl void registerEsdlXPathExtensions(IXpathContext *xpathCtx, IEspContext *espCtx, const StringArray &prefixes);
 
 #endif /* ESDL_SVC_CUSTOM_HPP_ */

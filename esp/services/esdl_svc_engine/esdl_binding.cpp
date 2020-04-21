@@ -417,7 +417,7 @@ void EsdlServiceImpl::addServiceLevelRequestTransform(IPropertyTree *customReque
 
     try
     {
-        m_serviceLevelRequestTransform.setown(createEsdlCustomTransform(*customRequestTransform));
+        m_serviceLevelRequestTransform.setown(createEsdlCustomTransform(*customRequestTransform, nullptr));
     }
     catch(IException* e)
     {
@@ -441,7 +441,7 @@ void EsdlServiceImpl::addMethodLevelRequestTransform(const char *method, IProper
 
     try
     {
-        Owned<IEsdlCustomTransform> crt = createEsdlCustomTransform(*customRequestTransform);
+        Owned<IEsdlCustomTransform> crt = createEsdlCustomTransform(*customRequestTransform, nullptr);
         m_customRequestTransformMap.setValue(method, crt.get());
     }
     catch(IException* e)

@@ -62,61 +62,61 @@ static constexpr const char * soapRequest = R"!!(<?xml version="1.0" encoding="U
 </soap:Envelope>
 )!!";
 
-static constexpr const char * esdlScript = R"!!(<xsdl:CustomRequestTransform target="soap:Body/extra/{$query}/{$request}">
-   <xsdl:variable name="var1"  select="'script'"/>
-   <xsdl:variable name="var2"  select="$var1"/>
-   <xsdl:param name="param1" select="'script'"/>
-   <xsdl:param name="param2" select="$param1"/>
-   <xsdl:SetValue target="TestCase"  value="$testcase"/>
-   <xsdl:SetValue target="Var2"  value="$var2"/>
-   <xsdl:SetValue target="Param2"  value="$param2"/>
-   <xsdl:choose>
-      <xsdl:when test="not(xsdl:validateFeaturesAccess('AllowSomething : Read, AllowAnother : Full'))">
-         <xsdl:Fail code="401" message="concat('authorization failed for something or other (', $clientversion, ')')"/>
-      </xsdl:when>
-      <xsdl:when test="not(xsdl:getFeatureSecAccessFlags('AllowSomething')=xsdl:secureAccessFlags('Full'))">
-         <xsdl:Fail code="401" message="concat('auth flag check failed for something (', $clientversion, ')')"/>
-      </xsdl:when>
-      <xsdl:when test="$FailLevel1A">
-         <xsdl:Fail code="11" message="'FailLevel1A'"/>
-      </xsdl:when>
-      <xsdl:when test="$FailLevel1B">
-        <xsdl:if test="$FailLevel1B">
-           <xsdl:Fail code="12" message="'FailLevel1B'"/>
-        </xsdl:if>
-      </xsdl:when>
-      <xsdl:when test="$AssertLevel1C">
-         <xsdl:Assert test="not($AssertLevel1C)" code="13" message="'AssertLevel1C'"/>
-      </xsdl:when>
-      <xsdl:otherwise>
-         <xsdl:SetValue target="InnerTestCase"  value="$testcase"/>
-         <xsdl:choose>
-            <xsdl:when test="$FailLevel2A">
-               <xsdl:Fail code="21" message="'FailLevel2A'"/>
-            </xsdl:when>
-            <xsdl:when test="$FailLevel2B">
-              <xsdl:if test="$FailLevel2B">
-                 <xsdl:Fail code="22" message="'FailLevel2B'"/>
-              </xsdl:if>
-            </xsdl:when>
-            <xsdl:when test="$AssertLevel2C">
-               <xsdl:Assert test="not($AssertLevel2C)" code="23" message="'AssertLevel2C'"/>
-            </xsdl:when>
-            <xsdl:otherwise>
-               <xsdl:SetValue target="test"  value="'auth success'"/>
-               <xsdl:SetValue target="Row/Name/Last" value="'XXX'"/>
-               <xsdl:SetValue target="Row/Name/Last" value="'POE'"/>
-               <xsdl:AppendValue target="Row/AppendTo"  value="'This'"/>
-               <xsdl:AppendValue target="Row/AppendTo"  value="'One'"/>
-               <xsdl:AppendValue target="Row/AppendTo"  value="'String'"/>
-               <xsdl:AddValue target="Row/Name/Aliases/Alias"  value="'moe'"/>
-               <xsdl:AddValue target="Row/Name/Aliases/Alias"  value="'poe'"/>
-               <xsdl:AddValue target="Row/Name/Aliases/Alias"  value="'roe'"/>
-            </xsdl:otherwise>
-         </xsdl:choose>
-      </xsdl:otherwise>
-   </xsdl:choose>
-</xsdl:CustomRequestTransform>
+static constexpr const char * esdlScript = R"!!(<es:CustomRequestTransform target="soap:Body/extra/{$query}/{$request}">
+   <es:variable name="var1"  select="'script'"/>
+   <es:variable name="var2"  select="$var1"/>
+   <es:param name="param1" select="'script'"/>
+   <es:param name="param2" select="$param1"/>
+   <es:set-value target="TestCase"  select="$testcase"/>
+   <es:set-value target="Var2"  select="$var2"/>
+   <es:set-value target="Param2"  select="$param2"/>
+   <es:choose>
+      <es:when test="not(es:validateFeaturesAccess('AllowSomething : Read, AllowAnother : Full'))">
+         <es:fail code="401" message="concat('authorization failed for something or other (', $clientversion, ')')"/>
+      </es:when>
+      <es:when test="not(es:getFeatureSecAccessFlags('AllowSomething')=es:secureAccessFlags('Full'))">
+         <es:fail code="401" message="concat('auth flag check failed for something (', $clientversion, ')')"/>
+      </es:when>
+      <es:when test="$FailLevel1A">
+         <es:fail code="11" message="'FailLevel1A'"/>
+      </es:when>
+      <es:when test="$FailLevel1B">
+        <es:if test="$FailLevel1B">
+           <es:fail code="12" message="'FailLevel1B'"/>
+        </es:if>
+      </es:when>
+      <es:when test="$AssertLevel1C">
+         <es:assert test="not($AssertLevel1C)" code="13" message="'AssertLevel1C'"/>
+      </es:when>
+      <es:otherwise>
+         <es:set-value target="InnerTestCase"  select="$testcase"/>
+         <es:choose>
+            <es:when test="$FailLevel2A">
+               <es:fail code="21" message="'FailLevel2A'"/>
+            </es:when>
+            <es:when test="$FailLevel2B">
+              <es:if test="$FailLevel2B">
+                 <es:fail code="22" message="'FailLevel2B'"/>
+              </es:if>
+            </es:when>
+            <es:when test="$AssertLevel2C">
+               <es:assert test="not($AssertLevel2C)" code="23" message="'AssertLevel2C'"/>
+            </es:when>
+            <es:otherwise>
+               <es:set-value target="test"  select="'auth success'"/>
+               <es:set-value target="Row/Name/Last" select="'XXX'"/>
+               <es:set-value target="Row/Name/Last" select="'POE'"/>
+               <es:append-value target="Row/AppendTo"  select="'This'"/>
+               <es:append-value target="Row/AppendTo"  select="'One'"/>
+               <es:append-value target="Row/AppendTo"  select="'String'"/>
+               <es:add-value target="Row/Name/Aliases/Alias"  select="'moe'"/>
+               <es:add-value target="Row/Name/Aliases/Alias"  select="'poe'"/>
+               <es:add-value target="Row/Name/Aliases/Alias"  select="'roe'"/>
+            </es:otherwise>
+         </es:choose>
+      </es:otherwise>
+   </es:choose>
+</es:CustomRequestTransform>
 )!!";
 
 static const char *target_config = "<method queryname='EchoPersonInfo'/>";
@@ -145,7 +145,7 @@ public:
             Owned<IPropertyTree> cfg = createPTreeFromXMLString(config);
             Owned<IPropertyTree> target = createPTreeFromXMLString(target_config);
             Owned<IPropertyTree> script = createPTreeFromXMLString(esdlScript);
-            Owned<IEsdlCustomTransform> tf = createEsdlCustomTransform(*script);
+            Owned<IEsdlCustomTransform> tf = createEsdlCustomTransform(*script, nullptr);
 
             Owned<IEspContext> ctx = createEspContext(nullptr);//createHttpSecureContext(m_request.get()));
             tf->processTransform(ctx, target, "EsdlExample", "EchoPersonInfo", "EchoPersonInfoRequest", request, cfg);
@@ -197,8 +197,8 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     </Context>
     <_TransactionId>1736623372_3126765312_1333296170</_TransactionId>
     <EchoPersonInfoRequest>
-     <TestCase>operations</TestCase>
      <InnerTestCase>operations</InnerTestCase>
+     <TestCase>operations</TestCase>
      <Var2>script</Var2>
      <Row>
       <Addresses>
@@ -222,8 +222,8 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
       </Name>
       <AppendTo>ThisOneString</AppendTo>
      </Row>
-     <Param2>script</Param2>
      <test>auth success</test>
+     <Param2>script</Param2>
     </EchoPersonInfoRequest>
    </EchoPersonInfo>
   </extra>
@@ -265,8 +265,8 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     </Context>
     <_TransactionId>1736623372_3126765312_1333296170</_TransactionId>
     <EchoPersonInfoRequest>
-     <TestCase>operations</TestCase>
      <InnerTestCase>operations</InnerTestCase>
+     <TestCase>operations</TestCase>
      <Var2>script</Var2>
      <Row>
       <Addresses>
@@ -290,8 +290,8 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
       </Name>
       <AppendTo>ThisOneString</AppendTo>
      </Row>
-     <Param2>produced and provided</Param2>
      <test>auth success</test>
+     <Param2>produced and provided</Param2>
     </EchoPersonInfoRequest>
    </EchoPersonInfo>
   </extra>

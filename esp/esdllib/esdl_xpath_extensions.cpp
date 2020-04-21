@@ -186,11 +186,18 @@ static void getFeatureSecAccessFlagsFunction (xmlXPathParserContextPtr ctxt, int
     xmlXPathReturnNumber(ctxt, access);
 }
 
-void registerEsdlXPathExtensions(IXpathContext *xpathContext, IEspContext *context)
+void registerEsdlXPathExtensions(IXpathContext *xpathContext, IEspContext *context, const StringArray &prefixes)
 {
     xpathContext->setUserData(context);
-    xpathContext->registerNamespace("xsdl", "urn:hpcc:xsdl");
-    xpathContext->registerFunction("urn:hpcc:xsdl", "validateFeaturesAccess", (void  *)validateFeaturesAccessFunction);
-    xpathContext->registerFunction("urn:hpcc:xsdl", "secureAccessFlags", (void  *)secureAccessFlagsFunction);
-    xpathContext->registerFunction("urn:hpcc:xsdl", "getFeatureSecAccessFlags", (void  *)getFeatureSecAccessFlagsFunction);
+    if (!prefixes.ordinality())
+        xpathContext->registerNamespace("esdl", "urn:hpcc:esdl:script");
+    else
+    {
+        ForEachItemIn(i, prefixes)
+            xpathContext->registerNamespace(prefixes.item(i), "urn:hpcc:esdl:script");
+    }
+
+    xpathContext->registerFunction("urn:hpcc:esdl:script", "validateFeaturesAccess", (void  *)validateFeaturesAccessFunction);
+    xpathContext->registerFunction("urn:hpcc:esdl:script", "secureAccessFlags", (void  *)secureAccessFlagsFunction);
+    xpathContext->registerFunction("urn:hpcc:esdl:script", "getFeatureSecAccessFlags", (void  *)getFeatureSecAccessFlagsFunction);
 }
