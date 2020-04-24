@@ -32,6 +32,7 @@
 #include <libxml/xpath.h>
 #include <libxml/xmlschemas.h>
 #include <libxml/hash.h>
+#include <libexslt/exslt.h>
 
 #include "xpathprocessor.hpp"
 #include "xmlerror.hpp"
@@ -40,7 +41,42 @@
 #include <stack>
 #include <memory>
 
-class CLibCompiledXpath : public CInterface, public ICompiledXpath
+static inline char *skipWS(char *s)
+{
+    while (isspace(*s)) s++;
+    return s;
+}
+static char *markEndGetNext(char *line)
+{
+    char *end = (char *)strchr(line, '\n');
+    if (!end)
+        return nullptr;
+    *end=0;
+    if (isEmptyString(++end))
+        return nullptr;
+    return end;
+}
+static char *extractFromLineGetNext(StringArray &functions, StringArray &variables, char *line)
+{
+    line = skipWS(line);
+    if (isEmptyString(line))
+        return nullptr;
+    char *next = markEndGetNext(line);
+    if (strncmp(line, "FUNCTION", 8)==0)
+    {
+        char *paren = (char *)strchr(line, '(');
+        if (paren)
+            *paren=0;
+        functions.append(skipWS(line+8+1));
+    }
+    else if (strncmp(line, "VARIABLE", 8)==0)
+    {
+        variables.append(skipWS(line+8+1));
+    }
+    return next;
+}
+
+class CLibCompiledXpath : public CInterfaceOf<ICompiledXpath>
 {
 private:
     xmlXPathCompExprPtr m_compiledXpathExpression = nullptr;
@@ -48,8 +84,6 @@ private:
     ReadWriteLock m_rwlock;
 
 public:
-    IMPLEMENT_IINTERFACE;
-
     CLibCompiledXpath(const char * xpath)
     {
         m_xpath.set(xpath);
@@ -67,12 +101,30 @@ public:
     {
         return m_compiledXpathExpression;
     }
+
+    virtual void extractReferences(StringArray &functions, StringArray &variables) override
+    {
+        char *buf = nullptr;
+        size_t len = 0;
+
+        FILE *stream = open_memstream(&buf, &len);
+        if (stream == nullptr)
+            return;
+
+        xmlXPathDebugDumpCompExpr(stream, m_compiledXpathExpression, 0);
+        fputc(0, stream);
+        fflush(stream);
+        fclose (stream);
+        char *line = buf;
+        while (line)
+            line = extractFromLineGetNext(functions, variables, line);
+        free (buf);
+    }
 };
 
 static xmlXPathObjectPtr variableLookupFunc(void *data, const xmlChar *name, const xmlChar *ns_uri);
 
 typedef std::map<std::string, xmlXPathObjectPtr> XPathObjectMap;
-typedef std::pair<std::string, xmlXPathObjectPtr> XPathObjectPair;
 
 class CLibXpathScope
 {
@@ -110,38 +162,45 @@ public:
 };
 
 typedef std::vector<std::unique_ptr<CLibXpathScope>> XPathScopeVector;
+typedef std::map<std::string, ICompiledXpath*> XPathInputMap;
 
-class CLibXpathContext : public CInterface, public IXpathContext
+class CLibXpathContext : public CInterfaceOf<IXpathContext>
 {
 private:
+    XPathInputMap provided;
     xmlDocPtr m_xmlDoc = nullptr;
     xmlXPathContextPtr m_xpathContext = nullptr;
     StringBuffer m_xpath;
     ReadWriteLock m_rwlock;
     XPathScopeVector scopes;
+    bool strictParameterDeclaration = true;
 
 public:
-    IMPLEMENT_IINTERFACE;
-
-    CLibXpathContext(const char * xmldoc) //not thread safe
+    CLibXpathContext(const char * xmldoc, bool _strictParameterDeclaration) : strictParameterDeclaration(_strictParameterDeclaration)
     {
+        beginScope("/");
         setXmlDoc(xmldoc);
     }
 
     ~CLibXpathContext()
     {
+        for (XPathInputMap::iterator it=provided.begin(); it!=provided.end(); ++it)
+            it->second->Release();
         xmlXPathFreeContext(m_xpathContext);
         xmlFreeDoc(m_xmlDoc);
     }
 
     void beginScope(const char *name) override
     {
+        WriteLockBlock wblock(m_rwlock);
         scopes.emplace_back(new CLibXpathScope(name));
     }
 
     void endScope() override
     {
-        scopes.pop_back();
+        WriteLockBlock wblock(m_rwlock);
+        if (scopes.size()>1) //preserve root scope
+            scopes.pop_back();
     }
 
     static void tableScanCallback(void *payload, void *data, xmlChar *name)
@@ -152,95 +211,83 @@ public:
     virtual void registerNamespace(const char *prefix, const char * uri) override
     {
         if (m_xpathContext)
+        {
+            WriteLockBlock wblock(m_rwlock);
             xmlXPathRegisterNs(m_xpathContext, (const xmlChar *) prefix, (const xmlChar *) uri);
+        }
     }
 
     virtual void registerFunction(const char *xmlns, const char * name, void *f) override
     {
         if (m_xpathContext)
+        {
+            WriteLockBlock wblock(m_rwlock);
             xmlXPathRegisterFuncNS(m_xpathContext, (const xmlChar *) name, (const xmlChar *) xmlns, (xmlXPathFunction) f);
+        }
     }
 
     virtual void setUserData(void *userdata) override
     {
         if (m_xpathContext)
+        {
+            WriteLockBlock wblock(m_rwlock);
             m_xpathContext->userData = userdata;
+        }
     }
 
     virtual void *getUserData() override
     {
-        return (m_xpathContext) ? m_xpathContext->userData : nullptr;
+        if (m_xpathContext)
+        {
+            ReadLockBlock wblock(m_rwlock);
+            return m_xpathContext->userData;
+        }
+        return nullptr;
     }
 
     virtual const char * getXpath() override
     {
+        ReadLockBlock wblock(m_rwlock);
         return m_xpath.str();
     }
-
-    xmlXPathObjectPtr lookupVariable(const char *name, const char *ns_uri)
+    inline CLibXpathScope *getCurrentScope()
+    {
+        ReadLockBlock wblock(m_rwlock);
+        assertex(scopes.size());
+        return scopes.back().get();
+    }
+    xmlXPathObjectPtr findVariable(const char *name, const char *ns_uri, CLibXpathScope *scope)
     {
         const char *fullname = name;
         StringBuffer s;
         if (!isEmptyString(ns_uri))
             fullname = s.append(ns_uri).append(':').append(name).str();
 
+        ReadLockBlock wblock(m_rwlock);
         xmlXPathObjectPtr obj = nullptr;
-        for (XPathScopeVector::const_reverse_iterator it=scopes.crbegin(); !obj && it!=scopes.crend(); ++it)
-            obj = xmlXPathObjectCopy(it->get()->getObject(fullname));
+        if (scope)
+            return scope->getObject(fullname);
 
-        //check root scope (library level) variables
+        for (XPathScopeVector::const_reverse_iterator it=scopes.crbegin(); !obj && it!=scopes.crend(); ++it)
+            obj = it->get()->getObject(fullname);
+
+        //check libxml2 level variables, shouldn't happen currently but we may want to wrap existing xpathcontexts in the future
         if (!obj)
-            obj = xmlXPathObjectCopy((xmlXPathObjectPtr)xmlHashLookup2(m_xpathContext->varHash, (const xmlChar *)name, (const xmlChar *)ns_uri));
+            obj = (xmlXPathObjectPtr)xmlHashLookup2(m_xpathContext->varHash, (const xmlChar *)name, (const xmlChar *)ns_uri);
         return obj;
     }
 
-    CLibXpathScope *queryScope(const char *scope)
+    xmlXPathObjectPtr getVariableObject(const char *name, const char *ns_uri, CLibXpathScope *scope)
     {
-        auto count = scopes.size();
-        if (!count)
-            return nullptr;
-        if (!*scope || streq(scope, "."))
-            return scopes.back().get();
-        if (streq(scope, ".."))
-        {
-            if (count<2)
-                return nullptr;
-            return scopes[count-2].get();
-        }
-        for (XPathScopeVector::reverse_iterator it=scopes.rbegin(); it!=scopes.rend(); ++it)
-        {
-            if (streq(it->get()->name, scope))
-                return it->get();
-        }
-        return nullptr;
+        return xmlXPathObjectCopy(findVariable(name, ns_uri, scope));
     }
 
-    CLibXpathScope *queryExpectedScope(const char *scope, const char *expected)
+    bool hasVariable(const char *name, const char *ns_uri, CLibXpathScope *scope)
     {
-        CLibXpathScope *found = queryScope(scope);
-        if (found)
-        {
-            if (!expected || streq(expected, found->name))
-                return found;
-        }
-        return nullptr;
+        return (findVariable(name, ns_uri, scope)!=nullptr);
     }
-    virtual bool scopeHasVariable(const char *scope, const char *name, const char *ns_uri, const char *expected) override
-    {
-        if (isEmptyString(name))
-            return false;
-        const char *fullname = name;
-        StringBuffer s;
-        if (!isEmptyString(ns_uri))
-            fullname = s.append(ns_uri).append(':').append(name).str();
-        if (!scope)
-            return xmlHashLookup2(m_xpathContext->varHash, (const xmlChar *)name, (const xmlChar *)ns_uri)!=nullptr;
-        CLibXpathScope *found = queryExpectedScope(scope, expected);
-        if (!found)
-            return false;
-        return found->getObject(fullname)!=nullptr;
-    }
-    virtual bool addObjectVariable(const char * name, xmlXPathObjectPtr obj)
+
+    virtual bool addObjectVariable(const char * name, xmlXPathObjectPtr obj, CLibXpathScope *scope)
     {
         if (isEmptyString(name))
             return false;
@@ -248,22 +295,24 @@ public:
         {
             if (!obj)
                 throw MakeStringException(-1, "addObjectVariable %s error", name);
-            if (!scopes.empty())
-                return scopes.back()->setObject(name, obj);
+            WriteLockBlock wblock(m_rwlock);
+            if (!scope && !scopes.empty())
+                scope = scopes.back().get();
+            if (scope)
+                return scope->setObject(name, obj);
             return xmlXPathRegisterVariable(m_xpathContext, (xmlChar *)name, obj) == 0;
         }
         return false;
     }
 
-    virtual bool addVariable(const char * name,  const char * val) override
+    bool addStringVariable(const char * name,  const char * val, CLibXpathScope *scope)
     {
-        WriteLockBlock wblock(m_rwlock);
         if (!val)
             return false;
-        return addObjectVariable(name, xmlXPathNewCString(val));
+        return addObjectVariable(name, xmlXPathNewCString(val), scope);
     }
 
-    virtual bool addEvaluateVariable(const char * name, const char * xpath) override
+    virtual bool addXpathVariable(const char * name, const char * xpath, CLibXpathScope *scope)
     {
         if (isEmptyString(xpath))
             addVariable(name, "");
@@ -271,13 +320,13 @@ public:
         {
             xmlXPathObjectPtr obj = evaluate(xpath);
             if (!obj)
-                throw MakeStringException(-1, "addEvaluateVariable xpath error %s", xpath);
-            return addObjectVariable(name, obj);
+                throw MakeStringException(-1, "addXpathVariable xpath error %s", xpath);
+            return addObjectVariable(name, obj, scope);
         }
         return false;
     }
 
-    virtual bool addEvaluateCXVariable(const char * name, ICompiledXpath * compiled) override
+    bool addCompiledVariable(const char * name, ICompiledXpath * compiled, CLibXpathScope *scope)
     {
         if (!compiled)
             addVariable(name, "");
@@ -287,17 +336,97 @@ public:
             xmlXPathObjectPtr obj = evaluate(clibCompiledXpath->getCompiledXPathExpression(), clibCompiledXpath->getXpath());
             if (!obj)
                 throw MakeStringException(-1, "addEvaluateVariable xpath error %s", clibCompiledXpath->getXpath());
-            return addObjectVariable(name, obj);
+            return addObjectVariable(name, obj, scope);
         }
 
         return false;
     }
 
-    virtual const char * getVariable(const char * name, StringBuffer & variable) override
+    virtual bool addInputValue(const char * name, const char * value) override
+    {
+        if (isEmptyString(name)||isEmptyString(value))
+            return false;
+        VStringBuffer xpath("'%s'", value);
+        return addInputXpath(name, xpath);
+    }
+    virtual bool addInputXpath(const char * name, const char * xpath) override
+    {
+        if (isEmptyString(name)||isEmptyString(xpath))
+            return false;
+        Owned<ICompiledXpath> compiled = compileXpath(xpath);
+        if (compiled)
+        {
+            WriteLockBlock wblock(m_rwlock);
+            provided.emplace(name, compiled.getClear());
+            return true;
+        }
+        return false;
+    }
+
+    inline ICompiledXpath *findInput(const char *name)
     {
         ReadLockBlock rblock(m_rwlock);
+        XPathInputMap::iterator it = provided.find(name);
+        if (it == provided.end())
+            return nullptr;
+         return it->second;
+    }
+
+    virtual bool declareCompiledParameter(const char * name, ICompiledXpath * compiled) override
+    {
+        if (hasVariable(name, nullptr, getCurrentScope()))
+            return false;
+
+        //use input value
+        ICompiledXpath *inputxp = findInput(name);
+        if (inputxp)
+            return addCompiledVariable(name, inputxp, getCurrentScope());
+
+        //use default provided
+        return addCompiledVariable(name, compiled, getCurrentScope());
+    }
+
+    virtual void declareRemainingInputs() override
+    {
+        for (XPathInputMap::iterator it=provided.begin(); it!=provided.end(); ++it)
+            declareCompiledParameter(it->first.c_str(), it->second);
+    }
+
+    virtual bool declareParamter(const char * name, const char *value) override
+    {
+        if (hasVariable(name, nullptr, getCurrentScope()))
+            return false;
+
+        //use input value
+        ICompiledXpath *input = findInput(name);
+        if (input)
+            return addCompiledVariable(name, input, getCurrentScope());
+
+        //use default provided
+        return addStringVariable(name, value, getCurrentScope());
+    }
+
+    virtual bool addXpathVariable(const char * name, const char * xpath) override
+    {
+        return addXpathVariable(name, xpath, nullptr);
+    }
+
+
+    virtual bool addVariable(const char * name,  const char * val) override
+    {
+        return addStringVariable(name, val, nullptr);
+    }
+
+    virtual bool addCompiledVariable(const char * name, ICompiledXpath * compiled) override
+    {
+        return addCompiledVariable(name, compiled, nullptr);
+    }
+
+    virtual const char * getVariable(const char * name, StringBuffer & variable) override
+    {
         if (m_xpathContext)
         {
+            ReadLockBlock rblock(m_rwlock);
             xmlXPathObjectPtr ptr = xmlXPathVariableLookupNS(m_xpathContext, (const xmlChar *)name, nullptr);
             if (!ptr)
                 return nullptr;
@@ -351,6 +480,7 @@ private:
     {
         if (xmldoc && * xmldoc)
         {
+            WriteLockBlock rblock(m_rwlock);
             m_xmlDoc = xmlParseDoc((const unsigned char *)xmldoc);
             if (m_xmlDoc == nullptr)
             {
@@ -488,7 +618,7 @@ static xmlXPathObjectPtr variableLookupFunc(void *data, const xmlChar *name, con
     CLibXpathContext *ctxt = (CLibXpathContext *) data;
     if (!ctxt)
         return nullptr;
-    return ctxt->lookupVariable((const char *)name, (const char *)ns_uri);
+    return ctxt->getVariableObject((const char *)name, (const char *)ns_uri, nullptr);
 }
 
 extern ICompiledXpath* compileXpath(const char * xpath)
@@ -496,7 +626,13 @@ extern ICompiledXpath* compileXpath(const char * xpath)
     return new CLibCompiledXpath(xpath);
 }
 
-extern IXpathContext* getXpathContext(const char * xmldoc)
+static bool exsltRegistered = false;
+extern IXpathContext* getXpathContext(const char * xmldoc, bool strictParameterDeclaration)
 {
-    return new CLibXpathContext(xmldoc);
+    if (!exsltRegistered)
+    {
+        exsltRegistered=true;
+        exsltRegisterAll();
+    }
+    return new CLibXpathContext(xmldoc, strictParameterDeclaration);
 }

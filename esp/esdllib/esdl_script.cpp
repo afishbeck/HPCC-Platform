@@ -63,14 +63,18 @@ class CEsdlTransformOperationBase : public CInterfaceOf<IEsdlTransformOperation>
 {
 protected:
     StringAttr mergedTarget;
+    StringAttr tagname;
+    bool ignoreCodingErrors = false; //ideally used only for debugging
+
 public:
     CEsdlTransformOperationBase(IPropertyTree *tree, const StringBuffer &prefix)
     {
-        if (tree && tree->hasProp("@_crtTarget"))
+        tagname.set(tree->queryName());
+        if (tree->hasProp("@_crtTarget"))
             mergedTarget.set(tree->queryProp("@_crtTarget"));
+        ignoreCodingErrors = tree->getPropBool("@optional", false);
     }
 
-    virtual const char *queryOperationTag()=0;
     virtual const char *queryMergedTarget() override
     {
         return mergedTarget;
@@ -83,18 +87,16 @@ protected:
     Owned<ICompiledXpath> m_select;
     StringAttr m_target;
     StringAttr m_traceName;
-    bool m_optional = false;
 
 public:
     CEsdlTransformOperationSetValue(IPropertyTree *tree, const StringBuffer &prefix) : CEsdlTransformOperationBase(tree, prefix)
     {
         m_traceName.set(tree->queryProp("@name"));
-        m_optional = tree->getPropBool("@optional", false);
 
         if (isEmptyString(tree->queryProp("@target")))
         {
-            VStringBuffer msg(" %s without target", queryOperationTag());
-            esdlOperationError("Custom transform: ", msg.str(), m_traceName.str(), !m_optional);
+            VStringBuffer msg(" %s without target", tagname.str());
+            esdlOperationError("Custom transform: ", msg.str(), m_traceName.str(), !ignoreCodingErrors);
         }
 
         const char *select = tree->queryProp("@select");
@@ -102,8 +104,8 @@ public:
             select = tree->queryProp("@value");
         if (isEmptyString(select))
         {
-            VStringBuffer msg(" %s without select", queryOperationTag());
-            esdlOperationError("Custom transform: ", msg.str(), m_traceName.str(), !m_optional);
+            VStringBuffer msg(" %s without select", tagname.str());
+            esdlOperationError("Custom transform: ", msg.str(), m_traceName.str(), !ignoreCodingErrors);
         }
 
         m_select.setown(compileXpath(select));
@@ -113,7 +115,7 @@ public:
     virtual void toDBGLog() override
     {
 #if defined(_DEBUG)
-        DBGLOG(">%s> set-value(%s, select('%s'))", m_traceName.str(), m_target.str(), m_select->getXpath());
+        DBGLOG(">%s> %s(%s, select('%s'))", m_traceName.str(), tagname.str(), m_target.str(), m_select->getXpath());
 #endif
     }
 
@@ -136,17 +138,16 @@ public:
         catch (IException* e)
         {
             StringBuffer msg;
-            esdlOperationError("Custom transform: ", e->errorMessage(msg), m_traceName, !m_optional);
+            esdlOperationError("Custom transform: ", e->errorMessage(msg), m_traceName, !ignoreCodingErrors);
             e->Release();
         }
         catch (...)
         {
-            esdlOperationError("Custom transform: ", "could not process", m_traceName, !m_optional);
+            esdlOperationError("Custom transform: ", "could not process", m_traceName, !ignoreCodingErrors);
         }
         return false;
     }
 
-    virtual const char *queryOperationTag() override {return "set-value";}
     virtual bool doSet(IPropertyTree *tree, const char *value)
     {
         ensurePTree(tree, m_target);
@@ -160,16 +161,8 @@ class CEsdlTransformOperationAppendValue : public CEsdlTransformOperationSetValu
 public:
     CEsdlTransformOperationAppendValue(IPropertyTree *tree, const StringBuffer &prefix) : CEsdlTransformOperationSetValue(tree, prefix){}
 
-    virtual void toDBGLog() override
-    {
-#if defined(_DEBUG)
-        DBGLOG(">%s> append-value(%s, select('%s'))", m_traceName.str(), m_target.str(), m_select->getXpath());
-#endif
-    }
-
     virtual ~CEsdlTransformOperationAppendValue(){}
 
-    virtual const char *queryOperationTag() override {return "append-value";}
     virtual bool doSet(IPropertyTree *tree, const char *value) override
     {
         ensurePTree(tree, m_target);
@@ -183,16 +176,8 @@ class CEsdlTransformOperationAddValue : public CEsdlTransformOperationSetValue
 public:
     CEsdlTransformOperationAddValue(IPropertyTree *tree, const StringBuffer &prefix) : CEsdlTransformOperationSetValue(tree, prefix){}
 
-    virtual void toDBGLog() override
-    {
-#if defined(_DEBUG)
-        DBGLOG(">%s> add-value(%s, select('%s'))", m_traceName.str(), m_target.str(), m_select->getXpath());
-#endif
-    }
-
     virtual ~CEsdlTransformOperationAddValue(){}
 
-    virtual const char *queryOperationTag() override {return "add-value";}
     virtual bool doSet(IPropertyTree *tree, const char *value) override
     {
         if (tree->getCount(m_target)==0)
@@ -231,7 +216,6 @@ public:
     {
     }
 
-    virtual const char *queryOperationTag() override {return "fail";}
     virtual bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
         int code = m_code.get() ? (int) xpathContext->evaluateAsNumber(m_code) : -1;
@@ -245,7 +229,7 @@ public:
     virtual void toDBGLog() override
     {
 #if defined(_DEBUG)
-        DBGLOG(">%s> fail with message(%s)", m_traceName.str(), m_message.get() ? m_message->getXpath() : "");
+        DBGLOG(">%s> %s with message(%s)", m_traceName.str(), tagname.str(), m_message.get() ? m_message->getXpath() : "");
 #endif
     }
 };
@@ -267,7 +251,6 @@ public:
     {
     }
 
-    virtual const char *queryOperationTag() override {return "assert";}
     virtual bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
         if (m_test && xpathContext->evaluateAsBoolean(m_test))
@@ -279,7 +262,7 @@ public:
     {
 #if defined(_DEBUG)
         const char *testXpath = m_test.get() ? m_test->getXpath() : "SYNTAX ERROR IN test";
-        DBGLOG(">%s> Assert if '%s' with message(%s)", m_traceName.str(), testXpath, m_message.get() ? m_message->getXpath() : "");
+        DBGLOG(">%s> %s if '%s' with message(%s)", m_traceName.str(), tagname.str(), testXpath, m_message.get() ? m_message->getXpath() : "");
 #endif
     }
 };
@@ -294,10 +277,10 @@ public:
     CEsdlTransformOperationVariable(IPropertyTree *tree, const StringBuffer &prefix) : CEsdlTransformOperationBase(tree, prefix)
     {
         if (isEmptyString(tree->queryProp("@name")))
-            esdlOperationError("Custom transform: ", "Variable without name", "", true);
+            esdlOperationError("Custom transform: ", "Variable without name", "", !ignoreCodingErrors);
         m_name.set(tree->queryProp("@name"));
         if (isEmptyString(tree->queryProp("@select")))
-            esdlOperationError("Custom transform: ", "Variable without select", m_name.str(), true);
+            esdlOperationError("Custom transform: ", "Variable without select", m_name.str(), !ignoreCodingErrors);
         if (tree->hasProp("@select"))
             m_select.setown(compileXpath(tree->queryProp("@select")));
     }
@@ -306,16 +289,15 @@ public:
     {
     }
 
-    virtual const char *queryOperationTag() override {return "variable";}
     virtual bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
-        return xpathContext->addEvaluateCXVariable(m_name, m_select);
+        return xpathContext->addCompiledVariable(m_name, m_select);
     }
 
     virtual void toDBGLog() override
     {
 #if defined(_DEBUG)
-        DBGLOG(">%s> Variable with select(%s)", m_name.str(), m_select.get() ? m_select->getXpath() : "");
+        DBGLOG(">%s> %s with select(%s)", m_name.str(), tagname.str(), m_select.get() ? m_select->getXpath() : "");
 #endif
     }
 };
@@ -338,20 +320,15 @@ public:
     {
     }
 
-    virtual const char *queryOperationTag() override {return "parameter";}
     virtual bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
-        if (xpathContext->scopeHasVariable(".", m_name, nullptr, nullptr))
-            return true;
-        if (xpathContext->scopeHasVariable("..", m_name, nullptr, "external_parameters")) //are we in the immediate child scope of the external parameters?
-            return true;
-        return xpathContext->addEvaluateCXVariable(m_name, m_select.get());
+        return xpathContext->declareCompiledParameter(m_name, m_select);
     }
 
     virtual void toDBGLog() override
     {
 #if defined(_DEBUG)
-        DBGLOG(">%s> Parameter with select(%s)", m_name.str(), m_select.get() ? m_select->getXpath() : "");
+        DBGLOG(">%s> %s with select(%s)", m_name.str(), tagname.str(), m_select.get() ? m_select->getXpath() : "");
 #endif
     }
 };
@@ -370,7 +347,7 @@ public:
         {
             const char *op = checkSkipOpPrefix(tree->queryName(), prefix);
             if (isEmptyString(op))
-                esdlOperationError("Custom transform: ", "unrecognized conditional", "", true);
+                esdlOperationError("Custom transform: ", "unrecognized conditional", "", !ignoreCodingErrors);
             if (streq(op, "if"))
                 m_op = 'i';
             else if (streq(op, "when"))
@@ -380,7 +357,7 @@ public:
             if (m_op!='o')
             {
                 if (isEmptyString(tree->queryProp("@test")))
-                    esdlOperationError("Custom transform: ", "conditional without test", "", true);
+                    esdlOperationError("Custom transform: ", "conditional without test", "", !ignoreCodingErrors);
                 m_test.setown(compileXpath(tree->queryProp("@test")));
             }
 
@@ -390,19 +367,6 @@ public:
 
     virtual ~CEsdlTransformOperationConditional(){}
 
-    virtual const char *queryOperationTag() override
-    {
-        switch(m_op)
-        {
-        case 'o':
-            return "otherwise";
-        case 'w':
-            return "when";
-        default:
-            break;
-        }
-        return "if";
-    }
     bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
         if (!evaluate(xpathContext))
@@ -415,10 +379,10 @@ public:
     virtual void toDBGLog () override
     {
     #if defined(_DEBUG)
-        DBGLOG (">>>>%s %s ", queryOperationTag(), m_test ? m_test->getXpath() : "");
+        DBGLOG (">>>>%s %s ", tagname.str(), m_test ? m_test->getXpath() : "");
         ForEachItemIn(midx, m_children)
             m_children.item(midx).toDBGLog();
-        DBGLOG ("<<<<%s<<<<<", queryOperationTag());
+        DBGLOG ("<<<<%s<<<<<", tagname.str());
     #endif
     }
 
@@ -447,11 +411,15 @@ private:
         {
             StringBuffer msg;
             DBGLOG("%s", e->errorMessage(msg).str());
+            if (!ignoreCodingErrors)
+                throw e;
             e->Release();
         }
         catch (...)
         {
             DBGLOG("CEsdlTransformOperationConditional: Could not evaluate test '%s'", m_test.get() ? m_test->getXpath() : "undefined!");
+            if (!ignoreCodingErrors)
+                throw;
         }
         return match;
     }
@@ -474,7 +442,6 @@ public:
 
     virtual ~CEsdlTransformOperationChoose(){}
 
-    virtual const char *queryOperationTag() override {return "choose";}
     bool process(IEspContext * context, IPropertyTree *request, IXpathContext * xpathContext) override
     {
         ForEachItemIn(i, m_conditionals)
@@ -488,10 +455,10 @@ public:
     virtual void toDBGLog () override
     {
     #if defined(_DEBUG)
-        DBGLOG (">>>>>>>>>>>CHOOSE>>>>>>>>>>");
+        DBGLOG (">>>>>>>>>>> %s >>>>>>>>>>", tagname.str());
         ForEachItemIn(i, m_conditionals)
             m_conditionals.item(i).toDBGLog();
-        DBGLOG (">>>>>>>>>>>>CHOOSE>>>>>>>>>>");
+        DBGLOG (">>>>>>>>>>> %s >>>>>>>>>>", tagname.str());
     #endif
     }
 
@@ -536,7 +503,8 @@ void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransfor
             DBGLOG("TARGET CONFIG: %s", marshalled.str());
         }
 
-        Owned<IXpathContext> xpathContext = getXpathContext(request.str());
+        bool strictParams = bindingCfg ? bindingCfg->getPropBool("@strictParams", false) : false;
+        Owned<IXpathContext> xpathContext = getXpathContext(request.str(), strictParams);
 
         StringArray prefixes;
         for ( IEsdlCustomTransform * const & item : transforms)
@@ -547,13 +515,12 @@ void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransfor
 
         registerEsdlXPathExtensions(xpathContext, context, prefixes);
 
-        CXpathContextScope scope(xpathContext, "external_parameters");
-
         VStringBuffer ver("%g", context->getClientVersion());
-        if(!xpathContext->addVariable("clientversion", ver.str()))
+        if(!xpathContext->addInputValue("clientversion", ver.str()))
             OERRLOG("Could not set custom transform variable: clientversion:'%s'", ver.str());
 
         //in case transform wants to make use of these values:
+        //make them few well known values variables rather than inputs so they are automatically available
         xpathContext->addVariable("query", tgtcfg->queryProp("@queryname"));
         xpathContext->addVariable("method", method);
         xpathContext->addVariable("service", service);
@@ -589,21 +556,27 @@ void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransfor
 
             auto it = statusLabels.find(user->getStatus());
 
-            xpathContext->addVariable("espUserName", user->getName());
-            xpathContext->addVariable("espUserRealm", user->getRealm() ? user->getRealm() : "");
-            xpathContext->addVariable("espUserPeer", user->getPeer() ? user->getPeer() : "");
-            xpathContext->addVariable("espUserStatus", VStringBuffer("%d", int(user->getStatus())));
+            xpathContext->addInputValue("espUserName", user->getName());
+            xpathContext->addInputValue("espUserRealm", user->getRealm() ? user->getRealm() : "");
+            xpathContext->addInputValue("espUserPeer", user->getPeer() ? user->getPeer() : "");
+            xpathContext->addInputValue("espUserStatus", VStringBuffer("%d", int(user->getStatus())));
             if (it != statusLabels.end())
-                xpathContext->addVariable("espUserStatusString", it->second);
+                xpathContext->addInputValue("espUserStatusString", it->second);
             else
                 throw MakeStringException(-1, "encountered unexpected secure user status (%d) while processing transform", int(user->getStatus()));
         }
         else
         {
             // enable transforms to distinguish secure versus insecure requests
-            xpathContext->addVariable("espUserName", "");
+            xpathContext->addInputValue("espUserName", "");
+            xpathContext->addInputValue("espUserName", "");
+            xpathContext->addInputValue("espUserRealm", "");
+            xpathContext->addInputValue("espUserPeer", "");
+            xpathContext->addInputValue("espUserStatus", "");
+            xpathContext->addInputValue("espUserStatusString", "");
         }
 
+        //external parameters need <es:param> statements to make them accessible (in strict mode)
         Owned<IPropertyTreeIterator> configParams;
         if (bindingCfg)
             configParams.setown(bindingCfg->getElements("Transform/Param"));
@@ -613,11 +586,14 @@ void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransfor
             {
                 IPropertyTree & currentParam = configParams->query();
                 if (currentParam.hasProp("@select"))
-                    xpathContext->addEvaluateVariable(currentParam.queryProp("@name"), currentParam.queryProp("@select"));
+                    xpathContext->addInputXpath(currentParam.queryProp("@name"), currentParam.queryProp("@select"));
                 else
-                    xpathContext->addVariable(currentParam.queryProp("@name"), currentParam.queryProp("@value"));
+                    xpathContext->addInputValue(currentParam.queryProp("@name"), currentParam.queryProp("@value"));
             }
         }
+        if (!strictParams)
+            xpathContext->declareRemainingInputs();
+
         Owned<IPropertyTree> theroot = createPTreeFromXMLString(request.str());
         StringBuffer defaultTarget;
             //This default gives us backward compatibility with only being able to write to the actual request
@@ -653,7 +629,7 @@ IEsdlTransformOperation *createEsdlTransformOperation(IPropertyTree *element, co
         return new CEsdlTransformOperationConditional(element, prefix);
     if (streq(op, "set-value") || streq(op, "SetValue"))
         return new CEsdlTransformOperationSetValue(element, prefix);
-    if (streq(op, "append-value") || streq(op, "AppendValue"))
+    if (streq(op, "append-to-value") || streq(op, "AppendValue"))
         return new CEsdlTransformOperationAppendValue(element, prefix);
     if (streq(op, "add-value"))
         return new CEsdlTransformOperationAddValue(element, prefix);
@@ -717,7 +693,19 @@ public:
             const char *tag = tree.queryName();
             const char *colon = strchr(tag, ':');
             if (colon)
-                m_prefix.append(colon-tag+1, tag); //keep the colon for easy comparison
+            {
+                m_prefix.append(colon-tag, tag);
+                if (!streq(m_prefix, "xsdl"))
+                {
+                    //any prefix other than xsdl must be declared on the root element. in future can support multiple and inherited prefixes
+                    VStringBuffer attpath("@xmlns:%s", m_prefix.str());
+                    const char *uri = tree.queryProp(attpath.str());
+                    if (!uri || !streq(uri, "urn:hpcc:esdl:script"))
+                        throw MakeStringException(-1, "Undeclared script xmlns prefix %s", m_prefix.str());
+                }
+                //add back the colon for easy comparison
+                m_prefix.append(':');
+            }
         }
 
         m_name.set(tree.queryProp("@name"));
@@ -751,6 +739,8 @@ public:
             StringAttr copy(m_prefix.str(), m_prefix.length()-1); //remove the colon
             prefixes.appendUniq(copy.str());
         }
+        else
+            prefixes.appendUniq("");
     }
     virtual void toDBGLog() override
     {

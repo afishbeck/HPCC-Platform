@@ -40,11 +40,20 @@ set ( SRCS
     esdl_def_helper.cpp
     esdl_transformer2.cpp
     esdl_script.cpp
-    esdl_xpath_extensions.cpp
     params2xml.cpp
     ${HPCC_SOURCE_DIR}/esp/bindings/SOAP/xpp/xpp/xpputils.cpp
     ${HPCC_SOURCE_DIR}/esp/services/common/wsexcept.cpp
 )
+
+if (USE_LIBXSLT)
+    list (APPEND SRCS
+        esdl_xpath_extensions_libxml.cpp
+    )
+else()
+    list (APPEND SRCS
+        esdl_xpath_extensions_unsupported.cpp
+    )
+endif()
 
 HPCC_ADD_LIBRARY( esdllib SHARED ${SRCS}
     ${HEADERS}
