@@ -777,140 +777,169 @@ public:
     {
         processServiceAndMethodTransforms({static_cast<IEsdlCustomTransform*>(this)}, context, tgtcfg, service, method, reqtype, content, bindingCfg);
     }
+
+    void processTransform(IEsdlScriptContext * scriptCtx, IPropertyTree *tgtcfg, IPropertyTree * bindingCfg, const char *srcSection, const char *tgtSection) override
+    {
+        processServiceAndMethodTransforms(scriptCtx, {static_cast<IEsdlCustomTransform*>(this)}, tgtcfg, bindingCfg, srcSection, tgtSection);
+    }
 };
 
-void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & content, IPropertyTree * bindingCfg)
+void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::initializer_list<IEsdlCustomTransform *> const &transforms, IPropertyTree *tgtcfg, IPropertyTree * bindingCfg, const char *srcSection, const char *tgtSection)
 {
     LogLevel level = LogMin;
+    if (!scriptCtx)
+        return;
     if (!transforms.size())
+        return;
+    if (isEmptyString(srcSection)||isEmptyString(tgtSection))
         return;
     if (tgtcfg)
         level = (unsigned) tgtcfg->getPropInt("@traceLevel", level);
 
-    if (content.length()!=0)
+    const char *method = scriptCtx->getSectionProperty("esdl", "method");
+    if (isEmptyString(method))
+        throw MakeStringException(ESDL_SCRIPT_Error, "ESDL script method name not set");
+    const char *service = scriptCtx->getSectionProperty("esdl", "service");
+    if (isEmptyString(service))
+        throw MakeStringException(ESDL_SCRIPT_Error, "ESDL script service name not set");
+    const char *reqtype = scriptCtx->getSectionProperty("esdl", "request");
+    if (isEmptyString(reqtype))
+        throw MakeStringException(ESDL_SCRIPT_Error, "ESDL script request name not set");
+
+    IEspContext *context = reinterpret_cast<IEspContext*>(scriptCtx->queryEspContext());
+
+    //the need for this will go away when the right hand side is libxml2 based
+    StringBuffer content;
+    scriptCtx->toXML(content, srcSection, false);
+
+    if (level >= LogMax)
     {
-        if (level >= LogMax)
-        {
-            DBGLOG("ORIGINAL content: %s", content.str());
-            StringBuffer marshalled;
-            if (bindingCfg)
-                toXML(bindingCfg, marshalled.clear());
-            DBGLOG("BINDING CONFIG: %s", marshalled.str());
-            if (tgtcfg)
-                toXML(tgtcfg, marshalled.clear());
-            DBGLOG("TARGET CONFIG: %s", marshalled.str());
-        }
-
-        bool strictParams = bindingCfg ? bindingCfg->getPropBool("@strictParams", false) : false;
-        Owned<IXpathContext> xpathContext = getXpathContext(content.str(), strictParams);
-
-        StringArray prefixes;
-        for ( IEsdlCustomTransform * const & item : transforms)
-        {
-            if (item)
-                item->appendEsdlURIPrefixes(prefixes);
-        }
-
-        registerEsdlXPathExtensions(xpathContext, context, prefixes);
-
-        VStringBuffer ver("%g", context->getClientVersion());
-        if(!xpathContext->addVariable("clientversion", ver.str()))
-            OERRLOG("Could not set ESDL Script variable: clientversion:'%s'", ver.str());
-
-        //in case transform wants to make use of these values:
-        //make them few well known values variables rather than inputs so they are automatically available
-        xpathContext->addVariable("query", tgtcfg->queryProp("@queryname"));
-        xpathContext->addVariable("method", method);
-        xpathContext->addVariable("service", service);
-        xpathContext->addVariable("request", reqtype);
-
-        ISecUser *user = context->queryUser();
-        if (user)
-        {
-            static const std::map<SecUserStatus, const char*> statusLabels =
-            {
-#define STATUS_LABEL_NODE(s) { s, #s }
-                STATUS_LABEL_NODE(SecUserStatus_Inhouse),
-                STATUS_LABEL_NODE(SecUserStatus_Active),
-                STATUS_LABEL_NODE(SecUserStatus_Exempt),
-                STATUS_LABEL_NODE(SecUserStatus_FreeTrial),
-                STATUS_LABEL_NODE(SecUserStatus_csdemo),
-                STATUS_LABEL_NODE(SecUserStatus_Rollover),
-                STATUS_LABEL_NODE(SecUserStatus_Suspended),
-                STATUS_LABEL_NODE(SecUserStatus_Terminated),
-                STATUS_LABEL_NODE(SecUserStatus_TrialExpired),
-                STATUS_LABEL_NODE(SecUserStatus_Status_Hold),
-                STATUS_LABEL_NODE(SecUserStatus_Unknown),
-#undef STATUS_LABEL_NODE
-            };
-
-            Owned<IPropertyIterator> userPropIt = user->getPropertyIterator();
-            ForEach(*userPropIt)
-            {
-                const char *name = userPropIt->getPropKey();
-                if (name && *name)
-                    xpathContext->addInputValue(name, user->getProperty(name));
-            }
-
-            auto it = statusLabels.find(user->getStatus());
-
-            xpathContext->addInputValue("espUserName", user->getName());
-            xpathContext->addInputValue("espUserRealm", user->getRealm() ? user->getRealm() : "");
-            xpathContext->addInputValue("espUserPeer", user->getPeer() ? user->getPeer() : "");
-            xpathContext->addInputValue("espUserStatus", VStringBuffer("%d", int(user->getStatus())));
-            if (it != statusLabels.end())
-                xpathContext->addInputValue("espUserStatusString", it->second);
-            else
-                throw MakeStringException(ESDL_SCRIPT_Error, "encountered unexpected secure user status (%d) while processing transform", int(user->getStatus()));
-        }
-        else
-        {
-            // enable transforms to distinguish secure versus insecure requests
-            xpathContext->addInputValue("espUserName", "");
-            xpathContext->addInputValue("espUserRealm", "");
-            xpathContext->addInputValue("espUserPeer", "");
-            xpathContext->addInputValue("espUserStatus", "");
-            xpathContext->addInputValue("espUserStatusString", "");
-        }
-
-        //external parameters need <es:param> statements to make them accessible (in strict mode)
-        Owned<IPropertyTreeIterator> configParams;
+        DBGLOG("ORIGINAL content: %s", content.str());
         if (bindingCfg)
-            configParams.setown(bindingCfg->getElements("Transform/Param"));
-        if (configParams)
-        {
-            ForEach(*configParams)
-            {
-                IPropertyTree & currentParam = configParams->query();
-                if (currentParam.hasProp("@select"))
-                    xpathContext->addInputXpath(currentParam.queryProp("@name"), currentParam.queryProp("@select"));
-                else
-                    xpathContext->addInputValue(currentParam.queryProp("@name"), currentParam.queryProp("@value"));
-            }
-        }
-        if (!strictParams)
-            xpathContext->declareRemainingInputs();
-
-        Owned<IPropertyTree> theroot = createPTreeFromXMLString(content.str());
-        StringBuffer defaultTarget;
-            //This default gives us backward compatibility with only being able to write to the actual request
-        const char *tgtQueryName = tgtcfg->queryProp("@queryname");
-        defaultTarget.setf("soap:Body/%s/%s", tgtQueryName ? tgtQueryName : method, reqtype);
-
-        for ( auto&& item : transforms)
-        {
-            if (item)
-            {
-                CEsdlCustomTransform *transform = static_cast<CEsdlCustomTransform*>(item);
-                transform->processTransformImpl(context, theroot, xpathContext, defaultTarget);
-            }
-        }
-
-        toXML(theroot, content.clear());
-
-        if (level >= LogMax)
-            DBGLOG(1,"MODIFIED content: %s", content.str());
+            toXML(bindingCfg, content.clear());
+        DBGLOG("BINDING CONFIG: %s", content.str());
+        if (tgtcfg)
+            toXML(tgtcfg, content.clear());
+        DBGLOG("TARGET CONFIG: %s", content.str());
     }
+
+    bool strictParams = bindingCfg ? bindingCfg->getPropBool("@strictParams", false) : false;
+    Owned<IXpathContext> xpathContext = scriptCtx->createXpathContext(srcSection, strictParams);
+
+    StringArray prefixes;
+    for ( IEsdlCustomTransform * const & item : transforms)
+    {
+        if (item)
+            item->appendEsdlURIPrefixes(prefixes);
+    }
+
+    registerEsdlXPathExtensions(xpathContext, context, prefixes);
+
+    VStringBuffer ver("%g", context->getClientVersion());
+    if(!xpathContext->addVariable("clientversion", ver.str()))
+        OERRLOG("Could not set ESDL Script variable: clientversion:'%s'", ver.str());
+
+    //in case transform wants to make use of these values:
+    //make them few well known values variables rather than inputs so they are automatically available
+    xpathContext->addVariable("query", tgtcfg->queryProp("@queryname"));
+
+    ISecUser *user = context->queryUser();
+    if (user)
+    {
+        static const std::map<SecUserStatus, const char*> statusLabels =
+        {
+#define STATUS_LABEL_NODE(s) { s, #s }
+            STATUS_LABEL_NODE(SecUserStatus_Inhouse),
+            STATUS_LABEL_NODE(SecUserStatus_Active),
+            STATUS_LABEL_NODE(SecUserStatus_Exempt),
+            STATUS_LABEL_NODE(SecUserStatus_FreeTrial),
+            STATUS_LABEL_NODE(SecUserStatus_csdemo),
+            STATUS_LABEL_NODE(SecUserStatus_Rollover),
+            STATUS_LABEL_NODE(SecUserStatus_Suspended),
+            STATUS_LABEL_NODE(SecUserStatus_Terminated),
+            STATUS_LABEL_NODE(SecUserStatus_TrialExpired),
+            STATUS_LABEL_NODE(SecUserStatus_Status_Hold),
+            STATUS_LABEL_NODE(SecUserStatus_Unknown),
+#undef STATUS_LABEL_NODE
+        };
+
+        Owned<IPropertyIterator> userPropIt = user->getPropertyIterator();
+        ForEach(*userPropIt)
+        {
+            const char *name = userPropIt->getPropKey();
+            if (name && *name)
+                xpathContext->addInputValue(name, user->getProperty(name));
+        }
+
+        auto it = statusLabels.find(user->getStatus());
+
+        xpathContext->addInputValue("espUserName", user->getName());
+        xpathContext->addInputValue("espUserRealm", user->getRealm() ? user->getRealm() : "");
+        xpathContext->addInputValue("espUserPeer", user->getPeer() ? user->getPeer() : "");
+        xpathContext->addInputValue("espUserStatus", VStringBuffer("%d", int(user->getStatus())));
+        if (it != statusLabels.end())
+            xpathContext->addInputValue("espUserStatusString", it->second);
+        else
+            throw MakeStringException(ESDL_SCRIPT_Error, "encountered unexpected secure user status (%d) while processing transform", int(user->getStatus()));
+    }
+    else
+    {
+        // enable transforms to distinguish secure versus insecure requests
+        xpathContext->addInputValue("espUserName", "");
+        xpathContext->addInputValue("espUserRealm", "");
+        xpathContext->addInputValue("espUserPeer", "");
+        xpathContext->addInputValue("espUserStatus", "");
+        xpathContext->addInputValue("espUserStatusString", "");
+    }
+
+    //external parameters need <es:param> statements to make them accessible (in strict mode)
+    Owned<IPropertyTreeIterator> configParams;
+    if (bindingCfg)
+        configParams.setown(bindingCfg->getElements("Transform/Param"));
+    if (configParams)
+    {
+        ForEach(*configParams)
+        {
+            IPropertyTree & currentParam = configParams->query();
+            if (currentParam.hasProp("@select"))
+                xpathContext->addInputXpath(currentParam.queryProp("@name"), currentParam.queryProp("@select"));
+            else
+                xpathContext->addInputValue(currentParam.queryProp("@name"), currentParam.queryProp("@value"));
+        }
+    }
+    if (!strictParams)
+        xpathContext->declareRemainingInputs();
+
+    Owned<IPropertyTree> theroot = createPTreeFromXMLString(content.str());
+    StringBuffer defaultTarget;
+        //This default gives us backward compatibility with only being able to write to the actual request
+    const char *tgtQueryName = tgtcfg->queryProp("@queryname");
+    defaultTarget.setf("soap:Body/%s/%s", tgtQueryName ? tgtQueryName : method, reqtype);
+
+    for ( auto&& item : transforms)
+    {
+        if (item)
+        {
+            CEsdlCustomTransform *transform = static_cast<CEsdlCustomTransform*>(item);
+            transform->processTransformImpl(context, theroot, xpathContext, defaultTarget);
+        }
+    }
+
+    toXML(theroot, content.clear());
+
+    if (level >= LogMax)
+        DBGLOG(1,"MODIFIED content: %s", content.str());
+}
+
+void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & content, IPropertyTree * bindingCfg)
+{
+    Owned<IEsdlScriptContext> scriptContext = createEsdlScriptContext(context);
+    scriptContext->setSectionXml("ESDLRequest", content.str());
+    scriptContext->setSectionProperty("esdl", "service", service);
+    scriptContext->setSectionProperty("esdl", "method", method);
+    scriptContext->setSectionProperty("esdl", "request_type", reqtype);
+
+
 }
 
 void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & content, IPropertyTree * bindingCfg)
@@ -922,3 +951,4 @@ IEsdlCustomTransform *createEsdlCustomTransform(IPropertyTree &tree, const char 
 {
     return new CEsdlCustomTransform(tree, ns_prefix);
 }
+

@@ -81,4 +81,18 @@ public:
 extern "C" XMLLIB_API ICompiledXpath* compileXpath(const char * xpath);
 extern "C" XMLLIB_API IXpathContext*  getXpathContext(const char * xmldoc, bool strictParameterDeclaration);
 
+interface IEsdlScriptContext : extends IInterface
+{
+    virtual IXpathContext* createXpathContext(const char *section, bool strictParameterDeclaration) = 0;
+    virtual void *queryEspContext() = 0;
+    virtual void setSectionXml(const char *section, const char *xml) = 0;
+    virtual void setSectionProperty(const char *section, const char *name, const char *value) = 0;
+    virtual const char *getSectionProperty(const char *section, const char *name) = 0;
+    virtual void setStoreProperty(const char *name, const char *value) = 0;
+    virtual void toXML(StringBuffer &xml, const char *section, bool includeParentNode=false) = 0;
+    virtual void toXML(StringBuffer &xml) = 0;
+};
+
+extern "C" XMLLIB_API IEsdlScriptContext *createEsdlScriptContext(void * espContext);
+
 #endif /* XPATH_MANAGER_HPP_ */

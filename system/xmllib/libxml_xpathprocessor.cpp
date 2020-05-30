@@ -209,10 +209,12 @@ public:
     {
         beginScope("/");
         setXmlDoc(xmldoc);
-        exsltDateXpathCtxtRegister(m_xpathContext, (xmlChar*)"date");
-        exsltMathXpathCtxtRegister(m_xpathContext, (xmlChar*)"math");
-        exsltSetsXpathCtxtRegister(m_xpathContext, (xmlChar*)"set");
-        exsltStrXpathCtxtRegister(m_xpathContext, (xmlChar*)"str");
+    }
+
+    CLibXpathContext(xmlDocPtr doc, xmlNodePtr node, bool _strictParameterDeclaration) : strictParameterDeclaration(_strictParameterDeclaration)
+    {
+        beginScope("/");
+        setContextDocument(doc, node);
     }
 
     ~CLibXpathContext()
@@ -223,6 +225,13 @@ public:
         xmlFreeDoc(m_xmlDoc);
     }
 
+    void registerExslt()
+    {
+        exsltDateXpathCtxtRegister(m_xpathContext, (xmlChar*)"date");
+        exsltMathXpathCtxtRegister(m_xpathContext, (xmlChar*)"math");
+        exsltSetsXpathCtxtRegister(m_xpathContext, (xmlChar*)"set");
+        exsltStrXpathCtxtRegister(m_xpathContext, (xmlChar*)"str");
+    }
     void pushLocation()
     {
         WriteLockBlock wblock(m_rwlock);
@@ -713,7 +722,7 @@ public:
         pos = newpos;
         if (!isValid())
             return false;
-        xmlNodePtr node = xmlXPathNodeSetItem(list, pos);;
+        xmlNodePtr node = xmlXPathNodeSetItem(list, pos);
         context->m_xpathContext->node = node;
         if ((node->type != XML_NAMESPACE_DECL && node->doc != nullptr))
             context->m_xpathContext->doc = node->doc;
@@ -773,6 +782,157 @@ static xmlXPathObjectPtr variableLookupFunc(void *data, const xmlChar *name, con
 extern ICompiledXpath* compileXpath(const char * xpath)
 {
     return new CLibCompiledXpath(xpath);
+}
+
+class CEsdlScriptContext : public CInterfaceOf<IEsdlScriptContext>
+{
+private:
+    void *espCtx = nullptr;
+    xmlDocPtr doc = nullptr;
+    xmlNodePtr root = nullptr;
+    xmlXPathContextPtr xpathCtx = nullptr;
+
+public:
+    CEsdlScriptContext(void *ctx) : espCtx(ctx)
+    {
+        doc =   xmlParseDoc((const xmlChar *) "<esdl_script_context/>");
+        xpathCtx = xmlXPathNewContext(doc);
+        if(xpathCtx == nullptr)
+            throw MakeStringException(-1, "CEsdlScriptContext: Unable to create new xPath context");
+
+        root = xmlDocGetRootElement(doc);
+        xpathCtx->node = root;
+    }
+
+private:
+    ~CEsdlScriptContext()
+    {
+        xmlXPathFreeContext(xpathCtx);
+        xmlFreeDoc(doc);
+    }
+    virtual void *queryEspContext() override
+    {
+        return espCtx;
+    }
+    xmlNodePtr getSectionNode(const char *name, const char *xpath="*[1]")
+    {
+        StringBuffer fullXpath(name);
+        if (!isEmptyString(xpath))
+            fullXpath.append('/').append(xpath);
+        xmlNodePtr sect = nullptr;
+        xmlXPathObjectPtr eval = xmlXPathEval((const xmlChar *) fullXpath.str(), xpathCtx);
+        if (eval && XPATH_NODESET == eval->type && eval->nodesetval && eval->nodesetval->nodeNr && eval->nodesetval->nodeTab!=nullptr)
+            sect = eval->nodesetval->nodeTab[0];
+        xmlXPathFreeObject(eval);
+        return sect;
+    }
+    xmlNodePtr getSection(const char *name)
+    {
+        return getSectionNode(name, nullptr);
+    }
+    xmlNodePtr ensureSection(const char *name)
+    {
+        xmlNodePtr sect = getSection(name);
+        if (sect)
+            return sect;
+        return xmlNewChild(root, nullptr, (const xmlChar *) name, nullptr);
+    }
+    void removeSection(const char *name)
+    {
+        xmlXPathObjectPtr eval = xmlXPathEval((const xmlChar *) name, xpathCtx);
+        if (!eval || XPATH_NODESET != eval->type || xmlXPathNodeSetIsEmpty(eval->nodesetval))
+            return;
+        xmlNodeSetPtr ns = eval->nodesetval;
+        int count = xmlXPathNodeSetGetLength(ns);
+        for(int i=0; i<count; i++)
+        {
+            xmlNodePtr node = xmlXPathNodeSetItem(ns, i);
+            if (node)
+            {
+                xmlUnlinkNode(node);
+                xmlFreeNode(node);
+            }
+        }
+    }
+    xmlNodePtr replaceSection(const char *name)
+    {
+        removeSection(name);
+        return xmlNewChild(root, nullptr, (const xmlChar *) name, nullptr);
+    }
+    virtual void setSectionXml(const char *section, const char *xml) override
+    {
+        xmlNodePtr sect = replaceSection(section);
+        if (xml==nullptr) //means delete content
+            return;
+
+        xmlParserCtxtPtr parserCtx = xmlCreateDocParserCtxt((const unsigned char *)xml);
+        if (!parserCtx)
+            throw MakeStringException(-1, "CEsdlScriptContext:setXmlSection: Unable to init parse of %s XML content", section);
+        parserCtx->myDoc = doc;
+        parserCtx->node = sect;
+        xmlParseDocument(parserCtx);
+        if (!parserCtx->wellFormed)
+        {
+           xmlFreeDoc(parserCtx->myDoc);
+           parserCtx->myDoc = nullptr;
+           xmlFreeParserCtxt(parserCtx);
+           throw MakeStringException(-1, "CEsdlScriptContext:setXmlSection: Unable to parse %s XML content", section);
+        }
+        xmlFreeParserCtxt(parserCtx);
+    }
+
+    virtual void setSectionProperty(const char *section, const char *name, const char *value) override
+    {
+        xmlNodePtr sect = ensureSection(section);
+        xmlNewProp(sect, (const xmlChar *)name, (const xmlChar *)value);
+    }
+
+    virtual const char *getSectionProperty(const char *section, const char *name) override
+    {
+        xmlNodePtr sect = getSection(section);
+        if (!sect)
+            return nullptr;
+        return (const char *) xmlGetProp(sect, (const xmlChar *)name);
+    }
+
+    virtual void setStoreProperty(const char *name, const char *value) override
+    {
+        setSectionProperty("Store", name, value);
+    }
+    virtual void toXML(StringBuffer &xml, const char *section, bool includeParentNode=false) override
+    {
+        xmlNodePtr sect = root;
+        if (!isEmptyString(section))
+        {
+            sect = getSectionNode(section, includeParentNode ? nullptr : "*[1]");
+            if (!sect)
+                throw MakeStringException(-1, "CEsdlScriptContext:toXML: section not found %s", section);
+        }
+        xmlBufferPtr xmlbuff = xmlBufferCreate();
+        xmlNodeDump(xmlbuff, doc, sect, 0, 1);
+        xml.append((const char *)xmlBufferContent(xmlbuff));
+        xmlBufferFree(xmlbuff);
+    }
+    virtual void toXML(StringBuffer &xml) override
+    {
+        toXML(xml, nullptr, true);
+    }
+    IXpathContext* createXpathContext(const char *section, bool strictParameterDeclaration) override
+    {
+        xmlNodePtr sect = getSectionNode(section);
+        if (!sect)
+            throw MakeStringException(-1, "CEsdlScriptContext:createXpathContext: section not found %s", section);
+        CLibXpathContext *xpathContext = new CLibXpathContext(doc, sect, strictParameterDeclaration);
+        xpathContext->addVariable("method", getSectionProperty("esdl", "method"));
+        xpathContext->addVariable("service", getSectionProperty("esdl", "service"));
+        xpathContext->addVariable("request", getSectionProperty("esdl", "request"));
+        return xpathContext;
+    }
+};
+
+IEsdlScriptContext *createEsdlScriptContext(void * espCtx)
+{
+    return new CEsdlScriptContext(espCtx);
 }
 
 extern IXpathContext* getXpathContext(const char * xmldoc, bool strictParameterDeclaration)
