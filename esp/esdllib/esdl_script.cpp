@@ -626,17 +626,26 @@ IEsdlTransformOperation *createEsdlTransformOperation(IPropertyTree *element, co
     return nullptr;
 }
 
+static inline void replaceVariable(StringBuffer &s, IXpathContext *xpathContext, const char *name)
+{
+    StringBuffer temp;
+    const char *val = xpathContext->getVariable(name, temp);
+    if (val)
+    {
+        VStringBuffer match("{$%s}", name);
+        s.replaceString(match, val);
+    }
+}
 static IPropertyTree *getTargetPTree(IPropertyTree *tree, IXpathContext *xpathContext, const char *target)
 {
     StringBuffer xpath(target);
     if (xpath.length())
     {
         //we can use real xpath processing in the future, for now simple substitution is fine
-        StringBuffer variable;
-        xpath.replaceString("{$query}", xpathContext->getVariable("query", variable));
-        xpath.replaceString("{$method}", xpathContext->getVariable("method", variable.clear()));
-        xpath.replaceString("{$service}", xpathContext->getVariable("service", variable.clear()));
-        xpath.replaceString("{$request}", xpathContext->getVariable("request", variable.clear()));
+        replaceVariable(xpath, xpathContext, "query");
+        replaceVariable(xpath, xpathContext, "method");
+        replaceVariable(xpath, xpathContext, "service");
+        replaceVariable(xpath, xpathContext, "request");
 
         IPropertyTree *child = tree->queryPropTree(xpath.str());  //get pointer to the write-able area
         if (!child)
@@ -769,22 +778,13 @@ public:
         }
     }
 
-    void processTransform(IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & content, IPropertyTree * bindingCfg) override
+    void processTransform(IEsdlScriptContext * scriptCtx, const char *srcSection, const char *tgtSection) override
     {
-        processServiceAndMethodTransforms({static_cast<IEsdlCustomTransform*>(this)}, context, tgtcfg, srvdef, mthdef, content, bindingCfg);
-    }
-    void processTransform(IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & content, IPropertyTree * bindingCfg) override
-    {
-        processServiceAndMethodTransforms({static_cast<IEsdlCustomTransform*>(this)}, context, tgtcfg, service, method, reqtype, content, bindingCfg);
-    }
-
-    void processTransform(IEsdlScriptContext * scriptCtx, IPropertyTree *tgtcfg, IPropertyTree * bindingCfg, const char *srcSection, const char *tgtSection) override
-    {
-        processServiceAndMethodTransforms(scriptCtx, {static_cast<IEsdlCustomTransform*>(this)}, tgtcfg, bindingCfg, srcSection, tgtSection);
+        processServiceAndMethodTransforms(scriptCtx, {static_cast<IEsdlCustomTransform*>(this)}, srcSection, tgtSection);
     }
 };
 
-void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::initializer_list<IEsdlCustomTransform *> const &transforms, IPropertyTree *tgtcfg, IPropertyTree * bindingCfg, const char *srcSection, const char *tgtSection)
+void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::initializer_list<IEsdlCustomTransform *> const &transforms, const char *srcSection, const char *tgtSection)
 {
     LogLevel level = LogMin;
     if (!scriptCtx)
@@ -793,37 +793,32 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
         return;
     if (isEmptyString(srcSection)||isEmptyString(tgtSection))
         return;
-    if (tgtcfg)
-        level = (unsigned) tgtcfg->getPropInt("@traceLevel", level);
+    level = scriptCtx->getPropInt64("target/*/@traceLevel", level);
 
-    const char *method = scriptCtx->getSectionProperty("esdl", "method");
+    const char *method = scriptCtx->queryAttribute("esdl", "method");
     if (isEmptyString(method))
         throw MakeStringException(ESDL_SCRIPT_Error, "ESDL script method name not set");
-    const char *service = scriptCtx->getSectionProperty("esdl", "service");
+    const char *service = scriptCtx->queryAttribute("esdl", "service");
     if (isEmptyString(service))
         throw MakeStringException(ESDL_SCRIPT_Error, "ESDL script service name not set");
-    const char *reqtype = scriptCtx->getSectionProperty("esdl", "request");
+    const char *reqtype = scriptCtx->queryAttribute("esdl", "request_type");
     if (isEmptyString(reqtype))
         throw MakeStringException(ESDL_SCRIPT_Error, "ESDL script request name not set");
 
     IEspContext *context = reinterpret_cast<IEspContext*>(scriptCtx->queryEspContext());
 
-    //the need for this will go away when the right hand side is libxml2 based
-    StringBuffer content;
-    scriptCtx->toXML(content, srcSection, false);
-
     if (level >= LogMax)
     {
-        DBGLOG("ORIGINAL content: %s", content.str());
-        if (bindingCfg)
-            toXML(bindingCfg, content.clear());
-        DBGLOG("BINDING CONFIG: %s", content.str());
-        if (tgtcfg)
-            toXML(tgtcfg, content.clear());
-        DBGLOG("TARGET CONFIG: %s", content.str());
+        StringBuffer logtxt;
+        scriptCtx->toXML(logtxt, srcSection, false);
+        DBGLOG("ORIGINAL content: %s", logtxt.str());
+        scriptCtx->toXML(logtxt.clear(), "config");
+        DBGLOG("BINDING CONFIG: %s", logtxt.str());
+        scriptCtx->toXML(logtxt.clear(), "target");
+        DBGLOG("TARGET CONFIG: %s", logtxt.str());
     }
 
-    bool strictParams = bindingCfg ? bindingCfg->getPropBool("@strictParams", false) : false;
+    bool strictParams = scriptCtx->getPropBool("config/*/@strictParams", false);
     Owned<IXpathContext> xpathContext = scriptCtx->createXpathContext(srcSection, strictParams);
 
     StringArray prefixes;
@@ -841,7 +836,8 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
 
     //in case transform wants to make use of these values:
     //make them few well known values variables rather than inputs so they are automatically available
-    xpathContext->addVariable("query", tgtcfg->queryProp("@queryname"));
+    StringBuffer temp;
+    xpathContext->addVariable("query", scriptCtx->getProp("target/*/@queryname", temp));
 
     ISecUser *user = context->queryUser();
     if (user)
@@ -892,28 +888,15 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
         xpathContext->addInputValue("espUserStatusString", "");
     }
 
-    //external parameters need <es:param> statements to make them accessible (in strict mode)
-    Owned<IPropertyTreeIterator> configParams;
-    if (bindingCfg)
-        configParams.setown(bindingCfg->getElements("Transform/Param"));
-    if (configParams)
-    {
-        ForEach(*configParams)
-        {
-            IPropertyTree & currentParam = configParams->query();
-            if (currentParam.hasProp("@select"))
-                xpathContext->addInputXpath(currentParam.queryProp("@name"), currentParam.queryProp("@select"));
-            else
-                xpathContext->addInputValue(currentParam.queryProp("@name"), currentParam.queryProp("@value"));
-        }
-    }
-    if (!strictParams)
-        xpathContext->declareRemainingInputs();
+    //the need for this will go away when the right hand side is libxml2 based
+    StringBuffer content;
+    scriptCtx->toXML(content, srcSection, false);
 
     Owned<IPropertyTree> theroot = createPTreeFromXMLString(content.str());
-    StringBuffer defaultTarget;
-        //This default gives us backward compatibility with only being able to write to the actual request
-    const char *tgtQueryName = tgtcfg->queryProp("@queryname");
+
+    StringBuffer defaultTarget; //This default gives us backward compatibility with only being able to write to the actual request
+    StringBuffer queryName;
+    const char *tgtQueryName = scriptCtx->getProp("target/*/@queryname", queryName);
     defaultTarget.setf("soap:Body/%s/%s", tgtQueryName ? tgtQueryName : method, reqtype);
 
     for ( auto&& item : transforms)
@@ -925,26 +908,34 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
         }
     }
 
-    toXML(theroot, content.clear());
+    scriptCtx->setContent(tgtSection, theroot);
 
     if (level >= LogMax)
+    {
+        scriptCtx->toXML(content.clear(), tgtSection);
         DBGLOG(1,"MODIFIED content: %s", content.str());
+    }
 }
 
-void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & content, IPropertyTree * bindingCfg)
+void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, const char *service, const char *method, const char* reqtype, StringBuffer & content, IPropertyTree *tgtCfg, IPropertyTree *bndCfg)
 {
     Owned<IEsdlScriptContext> scriptContext = createEsdlScriptContext(context);
-    scriptContext->setSectionXml("ESDLRequest", content.str());
-    scriptContext->setSectionProperty("esdl", "service", service);
-    scriptContext->setSectionProperty("esdl", "method", method);
-    scriptContext->setSectionProperty("esdl", "request_type", reqtype);
+    scriptContext->setContent("ESDLRequest", content.str());
+    scriptContext->setAttribute("esdl", "service", service);
+    scriptContext->setAttribute("esdl", "method", method);
+    scriptContext->setAttribute("esdl", "request_type", reqtype);
+    scriptContext->setAttribute("esdl", "request", reqtype);
 
+    scriptContext->setContent("target", tgtCfg);
+    scriptContext->setContent("config", bndCfg);
 
+    processServiceAndMethodTransforms(scriptContext, transforms, "ESDLRequest", "FinalRequest");
+    scriptContext->toXML(content.clear(), "FinalReqeust");
 }
 
-void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & content, IPropertyTree * bindingCfg)
+void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & content, IPropertyTree *tgtCfg, IPropertyTree *bndCfg)
 {
-    processServiceAndMethodTransforms(transforms, context, tgtcfg, srvdef.queryName(), mthdef.queryMethodName(), mthdef.queryRequestType(), content, bindingCfg);
+    processServiceAndMethodTransforms(transforms, context, srvdef.queryName(), mthdef.queryMethodName(), mthdef.queryRequestType(), content, tgtCfg, bndCfg);
 }
 
 IEsdlCustomTransform *createEsdlCustomTransform(IPropertyTree &tree, const char *ns_prefix)

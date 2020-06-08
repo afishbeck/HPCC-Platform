@@ -46,16 +46,16 @@
 
 interface IEsdlCustomTransform : extends IInterface
 {
-    virtual void processTransform(IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & content, IPropertyTree * bindingCfg) = 0;
-    virtual void processTransform(IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & content, IPropertyTree * bindingCfg) = 0;
-    virtual void processTransform(IEsdlScriptContext * context, IPropertyTree *tgtcfg, IPropertyTree * bindingCfg, const char *srcSection, const char *tgtSection) = 0;
+//    virtual void processTransform(IEspContext * context, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & content) = 0;
+//    virtual void processTransform(IEspContext * context, const char *service, const char *method, const char* reqtype, StringBuffer & content) = 0;
+    virtual void processTransform(IEsdlScriptContext * context, const char *srcSection, const char *tgtSection) = 0;
     virtual void appendEsdlURIPrefixes(StringArray &prefixes) = 0;
     virtual void toDBGLog() = 0;
 };
 
-esdl_decl void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IPropertyTree *tgtcfg, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & content, IPropertyTree * bindingCfg);
-esdl_decl void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IPropertyTree *tgtcfg, const char *service, const char *method, const char* reqtype, StringBuffer & content, IPropertyTree * bindingCfg);
-esdl_decl void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::initializer_list<IEsdlCustomTransform *> const &transforms, IPropertyTree *tgtcfg, IPropertyTree * bindingCfg, const char *srcSection, const char *tgtSection);
+esdl_decl void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & content, IPropertyTree *tgtCfg, IPropertyTree *bndCfg);
+esdl_decl void processServiceAndMethodTransforms(std::initializer_list<IEsdlCustomTransform *> const &transforms, IEspContext * context, const char *service, const char *method, const char* reqtype, StringBuffer & content, IPropertyTree *tgtCfg, IPropertyTree *bndCfg);
+esdl_decl void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::initializer_list<IEsdlCustomTransform *> const &transforms, const char *srcSection, const char *tgtSection);
 
 esdl_decl IEsdlCustomTransform *createEsdlCustomTransform(IPropertyTree &customRequestTransform, const char *ns_prefix);
 

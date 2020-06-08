@@ -1447,7 +1447,7 @@ void EsdlServiceImpl::prepareFinalRequest(IEspContext &context,
     if (serviceCrt || methodCrt)
     {
         context.addTraceSummaryTimeStamp(LogNormal, "srt-custreqtrans");
-        processServiceAndMethodTransforms({serviceCrt, methodCrt}, &context, tgtcfg, srvdef, mthdef, reqProcessed, m_oEspBindingCfg.get());
+        processServiceAndMethodTransforms({serviceCrt, methodCrt}, &context, srvdef, mthdef, reqProcessed, tgtcfg, m_oEspBindingCfg.get());
         context.addTraceSummaryTimeStamp(LogNormal, "end-custreqtrans");
     }
 }
