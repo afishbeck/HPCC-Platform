@@ -210,12 +210,14 @@ public:
     {
         beginScope("/");
         setXmlDoc(xmldoc);
+        registerExslt();
     }
 
     CLibXpathContext(xmlDocPtr doc, xmlNodePtr node, bool _strictParameterDeclaration) : strictParameterDeclaration(_strictParameterDeclaration)
     {
         beginScope("/");
         setContextDocument(doc, node);
+        registerExslt();
     }
 
     ~CLibXpathContext()
@@ -787,18 +789,6 @@ extern ICompiledXpath* compileXpath(const char * xpath)
     return new CLibCompiledXpath(xpath);
 }
 
-typedef std::vector<xmlNsPtr> xmlNsStack;
-
-xmlNsPtr lookupXmlNs(xmlNsStack &nss, const char *prefix)
-{
-    //search in revers order.  Allows overloading values on stack
-    for(xmlNsStack::reverse_iterator it = nss.rbegin(); it != nss.rend(); ++it)
-    {
-        if (streq((const char *)(*it)->prefix, prefix))
-            return *it;
-    }
-    return nullptr;
-}
 xmlNsPtr createNsFromXmlns(xmlNodePtr node, const char *attname, const char *uri, xmlNsPtr ns)
 {
     if (*attname=='@')
@@ -813,7 +803,7 @@ xmlNsPtr createNsFromXmlns(xmlNodePtr node, const char *attname, const char *uri
         return nullptr;
     return xmlNewNs(node, (const xmlChar *)uri, (const xmlChar *)attname);
 }
-void addChildFromPtree(xmlNodePtr parent, IPropertyTree &tree, const char *name, xmlNsStack &nss)
+void addChildFromPtree(xmlNodePtr parent, IPropertyTree &tree, const char *name)
 {
     if (isEmptyString(name))
         name = tree.queryName();
@@ -858,7 +848,7 @@ void addChildFromPtree(xmlNodePtr parent, IPropertyTree &tree, const char *name,
     }
     Owned<IPropertyTreeIterator> children = tree.getElements("*");
     ForEach(*children)
-        addChildFromPtree(node, children->query(), nullptr, nss);
+        addChildFromPtree(node, children->query(), nullptr);
 }
 
 IPropertyTree *createPtreeFromXmlNode(xmlNodePtr node);
@@ -880,6 +870,19 @@ IPropertyTree *createPtreeFromXmlNode(xmlNodePtr node)
     copyXmlNode(tree, node);
     return tree.getClear();
 }
+
+static const char *queryAttrValue(xmlNodePtr node, const char *name)
+{
+    if (!node)
+        return nullptr;
+    xmlAttrPtr att = xmlHasProp(node, (const xmlChar *)name);
+    if (!att)
+        return nullptr;
+    if (att->type != XML_ATTRIBUTE_NODE || att->children==nullptr || (att->children->type != XML_TEXT_NODE && att->children->type != XML_CDATA_SECTION_NODE))
+        return nullptr;
+    return (const char *) att->children->content;
+}
+
 class CEsdlScriptContext : public CInterfaceOf<IEsdlScriptContext>
 {
 private:
@@ -934,16 +937,16 @@ private:
                 xmlNodePtr node = eval->nodesetval->nodeTab[i];
                 if (node==nullptr)
                   continue;
-                const char *name = (const char *)xmlGetProp(node,(const xmlChar *) "name");
+                const char *name = queryAttrValue(node, "name");
                 if (xmlHasProp(node,(const xmlChar *) "select"))
-                  tgtXpathCtx->addInputXpath(name, (const char *) xmlGetProp(node,(const xmlChar *) "select"));
+                  tgtXpathCtx->addInputXpath(name, queryAttrValue(node,"select"));
                 else
-                  tgtXpathCtx->addInputValue(name, (const char *) xmlGetProp(node,(const xmlChar *) "value"));
+                  tgtXpathCtx->addInputValue(name, queryAttrValue(node,"value"));
             }
         }
         xmlXPathFreeObject(eval);
     }
-    const char *getProp(const char *xpath, StringBuffer &s) const override
+    const char *getXPathString(const char *xpath, StringBuffer &s) const override
     {
         xmlXPathObjectPtr eval = xmlXPathEval((const xmlChar *) xpath, xpathCtx);
         if (eval)
@@ -952,44 +955,47 @@ private:
             xmlXPathFreeObject(eval);
             if (v)
             {
-                s.append((const char *)v);
+                if (*v)
+                    s.append((const char *)v);
                 xmlFree(v);
                 return s;
             }
         }
         return nullptr;
     }
-    __int64 getPropInt64(const char *xpath, __int64 dft=0) const override
+    __int64 getXPathInt64(const char *xpath, __int64 dft=0) const override
     {
+        __int64 ret = dft;
         xmlXPathObjectPtr eval = xmlXPathEval((const xmlChar *) xpath, xpathCtx);
         if (eval)
         {
             xmlChar *val = xmlXPathCastToString(eval);
             xmlXPathFreeObject(eval);
-            if (val && *val)
+            if (val)
             {
-                __int64 ret = _atoi64((const char *)val);
+                if (*val)
+                    ret = _atoi64((const char *)val);
                 xmlFree(val);
-                return ret;
             }
         }
-        return dft;
+        return ret;
     }
-    bool getPropBool(const char *xpath, bool dft=false) const override
+    bool getXPathBool(const char *xpath, bool dft=false) const override
     {
+        bool ret = dft;
         xmlXPathObjectPtr eval = xmlXPathEval((const xmlChar *) xpath, xpathCtx);
         if (eval)
         {
             xmlChar *val = xmlXPathCastToString(eval);
             xmlXPathFreeObject(eval);
-            if (val && *val)
+            if (val)
             {
-                bool ret = strToBool((const char *)val);
+                if (*val)
+                    ret = strToBool((const char *)val);
                 xmlFree(val);
-                return ret;
             }
         }
-        return dft;
+        return ret;
     }
 
     xmlNodePtr getSection(const char *name)
@@ -1006,19 +1012,24 @@ private:
     void removeSection(const char *name)
     {
         xmlXPathObjectPtr eval = xmlXPathEval((const xmlChar *) name, xpathCtx);
-        if (!eval || XPATH_NODESET != eval->type || xmlXPathNodeSetIsEmpty(eval->nodesetval))
+        if (!eval)
             return;
-        xmlNodeSetPtr ns = eval->nodesetval;
-        int count = xmlXPathNodeSetGetLength(ns);
-        for(int i=0; i<count; i++)
+        if (XPATH_NODESET==eval->type && !xmlXPathNodeSetIsEmpty(eval->nodesetval))
         {
-            xmlNodePtr node = xmlXPathNodeSetItem(ns, i);
-            if (node)
+            xmlNodeSetPtr ns = eval->nodesetval;
+            int count = xmlXPathNodeSetGetLength(ns);
+            for(int i=0; i<count; i++)
             {
-                xmlUnlinkNode(node);
-                xmlFreeNode(node);
+                xmlNodePtr node = xmlXPathNodeSetItem(ns, i);
+                if (node)
+                {
+                    xmlUnlinkNode(node);
+                    xmlFreeNode(node);
+                    ns->nodeTab[i]=nullptr;
+                }
             }
         }
+        xmlXPathFreeObject(eval);
     }
     xmlNodePtr replaceSection(const char *name)
     {
@@ -1034,25 +1045,21 @@ private:
         xmlParserCtxtPtr parserCtx = xmlCreateDocParserCtxt((const unsigned char *)xml);
         if (!parserCtx)
             throw MakeStringException(-1, "CEsdlScriptContext:setXmlSection: Unable to init parse of %s XML content", section);
-        parserCtx->myDoc = doc;
+//        parserCtx->myDoc = doc;
         parserCtx->node = sect;
         xmlParseDocument(parserCtx);
-        if (!parserCtx->wellFormed)
-        {
-           xmlFreeDoc(parserCtx->myDoc);
-           parserCtx->myDoc = nullptr;
-           xmlFreeParserCtxt(parserCtx);
-           throw MakeStringException(-1, "CEsdlScriptContext:setXmlSection: Unable to parse %s XML content", section);
-        }
+        int wellFormed = parserCtx->wellFormed;
+        xmlFreeDoc(parserCtx->myDoc); //dummy document
         xmlFreeParserCtxt(parserCtx);
+        if (!wellFormed)
+           throw MakeStringException(-1, "CEsdlScriptContext:setContent xml string: Unable to parse %s XML content", section);
     }
     virtual void setContent(const char *section, IPropertyTree *tree) override
     {
         xmlNodePtr sect = replaceSection(section);
         if (tree==nullptr) //means delete content
             return;
-        xmlNsStack nss;
-        addChildFromPtree(sect, *tree, tree->queryName(), nss);
+        addChildFromPtree(sect, *tree, tree->queryName());
     }
 
     virtual void setAttribute(const char *section, const char *name, const char *value) override
@@ -1060,13 +1067,24 @@ private:
         xmlNodePtr sect = ensureSection(section);
         xmlNewProp(sect, (const xmlChar *)name, (const xmlChar *)value);
     }
-
     virtual const char *queryAttribute(const char *section, const char *name) override
     {
         xmlNodePtr sect = getSection(section);
         if (!sect)
             return nullptr;
-        return (const char *) xmlGetProp(sect, (const xmlChar *)name);
+        return queryAttrValue(sect, name);
+    }
+    virtual const char *getAttribute(const char *section, const char *name, StringBuffer &s) override
+    {
+        xmlNodePtr sect = getSection(section);
+        if (!sect)
+            return nullptr;
+        xmlChar *val = xmlGetProp(sect, (const xmlChar *)name);
+        if (!val)
+            return nullptr;
+        s.append((const char *)val);
+        xmlFree(val);
+        return s;
     }
 
     virtual void toXML(StringBuffer &xml, const char *section, bool includeParentNode=false) override
@@ -1076,7 +1094,7 @@ private:
         {
             sect = getSectionNode(section, includeParentNode ? nullptr : "*[1]");
             if (!sect)
-                throw MakeStringException(-1, "CEsdlScriptContext:toXML: section not found %s", section);
+                return;
         }
 
         xmlOutputBufferPtr xmlOut = xmlAllocOutputBuffer(nullptr);
@@ -1098,9 +1116,10 @@ private:
         if (!sect)
             throw MakeStringException(-1, "CEsdlScriptContext:createXpathContext: section not found %s", section);
         CLibXpathContext *xpathContext = new CLibXpathContext(doc, sect, strictParameterDeclaration);
-        xpathContext->addVariable("method", queryAttribute("esdl", "method"));
-        xpathContext->addVariable("service", queryAttribute("esdl", "service"));
-        xpathContext->addVariable("request", queryAttribute("esdl", "request"));
+        StringBuffer val;
+        xpathContext->addVariable("method", getAttribute("esdl", "method", val));
+        xpathContext->addVariable("service", getAttribute("esdl", "service", val.clear()));
+        xpathContext->addVariable("request", getAttribute("esdl", "request", val.clear()));
 
         //external parameters need <es:param> statements to make them accessible (in strict mode)
         addXpathCtxConfigInputs(xpathContext);

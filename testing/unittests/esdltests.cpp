@@ -210,21 +210,21 @@ class ESDLTests : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE( ESDLTests );
         CPPUNIT_TEST(testEsdlTransformScript);
-        //CPPUNIT_TEST(testEsdlTransformScriptNoPrefix);
-        //CPPUNIT_TEST(testEsdlTransformForEach);
-        //CPPUNIT_TEST(testEsdlTransformVarScope);
-        //CPPUNIT_TEST(testEsdlTransformLegacy);
-        //CPPUNIT_TEST(testEsdlTransformIgnoreScriptErrors);
-        //CPPUNIT_TEST(testEsdlTransformTargetXpathErrors);
-        //CPPUNIT_TEST(testEsdlTransformFailStrict);
-        //CPPUNIT_TEST(testEsdlTransformScriptVarParam);
-        //CPPUNIT_TEST(testEsdlTransformFailLevel1A);
-        //CPPUNIT_TEST(testEsdlTransformFailLevel1B);
-        //CPPUNIT_TEST(testEsdlTransformFailLevel1C);
-        //CPPUNIT_TEST(testEsdlTransformFailLevel2A);
-        //CPPUNIT_TEST(testEsdlTransformFailLevel2B);
-        //CPPUNIT_TEST(testEsdlTransformFailLevel2C);
-    //    CPPUNIT_TEST(testScriptContext);
+        CPPUNIT_TEST(testEsdlTransformScriptNoPrefix);
+        CPPUNIT_TEST(testEsdlTransformForEach);
+        CPPUNIT_TEST(testEsdlTransformVarScope);
+        CPPUNIT_TEST(testEsdlTransformLegacy);
+        CPPUNIT_TEST(testEsdlTransformIgnoreScriptErrors);
+        CPPUNIT_TEST(testEsdlTransformTargetXpathErrors);
+        CPPUNIT_TEST(testEsdlTransformFailStrict);
+        CPPUNIT_TEST(testEsdlTransformScriptVarParam);
+        CPPUNIT_TEST(testEsdlTransformFailLevel1A);
+        CPPUNIT_TEST(testEsdlTransformFailLevel1B);
+        CPPUNIT_TEST(testEsdlTransformFailLevel1C);
+        CPPUNIT_TEST(testEsdlTransformFailLevel2A);
+        CPPUNIT_TEST(testEsdlTransformFailLevel2B);
+        CPPUNIT_TEST(testEsdlTransformFailLevel2C);
+        CPPUNIT_TEST(testScriptContext);
     CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -237,28 +237,37 @@ public:
             return "unknown";
         return testname;
     }
-    void runTest(const char *testname, const char *runscript, const char *xml, const char *config, const char *result, int code)
-    {
-        StringBuffer request(xml);
 
+    IEsdlScriptContext *createTestScriptContext(IEspContext *ctx, const char *xml, const char *config)
+    {
+        Owned<IEsdlScriptContext> scriptContext = createEsdlScriptContext(ctx);
+        scriptContext->setAttribute("esdl", "service", "EsdlExample");
+        scriptContext->setAttribute("esdl", "method", "EchoPersonInfo");
+        scriptContext->setAttribute("esdl", "request_type", "EchoPersonInfoRequest");
+        scriptContext->setAttribute("esdl", "request", "EchoPersonInfoRequest");
+
+        scriptContext->setContent("config", config);
+        scriptContext->setContent("ESDLRequest", xml);
+        return scriptContext.getClear();
+    }
+
+    void runTransform(IEsdlScriptContext *scriptContext, const char *scriptXml, const char *srcSection, const char *tgtSection, const char *testname, int code)
+    {
+        Owned<IPropertyTree> script = createPTreeFromXMLString(scriptXml);
+        Owned<IEsdlCustomTransform> tf = createEsdlCustomTransform(*script, nullptr);
+
+        tf->processTransform(scriptContext, srcSection, tgtSection);
+        if (code)
+            throw MakeStringException(99, "Test failed(%s): expected an explicit exception %d", testname, code);
+    }
+    void runTest(const char *testname, const char *scriptXml, const char *xml, const char *config, const char *result, int code)
+    {
         try
         {
-            Owned<IPropertyTree> script = createPTreeFromXMLString(runscript);
-            Owned<IEsdlCustomTransform> tf = createEsdlCustomTransform(*script, nullptr);
-
             Owned<IEspContext> ctx = createEspContext(nullptr);
-            Owned<IEsdlScriptContext> scriptContext = createEsdlScriptContext(ctx.get());
-            scriptContext->setAttribute("esdl", "service", "EsdlExample");
-            scriptContext->setAttribute("esdl", "method", "EchoPersonInfo");
-            scriptContext->setAttribute("esdl", "request_type", "EchoPersonInfoRequest");
-            scriptContext->setAttribute("esdl", "request", "EchoPersonInfoRequest");
+            Owned<IEsdlScriptContext> scriptContext = createTestScriptContext(ctx, xml, config);
+            runTransform(scriptContext, scriptXml, "ESDLRequest", "FinalRequest", testname, code);
 
-            scriptContext->setContent("config", config);
-            scriptContext->setContent("ESDLRequest", request);
-
-            tf->processTransform(scriptContext, "ESDLRequest", "FinalRequest");
-            if (code)
-                throw MakeStringException(99, "Test failed(%s): expected an explicit exception %d", testname, code);
             StringBuffer output;
             scriptContext->toXML(output.clear(), "FinalRequest");
             if (result && !streq(result, output.str()))
@@ -596,7 +605,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     <Param name='testcase' value="for each friend"/>
     <Param name='section' select="'Friends'"/>
     <Param name='garbage' select="''"/>
-    <Param name='ForBuildListPath' select='/root/extra/Friends/Name'/>
+    <Param name='ForBuildListPath' select='/esdl_script_context/ESDLRequest/root/extra/Friends/Name'/><!--absolute path may change, highly frowned upon-->
     <Param name='ForIdPath' select='extra/Friends/Name/First'/>
   </Transform>
 </config>)!!";
@@ -651,7 +660,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     <Param name='section' select="'Relatives'"/>
     <Param name='garbage' select="''"/>
     <Param name='ForBuildListPath' select='extra/Relatives/Name'/>
-    <Param name='ForIdPath' select='/root/extra/Relatives/Name/First'/>
+    <Param name='ForIdPath' select='/esdl_script_context/ESDLRequest/root/extra/Relatives/Name/First'/> <!--absolute path may change, highly frowned upon-->
   </Transform>
 </config>)!!";
 
@@ -752,7 +761,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
              <append-to-value target="trace-halfway" select="$halfway"/>
              <append-to-value target="trace-global" select="$global"/>
            </if>
-           <for-each select="/root/extra/Friends/Name">
+           <for-each select="extra/Friends/Name">
                <variable name="local" select="'for1|'"/>
                <variable name="q" select="str:decode-uri('%27')"/>
                <variable name="path" select="concat('Friends/Name[First=', $q, First, $q, ']/Aliases')"/>
@@ -833,7 +842,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
         )!!";
 
         static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
-            <es:SetValue target="ID" select="/root/Person/Name/First"/>
+            <es:SetValue target="ID" select="Person/Name/First"/>
             <es:AppendValue target="Append" select="Person/Name/First"/>
             <es:AppendValue target="Append" value="'++'"/>
         </es:CustomRequestTransform>
@@ -1020,19 +1029,100 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
 
     void testScriptContext()
     {
-        Owned<IEsdlScriptContext> scriptContext = createEsdlScriptContext(nullptr);
-        scriptContext->setContent("mysection", "<a><b><c><d x='1'/></c></b></a>");
-        scriptContext->setAttribute("store1", "prop1", "aaaaaaaaaa");
-        scriptContext->setAttribute("store1", "prop2", "bbbbbbbbbb");
-        scriptContext->setAttribute("store1", "prop3", "cccccccccc");
+        static constexpr const char * input = R"!!(<?xml version="1.0" encoding="UTF-8"?>
+         <root>
+            <Person>
+               <FullName>
+                  <First>Joe</First>
+                  <ID>GI101</ID>
+                  <ID>GI102</ID>
+               </FullName>
+            </Person>
+          </root>
+        )!!";
 
-        const char *val = scriptContext->queryAttribute("store1", "prop1");
-        scriptContext->setAttribute("store2", "prop2", val);
+        static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
+            <es:parameter name="testpass"/> 
+            <es:if test="es:storedValueExists('myvalue')">
+              <es:set-value xpath_target="concat('check-value1-pass-', $testpass)" select="concat('already set as of pass-', $testpass)"/>
+              <es:set-value target="myvalue" select="es:getStoredStringValue('myvalue')"/>
+              <es:remove-node target="Name/ID[1]"/> //removing first one changes the index count so each is 1
+              <es:remove-node target="Name/ID[1]"/> 
+            </es:if>
+            <es:if test="es:storedValueExists('myvalue2')">
+              <es:set-value xpath_target="concat('check-value2-pass-', $testpass)" select="concat('already set in pass-', $testpass)"/>
+              <es:set-value target="myvalue2" select="es:getStoredStringValue('myvalue2')"/>
+            </es:if>
+            <es:if test="es:logOptionExists('option1')">
+              <es:set-value xpath_target="concat('check-logging-option1-pass-', $testpass)" select="concat('already set in pass-', $testpass)"/>
+              <es:set-value target="logging-option1" select="es:getLogOption('option1')"/>
+              <es:set-value target="profile" select="es:getLogProfile()"/>
+            </es:if>
+            <es:if test="not(es:storedValueExists('myvalue'))">
+              <es:set-value xpath_target="concat('check-set-pass-', $testpass)" select="concat('not already set in pass-', $testpass)"/>
+              <es:store-value xpath_name="'myvalue2'" select="'another stored value'"/>
+              <es:store-value name="myvalue" select="'this is a stored value'"/>
+              <es:set-log-option name="'option1'" select="'this is a logging option value'"/>
+              <es:set-log-profile select="'myprofile'"/>
+              <es:rename-node target="FullName" new_name="Name"/> 
+            </es:if>
+        </es:CustomRequestTransform>
+        )!!";
 
-        StringBuffer xml;
-        scriptContext->toXML(xml);
-        fprintf(stdout, "%s", xml.str());
-        fprintf(stdout, "%s", "\n-----------------\n");
+        constexpr const char *config1 = R"!!(<config>
+          <Transform>
+            <Param name='testcase' value="script context 1"/>
+            <Param name='testpass' value="1"/>
+          </Transform>
+        </config>)!!";
+
+        constexpr const char *config2 = R"!!(<config>
+          <Transform>
+            <Param name='testcase' value="script context 2"/>
+            <Param name='testpass' value="2"/>
+          </Transform>
+        </config>)!!";
+
+        try
+        {
+            Owned<IEspContext> ctx = createEspContext(nullptr);
+            Owned<IEsdlScriptContext> scriptContext = createTestScriptContext(ctx, input, config1);
+            runTransform(scriptContext, script, "ESDLRequest", "FirstPass", "script context 1", 0);
+
+            scriptContext->setContent("config", config2);
+            runTransform(scriptContext, script, "FirstPass", "SecondPass", "script context 2", 0);
+
+            constexpr const char * result = R"!!(<root>
+  <Person>
+    <Name>
+      <First>Joe</First>
+    </Name>
+    <myvalue>this is a stored value</myvalue>
+    <myvalue2>another stored value</myvalue2>
+    <logging-option1>this is a logging option value</logging-option1>
+    <check-set-pass-1>not already set in pass-1</check-set-pass-1>
+    <check-value2-pass-2>already set in pass-2</check-value2-pass-2>
+    <profile>myprofile</profile>
+    <check-logging-option1-pass-2>already set in pass-2</check-logging-option1-pass-2>
+    <check-value1-pass-2>already set as of pass-2</check-value1-pass-2>
+  </Person>
+</root>)!!";
+
+            StringBuffer output;
+            scriptContext->toXML(output, "SecondPass");
+            if (result && !streq(result, output.str()))
+            {
+                fputs(output.str(), stdout);
+                fflush(stdout);
+                throw MakeStringException(100, "Test failed(%s)", "script context");
+            }
+        }
+        catch (IException *E)
+        {
+            StringBuffer m;
+            fprintf(stdout, "\nTest(%s) Exception %d - %s\n", "script context", E->errorCode(), E->errorMessage(m).str());
+            throw E;
+        }
     }
 };
 

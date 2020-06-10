@@ -46,8 +46,6 @@
 
 interface IEsdlCustomTransform : extends IInterface
 {
-//    virtual void processTransform(IEspContext * context, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, StringBuffer & content) = 0;
-//    virtual void processTransform(IEspContext * context, const char *service, const char *method, const char* reqtype, StringBuffer & content) = 0;
     virtual void processTransform(IEsdlScriptContext * context, const char *srcSection, const char *tgtSection) = 0;
     virtual void appendEsdlURIPrefixes(StringArray &prefixes) = 0;
     virtual void toDBGLog() = 0;
@@ -59,6 +57,6 @@ esdl_decl void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx,
 
 esdl_decl IEsdlCustomTransform *createEsdlCustomTransform(IPropertyTree &customRequestTransform, const char *ns_prefix);
 
-esdl_decl void registerEsdlXPathExtensions(IXpathContext *xpathCtx, IEspContext *espCtx, const StringArray &prefixes);
+esdl_decl void registerEsdlXPathExtensions(IXpathContext *xpathCtx, IEsdlScriptContext *scriptCtx, const StringArray &prefixes);
 
 #endif /* ESDL_SCRIPT_HPP_ */
