@@ -219,59 +219,44 @@ bool CLoggingManager::updateLog(IEspContext* espContext, IEspUpdateLogRequestWra
     return bRet;
 }
 
-static bool checkEnabledLogEntry(IPropertyTree *scriptValues, const char *profile, const char *group, unsigned &groupEntryCount, const char *logtype, unsigned &typeEntryCount)
+static bool checkEnabledLogVariant(IPropertyTree *scriptValues, const char *profile, const char *tracename, const char *group, const char *logtype)
 {
-    if ((!group || *group) && (!logtype || !*logtype)) //get this special case out of the way
+    bool checkProfile = !isEmptyString(profile);
+    bool checkType = !isEmptyString(logtype);
+
+    if (checkProfile && (isEmptyString(group) || !strieq(profile, group)))
         return false;
-    //we only care about groups if a profile is specified, if so does it match?
-    if (profile && *profile && group && *group)
+    else if (checkType)
     {
-        groupEntryCount++;
-        if (!strieq(profile, group))
-            return false; //don't need to fall through and check types this group doesn't match
-    }
-    //if an entry has an enabled group but no type that entry is enabled
-    if (!logtype || !*logtype)
-        return true;
-    typeEntryCount++;
-    //if our type isn't disabled then this entry is enabled
-    VStringBuffer xpath("@disable-log-type-%s", logtype);
-    return (!scriptValues->getPropBool(xpath, false));
+        VStringBuffer xpath("@disable-log-type-%s", logtype);
+        if (scriptValues->getPropBool(xpath, false))
+        {
+            ESPLOG(LogNormal, "'%s' log entry disabled - log type '%s' disabled", tracename, logtype);
+            return false;
+        }
+     }
+    return true;
 }
 
 bool checkSkipThreadQueue(IPropertyTree *scriptValues, IUpdateLogThread &logthread)
 {
     if (!scriptValues)
         return false;
-    const char *controlName = logthread.queryControlName();
-    if (controlName && *controlName)
-    {
-        VStringBuffer controlAttr("@%s", controlName);
-        const char *controlValue = scriptValues->queryProp(controlAttr);
-        if (controlValue && strieq(controlValue, "skip"))
-            return true;
-    }
-    Linked<IEspLogAgent> agent = logthread.getLogAgent(); //badly named function get does not link
+    Linked<IEspLogAgent> agent = logthread.getLogAgent(); //badly named function get functions should link
     if (!agent)
         return false;
+
     const char *profile = scriptValues->queryProp("@profile");
-
-    unsigned groupEntryCount = 0;
-    unsigned groupEntriesDisabled = 0;
-    unsigned typeEntryCount = 0;
-    unsigned typeEntriesDisabled = 0;
-
     Owned<IEspLogAgentVariantIterator> variants = agent->getVariants();
+    if (isEmptyString(profile) && !variants->first())
+        return false;
+
     ForEach(*variants)
     {
-        //a single enabled entry means we can't skip.  Unfortunately group="", type="" may be an artifact? treat it as non-existent
-        if (checkEnabledLogEntry(scriptValues, profile, variants->query().getGroup(), groupEntryCount, variants->query().getType(), typeEntryCount))
+        const IEspLogAgentVariant& variant = variants->query();
+        if (checkEnabledLogVariant(scriptValues, profile, variant.getName(), variant.getGroup(), variant.getType()))
             return false;
     }
-    //if nothing was defined/checked then we're defacto enabled
-    if (groupEntryCount==0 && typeEntryCount==0)
-        return false;
-    //things were checked but each was disabled
     return true;
 }
 
@@ -285,7 +270,7 @@ bool CLoggingManager::updateLog(IEspContext* espContext, IEspUpdateLogRequestWra
         if (espContext)
             espContext->addTraceSummaryTimeStamp(LogMin, "LMgr:startQLog");
 
-        Owned<IPropertyTree> scriptValues = req.getScriptValuesTree();
+        Linked<IPropertyTree> scriptValues = req.getScriptValuesTree();
         if (oneTankFile)
         {
             Owned<CLogRequestInFile> reqInFile = new CLogRequestInFile();

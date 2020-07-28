@@ -688,7 +688,7 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
     context.addTraceSummaryValue(LogMin, "method", mthName);
     const char* srvName = srvdef.queryName();
 
-    if (m_serviceLevelCrtFail)
+    if (m_serviceLevelCrtFail) //checked further along in shared code, but might as well avoid extra overhead
         throw MakeStringException(-1, "%s::%s disabled due to Custom Transform errors. Review transform template in configuration.", srvdef.queryName(), mthName);
 
     Owned<MethodAccessMap>* authMap = m_methodAccessMaps.getValue(mthdef.queryMethodName());
