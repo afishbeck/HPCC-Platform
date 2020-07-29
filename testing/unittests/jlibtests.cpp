@@ -2377,5 +2377,75 @@ public:
 CPPUNIT_TEST_SUITE_REGISTRATION( JlibCompressionTestsStress );
 CPPUNIT_TEST_SUITE_NAMED_REGISTRATION( JlibCompressionTestsStress, "JlibCompressionTestsStress" );
 
+class JlibSecretTest : public CppUnit::TestFixture
+{
+    CPPUNIT_TEST_SUITE(JlibSecretTest);
+        CPPUNIT_TEST(test);
+    CPPUNIT_TEST_SUITE_END();
+
+public:
+    void test()
+    {
+//        StringBuffer result;
+//        getSecret(result, "tls-tony-test", "tls.cert");
+        bool https = false;
+        StringBuffer user;
+        StringBuffer password;
+        StringBuffer host;
+        StringBuffer port;
+        StringBuffer fullpath;
+        StringBuffer schemeHostPort;
+
+        const char *url = "http://abcdefg:hijklmnop@myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
+        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
+
+        url = "https://abcdefg:hijklmnop@myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
+        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
+
+        url = "http://usususus@9.8.7.6/abc/def/ghi?x=1;y=2;z=3";
+        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
+
+        url = "http://usususus:pwpwpw@myhost:12345/abc/def/ghi?x=1;y=2;z=3";
+        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
+
+        url = "http://:pwpwpw@:12345/abc/def/ghi?x=1;y=2;z=3";
+        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
+
+        url = "https://:pwpwpw@/abc/def/ghi?x=1;y=2;z=3";
+        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
+
+        url = "http://abcdefg:hijklmnop@myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
+        splitUrlSchemeHostPort(url, user.clear(), password.clear(), schemeHostPort.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, user.str(), password.str(), schemeHostPort.str(), fullpath.str());
+
+        url = "https://user10101:pw5678@myhost:12345/abc/def/ghi?x=1;y=2;z=3";
+        splitUrlSchemeHostPort(url, user.clear(), password.clear(), schemeHostPort.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, user.str(), password.str(), schemeHostPort.str(), fullpath.str());
+
+        url = "http://abcdefg:hijklmnop@myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
+        splitUrlSchemeHostPort(url, user.clear(), password.clear(), schemeHostPort.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, user.str(), password.str(), schemeHostPort.str(), fullpath.str());
+
+        url = "http://myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
+        splitUrlSchemeHostPort(url, user.clear(), password.clear(), schemeHostPort.clear(), fullpath.clear());
+        fprintf(stdout, "\n%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, user.str(), password.str(), schemeHostPort.str(), fullpath.str());
+
+        StringBuffer s;
+        const char *source = "http://${env.USER}:${env.TERM}@${env.NAMEX}:12345/abc/def/ghi?x=1;y=2;z=3${env.HOME}";
+        replaceEnvVariables(s, source, false);
+        fprintf(stdout, "\n%s\n", s.str());
+    }
+};
+
+CPPUNIT_TEST_SUITE_REGISTRATION(JlibSecretTest);
+CPPUNIT_TEST_SUITE_NAMED_REGISTRATION(JlibSecretTest, "JlibSecretTest");
+
+
 
 #endif // _USE_CPPUNIT
