@@ -53,6 +53,7 @@ data:
     {{ $apptype }}:
 {{ toYaml (omit . "logging") | indent 6 }}
 {{- include "hpcc.generateLoggingConfig" (dict "root" $ "me" .) | indent 6 }}
+{{ include "hpcc.generateVaultConfig" (dict "root" $ "categories" (list "all" "storage" "ecl" "ecl-user" ) ) | indent 4 }}
     global:
 {{ include "hpcc.generateGlobalConfigMap" $ | indent 6 }}
   {{ $apptype }}-jobspec.yaml: |

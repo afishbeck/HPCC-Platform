@@ -314,6 +314,22 @@ Add Secret volume for a component
 {{- end -}}
 
 {{/*
+Generate vault info
+*/}}
+{{- define "hpcc.generateVaultConfig" -}}
+{{- $categories := .categories -}}
+vaults:
+{{- range  $category, $vault := .root.Values.vaults }}
+  {{ $category }}:
+  {{- range $vaultid, $vault := . }}
+    {{ $vaultid }}:
+      type: {{ $vault.type }}
+      url: {{ $vault.url }}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Return a value indicating whether a storage plane is defined or not.
 */}}
 {{- define "hpcc.isValidStoragePlane" -}}

@@ -64,6 +64,28 @@ storage:
     # existingClaim: ""
     # forcePermissions: false
 
+vaults:
+  storage:
+    my-storage-vault:
+      url: http://vault-0:8200/v1/secret/data/storage/{$secret}?version={$version}
+      type: kv-v2
+      #secret: #vault auth secret.. if kubernetes auth is not supported
+  ecl:
+    my-ecl-vault:
+      url: http://vault-0:8200/v1/secret/data/ecl/{$secret}?version={$version}
+      type: kv-v2
+      #secret: #vault auth secret.. if kubernetes auth is not supported
+  ecl-user: #ECL code may have direct access to these secrets
+    my-ecl-user-vault:
+      url: http://vault-0:8200/v1/secret/data/user/{$secret}?version={$version}
+      type: kv-v2
+      #secret: #vault auth secret.. if kubernetes auth is not supported
+  esp:
+    my-esp-vault:
+      url: http://vault-0:8200/v1/secret/data/esp/{$secret}?version={$version}
+      type: kv-v2
+      #secret: #vault auth secret.. if kubernetes auth is not supported
+
 ## The secrets section contains a set of categories, each of which contain a list of secrets.  The categories deterime which
 ## components have access to the secrets.
 ## For each secret:

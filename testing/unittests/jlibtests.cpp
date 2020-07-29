@@ -2377,5 +2377,23 @@ public:
 CPPUNIT_TEST_SUITE_REGISTRATION( JlibCompressionTestsStress );
 CPPUNIT_TEST_SUITE_NAMED_REGISTRATION( JlibCompressionTestsStress, "JlibCompressionTestsStress" );
 
+class JlibSecretTest : public CppUnit::TestFixture
+{
+    CPPUNIT_TEST_SUITE(JlibSecretTest);
+        CPPUNIT_TEST(test);
+    CPPUNIT_TEST_SUITE_END();
+
+public:
+    void test()
+    {
+        StringBuffer result;
+        getSecret(result, "tls-tony-test", "tls.cert");
+    }
+};
+
+CPPUNIT_TEST_SUITE_REGISTRATION(JlibSecretTest);
+CPPUNIT_TEST_SUITE_NAMED_REGISTRATION(JlibSecretTest, "JlibSecretTest");
+
+
 
 #endif // _USE_CPPUNIT

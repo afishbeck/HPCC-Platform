@@ -55,6 +55,31 @@
       },
       "additionalProperties": false
     },
+    "vaults": {
+      "description": "configuration for vaults accessed by the components",
+      "type": "object",
+      "properties": {
+        "timeout": {
+          "type": "integer"
+        },
+        "storage": {
+          "$ref": "#/definitions/vaultCategory"
+        },
+        "esp": {
+          "$ref": "#/definitions/vaultCategory"
+        },
+        "ecl": {
+          "$ref": "#/definitions/vaultCategory"
+        },
+        "ecl-user": {
+          "$ref": "#/definitions/vaultCategory"
+        },
+        "all": {
+          "$ref": "#/definitions/vaultCategory"
+        }
+      },
+      "additionalProperties": false
+    },
     "bundles": {
       "description": "bundles",
       "type": "array",
@@ -244,6 +269,30 @@
       "additionalProperties": false
     },
     "secrets": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "vaultCategory": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/vault"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "vault": {
       "oneOf": [
         {
           "type": "object",
