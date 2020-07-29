@@ -169,6 +169,7 @@ set (    INCLUDES
         jtime.ipp
         junicode.hpp
         jutil.hpp
+        ${HPCC_SOURCE_DIR}/system/httplib/httplib.h
         ${HPCC_SOURCE_DIR}/system/security/cryptohelper/cryptocommon.cpp
         ${HPCC_SOURCE_DIR}/system/security/cryptohelper/digisign.cpp
         ${HPCC_SOURCE_DIR}/system/security/cryptohelper/pke.cpp
@@ -194,6 +195,7 @@ include_directories (
          ${HPCC_SOURCE_DIR}/system/globalid
          ${HPCC_SOURCE_DIR}/system/security/cryptohelper
          ${HPCC_SOURCE_DIR}/system/yaml/libyaml/include
+         ${HPCC_SOURCE_DIR}/system/httplib
          ${CMAKE_CURRENT_BINARY_DIR}  # for generated jelog.h file 
          ${CMAKE_BINARY_DIR}
          ${CMAKE_BINARY_DIR}/oss

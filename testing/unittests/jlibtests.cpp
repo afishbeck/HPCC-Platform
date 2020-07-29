@@ -32,6 +32,7 @@
 #include "jregexp.hpp"
 
 #include "unittests.hpp"
+#include "jstring.hpp"
 
 static const unsigned oneMinute = 60000; // msec
 
@@ -2376,6 +2377,108 @@ public:
 
 CPPUNIT_TEST_SUITE_REGISTRATION( JlibCompressionTestsStress );
 CPPUNIT_TEST_SUITE_NAMED_REGISTRATION( JlibCompressionTestsStress, "JlibCompressionTestsStress" );
+
+class JlibSecretTest : public CppUnit::TestFixture
+{
+    CPPUNIT_TEST_SUITE(JlibSecretTest);
+        CPPUNIT_TEST(test);
+    CPPUNIT_TEST_SUITE_END();
+
+public:
+    unsigned counter = 0;
+    void testGetSecret(const char *category, const char *name)
+    {
+        Owned<IPropertyTree> secret = getSecret(category, name);
+        fprintf(stdout, "\nany %d:\n", ++counter);
+        if (secret)
+            printYAML(secret);
+        else
+            fputs("null", stdout);
+        fflush(stdout);
+    }
+
+    void testGetSecretValue(const char *category, const char *name, const char *key)
+    {
+        StringBuffer value;
+        bool yes = getSecretValue(value, category, name, key, false);
+        fprintf(stdout, "\nvalue %d:\n", ++counter);
+        if (yes)
+            fputs(value.str(), stdout);
+        else
+            fputs("null", stdout);
+        fflush(stdout);
+    }
+    void testGetVaultSecret(const char *category, const char *vaultId, const char *name)
+    {
+        Owned<IPropertyTree> secret = getVaultSecret(category, vaultId, name);
+        fprintf(stdout, "\nvault %d:\n", ++counter);
+        if (secret)
+            printYAML(secret);
+        else
+            fputs("null", stdout);
+        fflush(stdout);
+    }
+
+    void testGetLocalSecret(const char *name)
+    {
+        Owned<IPropertyTree> secret = getLocalSecret(name);
+        fprintf(stdout, "\nlocal %d:\n", ++counter);
+        if (secret)
+            printYAML(secret);
+        else
+            fputs("null", stdout);
+        fflush(stdout);
+    }
+
+    void testRun(unsigned timeoutMs)
+    {
+        setSecretTimeout(timeoutMs);
+
+        testGetSecret("ecl", "http-connect-basicsecret");
+        testGetSecret("ecl", "http-connect-basicsecret"); //cached
+        testGetSecret("ecl", "http-connect-vaultsecret");
+        testGetVaultSecret("ecl", "my-ecl-vault", "http-connect-vaultsecret"); //cached
+        testGetVaultSecret("ecl", "my-ecl-vault", "http-connect-basicsecret"); //ignore local secret
+        testGetSecret("xxx", "http-connect-basicsecret");
+        testGetLocalSecret("http-connect-basicsecret");
+        testGetLocalSecret("xxx");
+        testGetSecretValue("ecl", "http-connect-basicsecret", "url"); //cached
+        testGetSecretValue("ecl", "http-connect-vaultsecret", "url");
+
+        testGetSecret("ecl", "xxx");
+        testGetVaultSecret("ecl", "xxx", "http-connect-vaultsecret");
+        testGetVaultSecret("ecl", "my-ecl-vault", "xxx");
+        testGetVaultSecret("xxx", "my-ecl-vault", "xxx");
+    }
+    void test()
+    {
+static constexpr const char * defaultYaml = R"!!(
+version: 1.0
+cppunit:
+  vaults:
+    ecl:
+      my-ecl-vault:
+        type: 
+        url: http://${env.VAULT_SERVICE_HOST}:${env.VAULT_SERVICE_PORT}/v1/secret/data/ecl/${secret}
+    ecl-user:
+    esp:
+    storage:
+)!!";
+
+        const char *args[] = {
+            NULL
+        };
+        Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, args, "cppunit", nullptr, nullptr, nullptr, nullptr);
+        setSecretMount("/opt/HPCCSystems/secrets");
+        testRun(1000000);
+        testRun(1);
+        testRun(0);
+    }
+};
+
+CPPUNIT_TEST_SUITE_REGISTRATION(JlibSecretTest);
+CPPUNIT_TEST_SUITE_NAMED_REGISTRATION(JlibSecretTest, "JlibSecretTest");
+
 
 
 #endif // _USE_CPPUNIT
