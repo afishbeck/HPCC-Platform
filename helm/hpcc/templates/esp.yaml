@@ -53,8 +53,10 @@ data:
 {{ include "hpcc.generateConfigMapQueues" $ | indent 6 }}
       services:
 {{ include "hpcc.generateConfigMapServices" $ | indent 6 }}
+{{ include "hpcc.generateVaultConfig" (dict "root" $ "categories" (list "all" "storage" "esp" ) ) | indent 6 }}
     global:
 {{ include "hpcc.generateGlobalConfigMap" $ | indent 6 }}
+
 ---
 apiVersion: v1
 kind: Service

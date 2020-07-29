@@ -111,6 +111,7 @@ data:
     eclagent: # main agent Q handler
 {{ toYaml (omit $eclAgentScope "logging") | indent 6 }}
 {{- include "hpcc.generateLoggingConfig" (dict "root" $ "me" $eclAgentScope) | indent 6 }}
+{{ include "hpcc.generateVaultConfig" (dict "root" $ "categories" (list "all" "storage" "ecl" "ecl-user" ) ) | indent 6 }}
     global:
 {{ include "hpcc.generateGlobalConfigMap" $ | indent 6 }}
 
