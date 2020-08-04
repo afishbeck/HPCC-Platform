@@ -448,6 +448,7 @@ public:
     static const char *getQuerySetPath(StringBuffer &buf, const char *id)
     {
         buf.appendf("QuerySets/QuerySet[@id='%s']", id);
+        DBGLOG("queryset path (%s)", buf.str());
         return buf.str();
     }
 
@@ -711,6 +712,8 @@ public:
 
     IDaliPackageWatcher *getSubscription(const char *id, const char *xpath, ISafeSDSSubscription *notifier, bool exact)
     {
+        DBGLOG("subscribe to %s", xpath);
+
         IDaliPackageWatcher *watcher = new CDaliPackageWatcher(id, xpath, notifier);
         watchers.append(*LINK(watcher));
         if (isConnected)
