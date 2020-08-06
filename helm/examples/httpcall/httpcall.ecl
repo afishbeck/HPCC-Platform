@@ -6,4 +6,4 @@ output(HTTPCALL('secret:urlsecret','GET', 'application/json', ServiceOutRecord, 
 output(HTTPCALL('secret:basicsecret','GET', 'application/json', ServiceOutRecord, XPATH('/'), LOG), NAMED('CredentialsSecret'));
 
 //WIP needs debugging
-//output(HTTPCALL('secret:certsecret','GET', 'text/xml', ServiceOutRecord, LOG), NAMED('Client-Certificate-Secret'));
+output(HTTPCALL('secret:certsecret','GET', 'text/xml', ServiceOutRecord, LOG), NAMED('ClientCertificateSecret'));

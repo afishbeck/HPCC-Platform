@@ -973,14 +973,16 @@ public:
 
             if (secretExists(secretName, "tls.crt"))
             {
-                getSecret(value.clear(), secretName, "tls.key", false);
-                if (value.isEmpty())
+                if (!secretExists(secretName, "tls.key"))
                     throw MakeStringException(0, "%sCALL HTTP-CONNECT SECRET (%s) provides client certificate but not private key", wscType == STsoap ? "SOAP" : "HTTP", secretName.str());
 
                 clientCert.setown(new ClientCertificate());
-                clientCert->privateKey.set(value);
-                getSecret(value.clear(), secretName, "tls.crt");
+                getSecretPath(value.clear(), secretName, "tls.crt");
                 clientCert->certificate.set(value);
+                getSecretPath(value.clear(), secretName, "tls.key");
+                clientCert->privateKey.set(value);
+                getSecret(value.clear(), secretName, "tls.passphrase", false);
+                clientCert->passphrase.set(value);
                 customClientCert = true;
             }
         }
