@@ -2399,7 +2399,10 @@ cppunit:
     storage:
 )!!";
 
-    Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, nullptr, "cppunit", nullptr, nullptr, nullptr, nullptr);
+char *args[] = {
+    NULL
+};
+    Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, args, "cppunit", nullptr, nullptr, nullptr, nullptr);
     StringBuffer out;
     Owned<IPropertyTree> secret = getSecret("ecl", "http-connect-basicsecret");
     fputs("\ns1:\n", stdout);
