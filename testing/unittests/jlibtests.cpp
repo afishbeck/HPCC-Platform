@@ -2384,6 +2384,27 @@ class JlibSecretTest : public CppUnit::TestFixture
     CPPUNIT_TEST_SUITE_END();
 
 public:
+    unsigned counter = 0;
+    void testGetSecret(const char *category, const char *name)
+    {
+        Owned<IPropertyTree> secret = getSecret(category, name);
+        fprintf(stdout, "\nattempt %d:\n", ++counter);
+        if (secret)
+            printYAML(secret);
+        else
+            fputs("null", stdout);
+    }
+
+    void testGetVaultSecret(const char *category, const char *vaultId, const char *name)
+    {
+        Owned<IPropertyTree> secret = getVaultSecret(category, vaultId, name);
+        fprintf(stdout, "\nattempt %d:\n", ++counter);
+        if (secret)
+            printYAML(secret);
+        else
+            fputs("null", stdout);
+    }
+
     void test()
     {
 static constexpr const char * defaultYaml = R"!!(
@@ -2399,88 +2420,23 @@ cppunit:
     storage:
 )!!";
 
-const char *args[] = {
-    NULL
-};
-    Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, args, "cppunit", nullptr, nullptr, nullptr, nullptr);
-    StringBuffer out;
-    Owned<IPropertyTree> secret = getSecret("ecl", "http-connect-basicsecret");
-    fputs("\ns1:\n", stdout);
-    printYAML(secret);
-    secret.setown(getSecret("ecl", "http-connect-vaultsecret"));
-    fputs("\ns2:\n", stdout);
-    printYAML(secret);
-    secret.setown(getVaultSecret("ecl", "my-ecl-vault", "http-connect-vaultsecret"));
-    fputs("\ns3:\n", stdout);
-    printYAML(secret);
-    secret.setown(getSecret("xxx", "xxx"));
-    fputs("\ns4:\n", stdout);
-    printYAML(secret);
-    secret.setown(getSecret("ecl", "xxx"));
-    fputs("\ns5:\n", stdout);
-    printYAML(secret);
-    secret.setown(getVaultSecret("ecl", "xxx", "http-connect-vaultsecret"));
-    fputs("\ns6:\n", stdout);
-    printYAML(secret);
-    secret.setown(getVaultSecret("ecl", "my-ecl-vault", "xxx"));
-    fputs("\ns7:\n", stdout);
-    printYAML(secret);
-
-/*
-        bool https = false;
-        StringBuffer user;
-        StringBuffer password;
-        StringBuffer host;
-        StringBuffer port;
-        StringBuffer fullpath;
-        StringBuffer schemeHostPort;
-
-        const char *url = "http://abcdefg:hijklmnop@myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
-        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
-
-        url = "https://abcdefg:hijklmnop@myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
-        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
-
-        url = "http://usususus@9.8.7.6/abc/def/ghi?x=1;y=2;z=3";
-        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
-
-        url = "http://usususus:pwpwpw@myhost:12345/abc/def/ghi?x=1;y=2;z=3";
-        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
-
-        url = "http://:pwpwpw@:12345/abc/def/ghi?x=1;y=2;z=3";
-        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
-
-        url = "https://:pwpwpw@/abc/def/ghi?x=1;y=2;z=3";
-        splitFullUrl(url, https, user.clear(), password.clear(), host.clear(), port.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%d\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, https, user.str(), password.str(), host.str(), port.str(), fullpath.str());
-
-        url = "http://abcdefg:hijklmnop@myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
-        splitUrlSchemeHostPort(url, user.clear(), password.clear(), schemeHostPort.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, user.str(), password.str(), schemeHostPort.str(), fullpath.str());
-
-        url = "https://user10101:pw5678@myhost:12345/abc/def/ghi?x=1;y=2;z=3";
-        splitUrlSchemeHostPort(url, user.clear(), password.clear(), schemeHostPort.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, user.str(), password.str(), schemeHostPort.str(), fullpath.str());
-
-        url = "http://abcdefg:hijklmnop@myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
-        splitUrlSchemeHostPort(url, user.clear(), password.clear(), schemeHostPort.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, user.str(), password.str(), schemeHostPort.str(), fullpath.str());
-
-        url = "http://myhost.why.com:12345/abc/def/ghi?x=1;y=2;z=3";
-        splitUrlSchemeHostPort(url, user.clear(), password.clear(), schemeHostPort.clear(), fullpath.clear());
-        fprintf(stdout, "\n%s\n\t%s\n\t%s\n\t%s\n\t%s\n", url, user.str(), password.str(), schemeHostPort.str(), fullpath.str());
-
-        StringBuffer s;
-        const char *source = "http://${env.USER}:${env.TERM}@${env.NAMEX}:12345/abc/def/ghi?x=1;y=2;z=3${env.HOME}";
-        replaceEnvVariables(s, source, false);
-        fprintf(stdout, "\n%s\n", s.str());
-        */
+        const char *args[] = {
+            NULL
+        };
+        Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, args, "cppunit", nullptr, nullptr, nullptr, nullptr);
+        StringBuffer out;
+        testGetSecret("ecl", "http-connect-basicsecret");
+        testGetSecret("ecl", "http-connect-basicsecret"); //cached
+        testGetSecret("ecl", "http-connect-vaultsecret");
+        testGetVaultSecret("ecl", "my-ecl-vault", "http-connect-vaultsecret"); //cached
+        testGetVaultSecret("ecl", "my-ecl-vault", "http-connect-basicsecret"); //ignore local secret
+        testGetSecret("xxx", "http-connect-basicsecret");
+        testGetSecret("ecl", "xxx");
+        testGetVaultSecret("ecl", "xxx", "http-connect-vaultsecret");
+        testGetVaultSecret("ecl", "my-ecl-vault", "xxx");
+        testGetVaultSecret("xxx", "my-ecl-vault", "xxx");
     }
+
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(JlibSecretTest);

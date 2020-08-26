@@ -3313,6 +3313,10 @@ public:
                 addCachedSecret(content.str(), secret, version);
                 return true;
             }
+            else
+            {
+                DBGLOG("Vault %s error accessing secret %s.%s [%d](%d) - vault: %s - response: %s", name.str(), secret, version ? version : "", res->status, res.error(), name.str(), res->body.c_str());
+            }
         }
         return false;
     }
