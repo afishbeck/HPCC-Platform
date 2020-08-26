@@ -2395,9 +2395,29 @@ public:
             fputs("null", stdout);
     }
 
+    void testGetSecretValue(const char *category, const char *name, const char *key)
+    {
+        StringBuffer value;
+        bool yes = getSecretValue(value, category, name, key, false);
+        fprintf(stdout, "\nattempt %d:\n", ++counter);
+        if (yes)
+            fputs(value.str(), stdout);
+        else
+            fputs("null", stdout);
+    }
     void testGetVaultSecret(const char *category, const char *vaultId, const char *name)
     {
         Owned<IPropertyTree> secret = getVaultSecret(category, vaultId, name);
+        fprintf(stdout, "\nattempt %d:\n", ++counter);
+        if (secret)
+            printYAML(secret);
+        else
+            fputs("null", stdout);
+    }
+
+    void testGetLocalSecret(const char *name)
+    {
+        Owned<IPropertyTree> secret = getLocalSecret(name);
         fprintf(stdout, "\nattempt %d:\n", ++counter);
         if (secret)
             printYAML(secret);
@@ -2431,6 +2451,11 @@ cppunit:
         testGetVaultSecret("ecl", "my-ecl-vault", "http-connect-vaultsecret"); //cached
         testGetVaultSecret("ecl", "my-ecl-vault", "http-connect-basicsecret"); //ignore local secret
         testGetSecret("xxx", "http-connect-basicsecret");
+        testGetLocalSecret("http-connect-basicsecret");
+        testGetLocalSecret("xxx");
+        testGetSecretValue("ecl", "http-connect-basicsecret", "url"); //cached
+        testGetSecretValue("ecl", "http-connect-vaultsecret", "url");
+
         testGetSecret("ecl", "xxx");
         testGetVaultSecret("ecl", "xxx", "http-connect-vaultsecret");
         testGetVaultSecret("ecl", "my-ecl-vault", "xxx");
