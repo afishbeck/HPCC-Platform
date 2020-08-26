@@ -3431,7 +3431,7 @@ static void addCachedSecret(const char *name, IPropertyTree *secret)
     }
 }
 
-static const char *ensureSecretDirctory()
+static const char *ensureSecretDirectory()
 {
     CriticalBlock block(secretCS);
     if (secretDirectory.isEmpty())
@@ -3446,7 +3446,7 @@ extern jlib_decl IPropertyTree *getLocalSecret(const char * name)
         return tree.getClear();
 
     StringBuffer path;
-    addPathSepChar(path.append(ensureSecretDirctory())).append(name).append(PATHSEPCHAR);
+    addPathSepChar(path.append(ensureSecretDirectory())).append(name).append(PATHSEPCHAR);
     Owned<IDirectoryIterator> dir = createDirectoryIterator(path);
     if (!dir || !dir->isDir() || !dir->first())
         return nullptr;

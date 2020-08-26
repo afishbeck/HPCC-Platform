@@ -99,7 +99,13 @@ vault login
 >Token (will be hidden): root
 ```
 
-Create example vault secret:
+Create example vault secrets:
+
+```bash
+vault kv put secret/ecl/http-connect-vaultsecret url=@url-basic username=@username password=@password
+```
+
+The following vault secret will be hidden by our "local" kubernetes secret below by default.  But we can ask for it directly in our HTTPCALL (see "httpcall_vault.ecl" example).
 
 ```bash
 vault kv put secret/ecl/http-connect-basicsecret url=@url-basic username=@username password=@password
@@ -116,7 +122,7 @@ kubectl create secret generic http-connect-basicsecret --from-file=url=url-basic
 Install the HPCC helm chart with the secrets just defined added to all components that run ECL.
 
 ```bash
-helm install myhpcc hpcc/ --set global.image.version=latest -f examples/httpcall/values-http-connect.yaml
+helm install myhpcc hpcc/ --set global.image.version=latest -f examples/secrets/values-secrets.yaml
 ```
 
 ## Using both secrets via HTTPCALL from within ECL code 
