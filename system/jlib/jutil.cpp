@@ -3350,6 +3350,8 @@ public:
     CVaultManager()
     {
         IPropertyTree *config = queryComponentConfig().queryPropTree("vaults");
+        if (!config)
+            return;
         Owned<IPropertyTreeIterator> iter = config->getElements("*");
         ForEach (*iter)
         {
