@@ -3167,7 +3167,7 @@ CVaultKind getSecretType(const char *s)
         return CVaultKind::kv_v1;
     return CVaultKind::kv_v2;
 }
-interface IVaultMap : extends IInterface
+interface IVaultManager : extends IInterface
 {
     virtual bool requestSecretFromVault(const char *category, const char *vaultId, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
     virtual bool requestSecretByCategory(const char *category, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
@@ -3344,7 +3344,7 @@ public:
     }
 };
 
-class CVaultManager : public CInterfaceOf<IVaultMap>
+class CVaultManager : public CInterfaceOf<IVaultManager>
 {
 private:
     std::map<std::string, std::unique_ptr<CVaultSet>> categories;
@@ -3384,7 +3384,7 @@ public:
 };
 
 static Owned<CVaultManager> vaultManager;
-IVaultMap *queryVaultManager()
+IVaultManager *queryVaultManager()
 {
     CriticalBlock block(secretCS);
     if (!vaultManager)
@@ -3468,7 +3468,7 @@ extern jlib_decl IPropertyTree *getLocalSecret(const char * name)
 
 extern jlib_decl IPropertyTree *getVaultSecret(const char *category, const char *vaultId, const char * name, const char *version)
 {
-    IVaultMap *vaultmgr = queryVaultManager();
+    IVaultManager *vaultmgr = queryVaultManager();
     if (!vaultmgr)
         return nullptr;
     CVaultKind kind;
