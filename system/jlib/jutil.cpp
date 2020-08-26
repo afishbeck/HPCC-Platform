@@ -3236,6 +3236,8 @@ public:
     }
     bool getCachedSecret(CVaultKind &rkind, StringBuffer &content, const char *secret, const char *version)
     {
+        if (!cache)
+            return false;
         unsigned timeoutThreshold = msTick() - getSecretTimeout();
         CriticalBlock block(cacheCS);
         IPropertyTree *tree = cache->queryPropTree(secret);
