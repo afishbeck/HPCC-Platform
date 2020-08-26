@@ -3456,7 +3456,7 @@ extern jlib_decl IPropertyTree *getLocalSecret(const char * name)
     StringBuffer path;
     addPathSepChar(path.append(ensureSecretDirectory())).append(name).append(PATHSEPCHAR);
     Owned<IDirectoryIterator> dir = createDirectoryIterator(path);
-    if (!dir || !dir->isDir() || !dir->first())
+    if (!dir || !dir->first())
         return nullptr;
     tree.setown(createPTree(name));
     tree->setPropInt("@created", (int) msTick());
