@@ -443,7 +443,7 @@ extern jlib_decl StringBuffer &getFileAccessUrl(StringBuffer &out);
 extern jlib_decl void setSecretMount(const char * path);
 
 extern jlib_decl IPropertyTree *getLocalSecret(const char * name);
-extern jlib_decl IPropertyTree *getVaultSecret(const char *category, const char *vaultId, const char * name, const char *version);
+extern jlib_decl IPropertyTree *getVaultSecret(const char *category, const char *vaultId, const char * name, const char *version=nullptr);
 extern jlib_decl IPropertyTree *getSecret(const char *category, const char * name);
 extern jlib_decl bool getSecretValue(StringBuffer & result, const char *category, const char * name, const char * key, bool required);
 

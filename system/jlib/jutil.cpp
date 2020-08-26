@@ -3176,7 +3176,11 @@ interface IVaultManager : extends IInterface
 class CVault
 {
 private:
-    StringBuffer url;
+    bool useKubernetesAuth = true;
+    CVaultKind kind;
+    CriticalSection vaultCS;
+    Owned<IPropertyTree> cache;
+
     StringBuffer schemeHostPort;
     StringBuffer path;
     StringBuffer username;
@@ -3184,13 +3188,12 @@ private:
     StringAttr name;
     StringAttr role;
     StringAttr token;
-    CVaultKind kind;
-    bool useKubernetesAuth = true;
-    CriticalSection cacheCS;
-    Owned<IPropertyTree> cache;
+
 public:
     CVault(const char *name_, IPropertyTree *vault) : name(name_)
     {
+        cache.setown(createPTree());
+        StringBuffer url;
         replaceEnvVariables(url, vault->queryProp("@url"), false);
         if (url.length())
             splitUrlSchemeHostPort(url.str(), username, password, schemeHostPort, path);
@@ -3210,6 +3213,9 @@ public:
     CVaultKind getVaultKind() const { return kind; }
     void kubernetesLogin()
     {
+        CriticalBlock block(vaultCS);
+        if (token.length())
+            return;
         StringBuffer login_token;
         login_token.loadFile("/var/run/secrets/kubernetes.io/serviceaccount/token");
         if (login_token.length())
@@ -3231,15 +3237,19 @@ public:
                             token.set(respTree->queryProp("auth/client_token"));
                     }
                 }
+                else
+                {
+                    Owned<IException> e = MakeStringException(0, "Vault kube auth error [%d](%d) - vault: %s - response: %s", res->status, res.error(), name.str(), res->body.c_str());
+                    OWARNLOG(e);
+                    throw e.getClear();
+                }
             }
         }
     }
     bool getCachedSecret(CVaultKind &rkind, StringBuffer &content, const char *secret, const char *version)
     {
-        if (!cache)
-            return false;
         unsigned timeoutThreshold = msTick() - getSecretTimeout();
-        CriticalBlock block(cacheCS);
+        CriticalBlock block(vaultCS);
         IPropertyTree *tree = cache->queryPropTree(secret);
         if (tree)
         {
@@ -3269,7 +3279,7 @@ public:
         envelope->setPropInt("@created", (int) msTick());
         envelope->setProp("", content);
         {
-            CriticalBlock block(cacheCS);
+            CriticalBlock block(vaultCS);
             cache->setPropTree(secret, envelope.getClear());
         }
     }
@@ -3393,11 +3403,11 @@ IVaultManager *queryVaultManager()
 }
 
 CriticalSection secretCacheCS;
-Owned<IPropertyTree> secretCache;
+static Owned<IPropertyTree> secretCache = createPTree();
 
 static IPropertyTree *getCachedSecret(const char *name)
 {
-    if (!secretCache || isEmptyString(name))
+    if (isEmptyString(name))
         return nullptr;
     unsigned timeoutThreshold = msTick() - getSecretTimeout();
     Owned<IPropertyTree> secret;
@@ -3425,8 +3435,6 @@ static void addCachedSecret(const char *name, IPropertyTree *secret)
     secret->setPropInt("@created", (int)msTick());
     {
         CriticalBlock block(secretCacheCS);
-        if (!secretCache)
-            secretCache.setown(createPTree());
         secretCache->setPropTree(name, LINK(secret));
     }
 }

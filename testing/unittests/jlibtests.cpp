@@ -2386,8 +2386,44 @@ class JlibSecretTest : public CppUnit::TestFixture
 public:
     void test()
     {
-//        StringBuffer result;
-//        getSecret(result, "tls-tony-test", "tls.cert");
+static constexpr const char * defaultYaml = R"!!(
+version: 1.0
+cppunit:
+  vaults:
+    ecl:
+      my-ecl-vault:
+        type: 
+        url: http://${env.VAULT_SERVICE_HOST}:${env.VAULT_SERVICE_PORT}/v1/secret/data/ecl/${secret}
+    ecl-user:
+    esp:
+    storage:
+)!!";
+
+    Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, nullptr, "cppunit", nullptr, nullptr, nullptr, nullptr);
+    StringBuffer out;
+    Owned<IPropertyTree> secret = getSecret("ecl", "http-connect-basicsecret");
+    fputs("\ns1:\n", stdout);
+    printYAML(secret);
+    secret.setown(getSecret("ecl", "http-connect-vaultsecret"));
+    fputs("\ns2:\n", stdout);
+    printYAML(secret);
+    secret.setown(getVaultSecret("ecl", "my-ecl-vault", "http-connect-vaultsecret"));
+    fputs("\ns3:\n", stdout);
+    printYAML(secret);
+    secret.setown(getSecret("xxx", "xxx"));
+    fputs("\ns4:\n", stdout);
+    printYAML(secret);
+    secret.setown(getSecret("ecl", "xxx"));
+    fputs("\ns5:\n", stdout);
+    printYAML(secret);
+    secret.setown(getVaultSecret("ecl", "xxx", "http-connect-vaultsecret"));
+    fputs("\ns6:\n", stdout);
+    printYAML(secret);
+    secret.setown(getVaultSecret("ecl", "my-ecl-vault", "xxx"));
+    fputs("\ns7:\n", stdout);
+    printYAML(secret);
+
+/*
         bool https = false;
         StringBuffer user;
         StringBuffer password;
@@ -2440,6 +2476,7 @@ public:
         const char *source = "http://${env.USER}:${env.TERM}@${env.NAMEX}:12345/abc/def/ghi?x=1;y=2;z=3${env.HOME}";
         replaceEnvVariables(s, source, false);
         fprintf(stdout, "\n%s\n", s.str());
+        */
     }
 };
 

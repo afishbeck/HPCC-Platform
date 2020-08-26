@@ -122,7 +122,8 @@ kubectl create secret generic http-connect-basicsecret --from-file=url=url-basic
 Install the HPCC helm chart with the secrets just defined added to all components that run ECL.
 
 ```bash
-helm install myhpcc hpcc/ --set global.image.version=latest -f examples/secrets/values-secrets.yaml
+helm install myhpcc ../../hpcc/ --set global.image.version=latest -f val
+ues-secrets.yaml
 ```
 
 ## Using both secrets via HTTPCALL from within ECL code 
