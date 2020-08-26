@@ -2399,7 +2399,7 @@ cppunit:
     storage:
 )!!";
 
-char *args[] = {
+const char *args[] = {
     NULL
 };
     Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, args, "cppunit", nullptr, nullptr, nullptr, nullptr);
