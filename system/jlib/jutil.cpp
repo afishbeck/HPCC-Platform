@@ -3326,7 +3326,6 @@ public:
         return false;
     }
 };
-
 class CVaultSet
 {
 private:

@@ -961,20 +961,20 @@ public:
             Owned<IPropertyTree> secret = (vaultId.isEmpty()) ? getSecret("ecl", secretName) : getVaultSecret("ecl", vaultId, secretName, nullptr);
             if (!secret)
                 throw MakeStringException(0, "%sCALL %s SECRET not found", wscType == STsoap ? "SOAP" : "HTTP", secretName.str());
-            const char *url = secret->queryProp("@url");
+            const char *url = secret->queryProp("url");
             if (isEmptyString(url))
                 throw MakeStringException(0, "%sCALL %s HTTP SECRET must contain url", wscType == STsoap ? "SOAP" : "HTTP", secretName.str());
             UrlListParser urlListParser(url);
-            StringBuffer auth(secret->queryProp("@username"));
+            StringBuffer auth(secret->queryProp("username"));
             if (auth.length())
             {
                 if (strchr(auth, ':'))
                     throw MakeStringException(0, "%sCALL HTTP-CONNECT SECRET username contains illegal colon", wscType == STsoap ? "SOAP" : "HTTP");
                 auth.append(':');
-                auth.append(secret->queryProp("@password"));
+                auth.append(secret->queryProp("password"));
             }
             urlListParser.getUrls(urlArray, auth);
-            proxyAddress.append(secret->queryProp("@proxy"));
+            proxyAddress.append(secret->queryProp("proxy"));
         }
         else
         {
