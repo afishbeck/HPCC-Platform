@@ -978,8 +978,11 @@ StringBuffer &replaceEnvVariables(StringBuffer & result, const char *source, boo
                 if (value)
                 {
                     result.append(value);
+                    size_t replaced = (thumb - source) + lenTerm;
                     source = thumb + lenTerm;
-                    left -= (source - finger);
+                    left -= replaced;
+                    if (left != strlen(source))
+                        fprintf(stdout, "oops left(%lu) len(%lu)", left, strlen(source));
                     continue;
                 }
                 if (exceptions)

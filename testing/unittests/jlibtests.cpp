@@ -32,6 +32,7 @@
 #include "jregexp.hpp"
 
 #include "unittests.hpp"
+#include "jstring.hpp"
 
 static const unsigned oneMinute = 60000; // msec
 
@@ -2425,8 +2426,10 @@ public:
             fputs("null", stdout);
     }
 
-    void test()
+    void testRun(unsigned timeoutMs)
     {
+        setSecretTimeout(timeoutMs);
+
 static constexpr const char * defaultYaml = R"!!(
 version: 1.0
 cppunit:
@@ -2434,7 +2437,7 @@ cppunit:
     ecl:
       my-ecl-vault:
         type: 
-        url: http://${env.VAULT_SERVICE_HOST}:${env.VAULT_SERVICE_PORT}/v1/secret/data/ecl/${secret}
+        url: http://${env.HOME}:${env.USER}/v1/secret/data/ecl/${secret}
     ecl-user:
     esp:
     storage:
@@ -2444,7 +2447,7 @@ cppunit:
             NULL
         };
         Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, args, "cppunit", nullptr, nullptr, nullptr, nullptr);
-        StringBuffer out;
+
         testGetSecret("ecl", "http-connect-basicsecret");
         testGetSecret("ecl", "http-connect-basicsecret"); //cached
         testGetSecret("ecl", "http-connect-vaultsecret");
@@ -2461,7 +2464,12 @@ cppunit:
         testGetVaultSecret("ecl", "my-ecl-vault", "xxx");
         testGetVaultSecret("xxx", "my-ecl-vault", "xxx");
     }
-
+    void test()
+    {
+        testRun(1000000);
+        testRun(1);
+        testRun(0);
+    }
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(JlibSecretTest);

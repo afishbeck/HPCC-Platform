@@ -3261,6 +3261,7 @@ public:
             if (created && (created < timeoutThreshold))
             {
                 tree->removeTree(envelope);
+                puts("\nremoved from vault cache\n");
                 return false;
             }
             const char *s = envelope->queryProp("");
@@ -3268,6 +3269,7 @@ public:
             {
                 rkind = kind;
                 content.append(s);
+                puts("\nretrieved from vault cache\n");
                 return true;
             }
         }
@@ -3281,6 +3283,7 @@ public:
         {
             CriticalBlock block(vaultCS);
             cache->setPropTree(secret, envelope.getClear());
+            puts("\nadded to vault cache\n");
         }
     }
     bool requestSecret(CVaultKind &rkind, StringBuffer &content, const char *secret, const char *version)
@@ -3424,8 +3427,10 @@ static IPropertyTree *getCachedSecret(const char *name)
             if (created && (created < timeoutThreshold))
             {
                 secretCache->removeProp(name);
+                puts("\nremoved from local cache\n");
                 return nullptr;
             }
+            puts("\nretrieved from local cache\n");
             return secret.getClear();
         }
     }
@@ -3440,6 +3445,7 @@ static void addCachedSecret(const char *name, IPropertyTree *secret)
     {
         CriticalBlock block(secretCacheCS);
         secretCache->setPropTree(name, LINK(secret));
+        puts("\nadded to local cache\n");
     }
 }
 
