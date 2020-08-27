@@ -3253,7 +3253,7 @@ public:
         IPropertyTree *tree = cache->queryPropTree(secret);
         if (tree)
         {
-            const char *vername = isEmptyString(version) ? "latest" : version;
+            VStringBuffer vername("v.%s", isEmptyString(version) ? "latest" : version);
             IPropertyTree *envelope = tree->queryPropTree(vername);
             if (!envelope)
                 return false;
@@ -3277,12 +3277,14 @@ public:
     }
     void addCachedSecret(const char *content, const char *secret, const char *version)
     {
-        Owned<IPropertyTree> envelope = createPTree(isEmptyString(version) ? "latest" : version);
+        VStringBuffer vername("v.%s", isEmptyString(version) ? "latest" : version);
+        Owned<IPropertyTree> envelope = createPTree(vername);
         envelope->setPropInt("@created", (int) msTick());
         envelope->setProp("", content);
         {
             CriticalBlock block(vaultCS);
-            cache->setPropTree(secret, envelope.getClear());
+            IPropertyTree *parent = ensurePTree(cache, secret);
+            parent->setPropTree(vername, envelope.getClear());
             puts("\nadded to vault cache\n");
         }
     }

@@ -2389,64 +2389,50 @@ public:
     void testGetSecret(const char *category, const char *name)
     {
         Owned<IPropertyTree> secret = getSecret(category, name);
-        fprintf(stdout, "\nattempt %d:\n", ++counter);
+        fprintf(stdout, "\nany %d:\n", ++counter);
         if (secret)
             printYAML(secret);
         else
             fputs("null", stdout);
+        fflush(stdout);
     }
 
     void testGetSecretValue(const char *category, const char *name, const char *key)
     {
         StringBuffer value;
         bool yes = getSecretValue(value, category, name, key, false);
-        fprintf(stdout, "\nattempt %d:\n", ++counter);
+        fprintf(stdout, "\nvalue %d:\n", ++counter);
         if (yes)
             fputs(value.str(), stdout);
         else
             fputs("null", stdout);
+        fflush(stdout);
     }
     void testGetVaultSecret(const char *category, const char *vaultId, const char *name)
     {
         Owned<IPropertyTree> secret = getVaultSecret(category, vaultId, name);
-        fprintf(stdout, "\nattempt %d:\n", ++counter);
+        fprintf(stdout, "\nvault %d:\n", ++counter);
         if (secret)
             printYAML(secret);
         else
             fputs("null", stdout);
+        fflush(stdout);
     }
 
     void testGetLocalSecret(const char *name)
     {
         Owned<IPropertyTree> secret = getLocalSecret(name);
-        fprintf(stdout, "\nattempt %d:\n", ++counter);
+        fprintf(stdout, "\nlocal %d:\n", ++counter);
         if (secret)
             printYAML(secret);
         else
             fputs("null", stdout);
+        fflush(stdout);
     }
 
     void testRun(unsigned timeoutMs)
     {
         setSecretTimeout(timeoutMs);
-
-static constexpr const char * defaultYaml = R"!!(
-version: 1.0
-cppunit:
-  vaults:
-    ecl:
-      my-ecl-vault:
-        type: 
-        url: http://${env.HOME}:${env.USER}/v1/secret/data/ecl/${secret}
-    ecl-user:
-    esp:
-    storage:
-)!!";
-
-        const char *args[] = {
-            NULL
-        };
-        Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, args, "cppunit", nullptr, nullptr, nullptr, nullptr);
 
         testGetSecret("ecl", "http-connect-basicsecret");
         testGetSecret("ecl", "http-connect-basicsecret"); //cached
@@ -2466,6 +2452,24 @@ cppunit:
     }
     void test()
     {
+static constexpr const char * defaultYaml = R"!!(
+version: 1.0
+cppunit:
+  vaults:
+    ecl:
+      my-ecl-vault:
+        type: 
+        url: http://${env.VAULT_SERVICE_HOST}:${env.VAULT_SERVICE_PORT}/v1/secret/data/ecl/${secret}
+    ecl-user:
+    esp:
+    storage:
+)!!";
+
+        const char *args[] = {
+            NULL
+        };
+        Owned<IPropertyTree> cfg = loadConfiguration(defaultYaml, args, "cppunit", nullptr, nullptr, nullptr, nullptr);
+        setSecretMount("/opt/HPCCSystems/secrets");
         testRun(1000000);
         testRun(1);
         testRun(0);
