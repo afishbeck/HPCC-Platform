@@ -13,8 +13,17 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 ################################################################################
-HPCC_ADD_SUBDIRECTORY (eclwatch)
-HPCC_ADD_SUBDIRECTORY (eclservices)
-HPCC_ADD_SUBDIRECTORY (eclqueries)
-HPCC_ADD_SUBDIRECTORY (esdl)
-HPCC_ADD_SUBDIRECTORY (sql2ecl)
+
+set ( ESP_APPLICATION_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/esp.yaml
+    ${CMAKE_CURRENT_SOURCE_DIR}/application.yaml
+    ${CMAKE_CURRENT_SOURCE_DIR}/esdl.yaml
+    ${CMAKE_CURRENT_SOURCE_DIR}/ldap.yaml
+    ${CMAKE_CURRENT_SOURCE_DIR}/ldap_authorization_map.yaml
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugins.yaml
+    ${CMAKE_CURRENT_SOURCE_DIR}/directories.yaml
+)
+
+FOREACH( iFile ${ESP_APPLICATION_FILES} )
+    Install( FILES ${iFile} DESTINATION componentfiles/applications/esdl COMPONENT Runtime )
+ENDFOREACH ( iFile )
