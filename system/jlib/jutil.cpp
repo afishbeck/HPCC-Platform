@@ -3582,6 +3582,24 @@ static IPropertyTree *getCachedVaultSecret(const char *category, const char *vau
     return createPTreeFromVaultSecret(json.str(), kind);
 }
 
+static IPropertyTree *requestVaultSecret(const char *category, const char *vaultId, const char * name, const char *version)
+{
+    CVaultKind kind;
+    StringBuffer json;
+    IVaultManager *vaultmgr = ensureVaultManager();
+    if (isEmptyString(vaultId))
+    {
+        if (!vaultmgr->requestSecretByCategory(category, kind, json, name, version))
+            return nullptr;
+    }
+    else
+    {
+        if (!vaultmgr->requestSecretFromVault(category, vaultId, kind, json, name, version))
+            return nullptr;
+    }
+    return createPTreeFromVaultSecret(json.str(), kind);
+}
+
 extern jlib_decl IPropertyTree *getVaultSecret(const char *category, const char *vaultId, const char * name, const char *version)
 {
     CVaultKind kind;
@@ -3610,7 +3628,7 @@ extern jlib_decl IPropertyTree *getSecret(const char *category, const char * nam
     if (!secret)
         secret.setown(loadLocalSecret(name));
     if (!secret)
-        secret.setown(getVaultSecret(category, nullptr, name, nullptr));
+        secret.setown(requestVaultSecret(category, nullptr, name, nullptr));
     return secret.getClear();
 }
 
