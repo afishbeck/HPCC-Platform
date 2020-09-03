@@ -185,7 +185,7 @@ static inline bool checkSecretExpired(unsigned created)
     if (!created)
         return false;
     unsigned age = msTick() - created;
-    return age > getSecretTimeout());
+    return age > getSecretTimeout();
 }
 
 enum class CVaultKind { kv_v1, kv_v2 };
@@ -493,7 +493,6 @@ static IPropertyTree *getCachedLocalSecret(const char *name)
 {
     if (isEmptyString(name))
         return nullptr;
-    unsigned timeoutThreshold = msTick() - getSecretTimeout();
     Owned<IPropertyTree> secret;
     {
         CriticalBlock block(secretCacheCS);
