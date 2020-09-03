@@ -22,6 +22,7 @@
 #include "jfile.hpp"
 #include "jregexp.hpp"
 #include "jstring.hpp"
+#include "jsecrets.hpp"
 #include "jlog.hpp"
 #include "azurefile.hpp"
 

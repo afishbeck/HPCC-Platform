@@ -80,6 +80,7 @@ set (    SRCS
          jqueue.cpp
          jregexp.cpp 
          jrowstream.cpp
+         jsecrets.cpp 
          jsem.cpp 
          jset.cpp 
          jsmartsock.cpp 
@@ -151,6 +152,7 @@ set (    INCLUDES
         jrespool.tpp
         jrowstream.hpp
         jscm.hpp
+        jsecrets.hpp
         jsem.hpp
         jset.hpp
         jsmartsock.hpp

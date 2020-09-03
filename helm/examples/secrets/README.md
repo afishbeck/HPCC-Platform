@@ -8,14 +8,27 @@ This example assumes you are starting from a linux command shell in the HPCC-Pla
 
 This example uses Hashicorp vault.  The following steps can be used to set up a development mode only instance of vault just for the purposes of this example.  This makes it easy to test out vault functionality without going through the much more extensive configuration process for a production ready vault installation.
 
-## Install hashicorp vault in dev mode:
+## Install hashicorp vault command line client:
+
+https://learn.hashicorp.com/tutorials/vault/getting-started-install
+
+
+## Install hashicorp vault service in dev mode:
 
 This is for development only, never deploy this way in production.
 Deploying in dev mode sets up an in memory kv store that won't persist secret values across restart, and the vault will automatically be unsealed.
 
-In dev mode the default root token is simply "root".
+In dev mode the default root token is simply the string "root".
 
+Add Hashicorp helm repo:
+
+```bash
+helm repo add hashicorp https://helm.releases.hashicorp.com
 ```
+
+Install vault server.
+
+```bash
 helm install vault hashicorp/vault --set "server.dev.enabled=true"
 ```
 
@@ -31,6 +44,13 @@ In a separate terminal window start vault port forwarding.
 
 ```bash
 kubectl port-forward vault-0 8200:8200
+```
+
+Login to the vault command line using the vault root token (development mode defaults to "root"):
+
+```bash
+vault login
+>Token (will be hidden): root
 ```
 
 ## Configure vault kubernetes auth
@@ -92,13 +112,6 @@ Besides the URL values can currently be set for proxy (trusted for keeping these
 
 ## Create example vault secret:
 
- Login to the vault command line using the vault root token (development mode defaults to "root"):
-
-```bash
-vault login
->Token (will be hidden): root
-```
-
 Create example vault secrets:
 
 ```bash
@@ -122,11 +135,10 @@ kubectl create secret generic http-connect-basicsecret --from-file=url=url-basic
 Install the HPCC helm chart with the secrets just defined added to all components that run ECL.
 
 ```bash
-helm install myhpcc ../../hpcc/ --set global.image.version=latest -f val
-ues-secrets.yaml
+helm install myhpcc ../../hpcc/ --set global.image.version=latest -f values-secrets.yaml
 ```
 
-## Using both secrets via HTTPCALL from within ECL code
+## Using the created secrets via HTTPCALL from within ECL code
 
 ```bash
 ecl run hthor httpcall_secret.ecl

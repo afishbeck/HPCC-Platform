@@ -18,6 +18,7 @@
 #include "jliball.hpp"
 #include "jqueue.tpp"
 #include "jisem.hpp"
+#include "jsecrets.hpp"
 
 #include "rtlformat.hpp"
 

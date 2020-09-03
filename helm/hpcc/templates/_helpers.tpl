@@ -319,13 +319,18 @@ Generate vault info
 {{- define "hpcc.generateVaultConfig" -}}
 {{- $categories := .categories -}}
 vaults:
-{{- range  $category, $vault := .root.Values.vaults }}
-  {{ $category }}:
-  {{- range $vaultid, $vault := . }}
-    {{ $vaultid }}:
-      type: {{ $vault.type }}
+{{- range  $categoryname, $category := .root.Values.vaults -}}
+ {{- if (has $categoryname $categories) }}
+  {{ $categoryname }}:
+  {{- range $vault := . }}
+    - name: {{ $vault.name }}
+      kind: {{ $vault.kind }}
       url: {{ $vault.url }}
-  {{- end -}}
+    {{- if index $vault "client-secret" }}
+      client-secret: {{ index $vault "client-secret" }}
+    {{- end -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 

@@ -280,12 +280,11 @@
       ]
     },
     "vaultCategory": {
+      "description": "set of vaults under a given category",
       "oneOf": [
         {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/vault"
-          }
+            "type": "array",
+            "items": { "$ref": "#/definitions/vault" }
         },
         {
           "type": "null"
@@ -293,15 +292,28 @@
       ]
     },
     "vault": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
+      "description": "information about an individual vault",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "the name of the vault",
+          "type": "string"
         },
-        {
-          "type": "null"
+        "url": {
+          "description": "the url used to access the vault",
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["kv-v2", "kv-v1"]
+        },
+        "client-secret": {
+          "description": "optional name of kubernetes secret that will provide the vault client token",
+          "type": "string"
         }
-      ]
+      },
+      "required": [ "name", "url" ],
+      "additionalProperties": false
     },
     "hostgroups": {
       "oneOf": [
