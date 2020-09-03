@@ -148,6 +148,16 @@ kubectl get pods
 
 ## Using the created secrets via HTTPCALL from within ECL code
 
+The following ecl commands will run the three ECL files on hthor.  For each job the expected result would be:
+
+```xml
+<Result>
+<Dataset name='Result 1'>
+ <Row><authenticated>true</authenticated></Row>
+</Dataset>
+</Result>
+```
+
 ```bash
 ecl run hthor examples/secrets/httpcall_secret.ecl
 

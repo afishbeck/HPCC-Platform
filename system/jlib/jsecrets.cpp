@@ -533,19 +533,21 @@ static IPropertyTree *loadLocalSecret(const char * name)
 {
     StringBuffer path;
     addPathSepChar(path.append(ensureSecretDirectory())).append(name).append(PATHSEPCHAR);
-    Owned<IDirectoryIterator> dir = createDirectoryIterator(path);
-    if (!dir || !dir->first())
+    Owned<IDirectoryIterator> entries = createDirectoryIterator(path);
+    if (!entries || !entries->first())
         return nullptr;
     Owned<IPropertyTree> tree = createPTree(name);
     tree->setPropInt("@created", (int) msTick());
-    ForEach(*dir)
+    ForEach(*entries)
     {
+        if (entries->isDir())
+            continue;
         StringBuffer name;
-        dir->getName(name);
+        entries->getName(name);
         if (!validateXMLTag(name))
             continue;
         StringBuffer value;
-        value.loadFile(&dir->query());
+        value.loadFile(&entries->query());
         tree->setProp(name, value.str());
     }
     addCachedLocalSecret(name, tree);
