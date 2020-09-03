@@ -180,6 +180,14 @@ extern jlib_decl void setSecretMount(const char * path)
         secretDirectory.set(path);
 }
 
+static inline bool checkSecretExpired(unsigned created)
+{
+    if (!created)
+        return false;
+    unsigned age = msTick() - created;
+    return age > getSecretTimeout());
+}
+
 enum class CVaultKind { kv_v1, kv_v2 };
 
 CVaultKind getSecretType(const char *s)
@@ -233,7 +241,8 @@ public:
             useKubernetesAuth = false;
             //for now only support direct access token.  we can support other combinations for example login token, ldap login, etc later.
             Owned<IPropertyTree> clientSecret = getLocalSecret(vault->queryProp("@client-secret"));
-            token.set(clientSecret->queryProp("token"));
+            if (clientSecret)
+                token.set(clientSecret->queryProp("token"));
         }
     }
     CVaultKind getVaultKind() const { return kind; }
@@ -283,15 +292,10 @@ public:
             IPropertyTree *envelope = tree->queryPropTree(vername);
             if (!envelope)
                 return false;
-            unsigned created = (unsigned) envelope->getPropInt("@created");
-            if (created)
+            if (checkSecretExpired((unsigned) envelope->getPropInt("@created")))
             {
-                unsigned age = msTick() - created;
-                if (age > getSecretTimeout())
-                {
-                    tree->removeTree(envelope);
-                    return false;
-                }
+                tree->removeTree(envelope);
+                return false;
             }
             const char *s = envelope->queryProp("");
             if (!isEmptyString(s))
@@ -321,7 +325,12 @@ public:
             return false;
         if (useKubernetesAuth && token.isEmpty())
             kubernetesLogin();
-
+        if (token.isEmpty())
+        {
+            Owned<IException> e = MakeStringException(0, "Vault auth error - vault: %s - vault access token not provided", name.str());
+            OERRLOG(e);
+            throw e.getClear();
+        }
         StringBuffer location(path);
         location.replaceString("${secret}", secret);
         location.replaceString("${version}", version ? version : "1");
@@ -491,8 +500,7 @@ static IPropertyTree *getCachedLocalSecret(const char *name)
         secret.setown(secretCache->getPropTree(name));
         if (secret)
         {
-            unsigned created = (unsigned) secret->getPropInt("@created");
-            if (created && (created < timeoutThreshold))
+            if (checkSecretExpired((unsigned) secret->getPropInt("@created")))
             {
                 secretCache->removeProp(name);
                 return nullptr;

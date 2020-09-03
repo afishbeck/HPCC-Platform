@@ -2,7 +2,7 @@
 
 This example demonstrates HPCC use use of Kubernetes and Hashicorp Vault secrets.
 
-This example assumes you are starting from a linux command shell in the HPCC-Platform/helm/examples/secrets directory where you will find the example files used here.
+This example assumes you are starting from a linux command shell in the HPCC-Platform/helm directory.  From there you will find the example files and this README file in the examples/secrets directory.
 
 ## Hashicorp Vault support:
 
@@ -49,9 +49,11 @@ kubectl port-forward vault-0 8200:8200
 Login to the vault command line using the vault root token (development mode defaults to "root"):
 
 ```bash
-vault login
->Token (will be hidden): root
+vault login root
 ```
+
+If you don't provide the token on the command line you will be prompted to input the value and it will be hidden from view.
+
 
 ## Configure vault kubernetes auth
 
@@ -85,7 +87,7 @@ exit
 Setup vault auth policy granting access to the ecl secrets locations we plan to use:
 
 ```bash
-vault policy write hpcc-kv-ro hpcc_vault_policies.hcl
+vault policy write hpcc-kv-ro examples/secrets/hpcc_vault_policies.hcl
 ```
 
 Setup hpcc-vault-access auth role within the default service account (if necessary change bound_service_account "names" and "namespace" to match the service account the HPCC deployment is using):
@@ -102,7 +104,7 @@ vault write auth/kubernetes/role/hpcc-vault-access \
 
 This example focuses on ECL secrets to provide HTTP connection strings and credentials for ECL SOAPCALL and HTTPCALL commands.
 
-These secrets are prefixed with the string "http-connect-" requiring this prefix ensures that HTTPCALL only accesses secrets which are intended for this use.
+These secrets are prefixed with the string "http-connect-" requiring this prefix ensures that HTTPCALL/SOAPCALL only accesses secrets which are intended for this use.
 
 HTTP-CONNECT secrets consist of a url string and optional additional secrets associated with that URL.  Requiring the url to be part of the secret prevents credentials from being easily hijacked via an HTTPCALL to an arbitrary location.  Instead the credentials are explicitly associated with the provided url.
 
@@ -115,19 +117,19 @@ Besides the URL values can currently be set for proxy (trusted for keeping these
 Create example vault secrets:
 
 ```bash
-vault kv put secret/ecl/http-connect-vaultsecret url=@url-basic username=@username password=@password
+vault kv put secret/ecl/http-connect-vaultsecret url=@examples/secrets/url-basic username=@examples/secrets/username password=@examples/secrets/password
 ```
 
 The following vault secret will be hidden by our "local" kubernetes secret below by default.  But we can ask for it directly in our HTTPCALL (see "httpcall_vault.ecl" example).
 
 ```bash
-vault kv put secret/ecl/http-connect-basicsecret url=@url-basic username=@username password=@password
+vault kv put secret/ecl/http-connect-basicsecret url=@examples/secrets/url-basic username=@examples/secrets/username password=@examples/secrets/password
 ```
 
 Create example kubernetes secret:
 
 ```bash
-kubectl create secret generic http-connect-basicsecret --from-file=url=url-basic --from-file=username --from-file=password
+kubectl create secret generic http-connect-basicsecret --from-file=url=examples/secrets/url-basic --from-file=examples/secrets/username --from-file=examples/secrets/password
 ```
 
 ## Installing the HPCC with the HTTP-CONNECT Secrets added to ECL components
@@ -135,15 +137,21 @@ kubectl create secret generic http-connect-basicsecret --from-file=url=url-basic
 Install the HPCC helm chart with the secrets just defined added to all components that run ECL.
 
 ```bash
-helm install myhpcc ../../hpcc/ --set global.image.version=latest -f values-secrets.yaml
+helm install myhpcc hpcc/ --set global.image.version=latest -f examples/secrets/values-secrets.yaml
+```
+
+Use kubectl to check the status of the deployed pods.  Wait until all pods are running before continuing.
+
+```bash
+kubectl get pods
 ```
 
 ## Using the created secrets via HTTPCALL from within ECL code
 
 ```bash
-ecl run hthor httpcall_secret.ecl
+ecl run hthor examples/secrets/httpcall_secret.ecl
 
-ecl run hthor httpcall_vault.ecl
+ecl run hthor examples/secrets/examples/secrets/httpcall_vault.ecl
 
-ecl run hthor httpcall_vault_direct.ecl
+ecl run hthor examples/secrets/httpcall_vault_direct.ecl
 ```
