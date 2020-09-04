@@ -48,8 +48,27 @@
 
 #include <vector>
 
+enum class CVaultKind { kv_v1, kv_v2 };
+
+CVaultKind getSecretType(const char *s)
+{
+    if (isEmptyString(s))
+        return CVaultKind::kv_v2;
+    if (streq(s, "kv_v1"))
+        return CVaultKind::kv_v1;
+    return CVaultKind::kv_v2;
+}
+interface IVaultManager : extends IInterface
+{
+    virtual bool getCachedSecretFromVault(const char *category, const char *vaultId, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
+    virtual bool requestSecretFromVault(const char *category, const char *vaultId, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
+    virtual bool getCachedSecretByCategory(const char *category, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
+    virtual bool requestSecretByCategory(const char *category, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
+};
+
 static CriticalSection secretCacheCS;
 static Owned<IPropertyTree> secretCache;
+static Owned<IVaultManager> vaultManager;
 
 MODULE_INIT(INIT_PRIORITY_SYSTEM)
 {
@@ -59,6 +78,8 @@ MODULE_INIT(INIT_PRIORITY_SYSTEM)
 
 MODULE_EXIT()
 {
+    vaultManager.clear();
+    secretCache.clear();
 }
 
 static void splitUrlAddress(const char *address, size_t len, StringBuffer &host, StringBuffer *port)
@@ -191,24 +212,6 @@ static inline bool checkSecretExpired(unsigned created)
     unsigned age = msTick() - created;
     return age > getSecretTimeout();
 }
-
-enum class CVaultKind { kv_v1, kv_v2 };
-
-CVaultKind getSecretType(const char *s)
-{
-    if (isEmptyString(s))
-        return CVaultKind::kv_v2;
-    if (streq(s, "kv_v1"))
-        return CVaultKind::kv_v1;
-    return CVaultKind::kv_v2;
-}
-interface IVaultManager : extends IInterface
-{
-    virtual bool getCachedSecretFromVault(const char *category, const char *vaultId, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
-    virtual bool requestSecretFromVault(const char *category, const char *vaultId, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
-    virtual bool getCachedSecretByCategory(const char *category, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
-    virtual bool requestSecretByCategory(const char *category, CVaultKind &kind, StringBuffer &content, const char *secret, const char *version) = 0;
-};
 
 class CVault
 {
@@ -484,7 +487,6 @@ public:
     }
 };
 
-static Owned<CVaultManager> vaultManager;
 IVaultManager *ensureVaultManager()
 {
     CriticalBlock block(secretCS);
