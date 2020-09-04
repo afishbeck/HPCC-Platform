@@ -1209,6 +1209,17 @@ private:
 
     bool espProcExists(const char * espprocname)
     {
+#ifdef _CONTAINERIZED
+        VStringBuffer xpath("services[@name='%s']", espprocname);
+        IPropertyTree *service = queryComponentConfig().queryPropTree(xpath);
+        if (service)
+        {
+            const char *serviceType = service->queryProp("@type");
+            if (!serviceType || streq(serviceType, "esdl-sandbox"))
+                return true;
+        }
+        return false;
+#else
         if (!espprocname || !*espprocname)
             return false;
         VStringBuffer xpath("/Environment/Software/EspProcess[@name='%s']", espprocname);
@@ -1217,6 +1228,7 @@ private:
             return true;
         else
             return false;
+#endif
     }
 
     bool isEsdlServiceDefined(const char* definitionId, const char* serviceName)
