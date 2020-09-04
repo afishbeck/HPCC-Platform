@@ -35,7 +35,7 @@ CEsdlSvcEngineSoapBindingEx::CEsdlSvcEngineSoapBindingEx()
 {
 }
 
-CEsdlSvcEngineSoapBindingEx::CEsdlSvcEngineSoapBindingEx(IPropertyTree* cfg, const char *bindname, const char *procname) : EsdlBindingImpl(cfg, bindname, procname)
+CEsdlSvcEngineSoapBindingEx::CEsdlSvcEngineSoapBindingEx(IPropertyTree* cfg, IPropertyTree *esdlBundle, const char *bindname, const char *procname) : EsdlBindingImpl(cfg, esdlBundle, bindname, procname)
 {
 }
 
