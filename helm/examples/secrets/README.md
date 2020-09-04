@@ -94,7 +94,7 @@ Setup hpcc-vault-access auth role within the default service account (if necessa
 
 ```bash
 vault write auth/kubernetes/role/hpcc-vault-access \
-        bound_service_account_names=default \
+        bound_service_account_names=hpcc-default \
         bound_service_account_namespaces=default \
         policies=hpcc-kv-ro \
         ttl=24h
