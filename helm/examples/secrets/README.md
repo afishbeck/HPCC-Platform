@@ -12,6 +12,7 @@ This example uses Hashicorp vault.  The following steps can be used to set up a 
 
 https://learn.hashicorp.com/tutorials/vault/getting-started-install
 
+--------------------------------------------------------------------------------------------------------
 
 ## Install hashicorp vault service in dev mode:
 
@@ -148,7 +149,23 @@ kubectl get pods
 
 ## Using the created secrets via HTTPCALL from within ECL code
 
-The following ecl commands will run the three ECL files on hthor.  For each job the expected result would be:
+If you don't already have the HPCC client tools installed please install them now:
+
+https://hpccsystems.com/download#HPCC-Platform
+
+--------------------------------------------------------------------------------------------------------
+
+The following ecl commands will run the three example ECL files on hthor.
+
+```bash
+ecl run hthor examples/secrets/httpcall_secret.ecl
+
+ecl run hthor examples/secrets/httpcall_vault.ecl
+
+ecl run hthor examples/secrets/httpcall_vault_direct.ecl
+```
+
+For each job the expected result would be:
 
 ```xml
 <Result>
@@ -156,12 +173,4 @@ The following ecl commands will run the three ECL files on hthor.  For each job 
  <Row><authenticated>true</authenticated></Row>
 </Dataset>
 </Result>
-```
-
-```bash
-ecl run hthor examples/secrets/httpcall_secret.ecl
-
-ecl run hthor examples/secrets/examples/secrets/httpcall_vault.ecl
-
-ecl run hthor examples/secrets/httpcall_vault_direct.ecl
 ```
