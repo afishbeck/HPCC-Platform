@@ -82,8 +82,8 @@ secrets:
   ecl:
     ## Category for secrets published to all components that run ecl
 
-  all:
-    ## Category for secrets published to all components
+  system:
+    ## Category for secrets published to all components for system level useage
 
 ## The vaults section mirrors the secret section but leverages vault for the storage of secrets.
 ## There is an additional category for vaults named "ecl-user".  In the future "ecl-user" vault

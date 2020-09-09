@@ -290,7 +290,7 @@ Add the secret volume mounts for a component
  {{- if (has $category $categories) -}}
 {{- range $secretid, $secretname := $key -}}
 - name: secret-{{ $secretid }}
-  mountPath: /opt/HPCCSystems/secrets/{{ $secretid }}
+  mountPath: /opt/HPCCSystems/secrets/{{ $category }}/{{ $secretid }}
 {{ end -}}
  {{- end -}}
 {{- end -}}

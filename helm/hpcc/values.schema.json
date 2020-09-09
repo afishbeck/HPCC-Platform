@@ -49,7 +49,7 @@
         "ecl": {
           "$ref": "#/definitions/secrets"
         },
-        "all": {
+        "system": {
           "$ref": "#/definitions/secrets"
         }
       },
@@ -72,9 +72,6 @@
           "$ref": "#/definitions/vaultCategory"
         },
         "ecl-user": {
-          "$ref": "#/definitions/vaultCategory"
-        },
-        "all": {
           "$ref": "#/definitions/vaultCategory"
         }
       },

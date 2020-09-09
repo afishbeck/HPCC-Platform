@@ -247,7 +247,7 @@ public:
         {
             useKubernetesAuth = false;
             //for now only support direct access token.  we can support other combinations for example login token, ldap login, etc later.
-            Owned<IPropertyTree> clientSecret = getLocalSecret(vault->queryProp("@client-secret"));
+            Owned<IPropertyTree> clientSecret = getLocalSecret("system", vault->queryProp("@client-secret"));
             if (clientSecret)
                 token.set(clientSecret->queryProp("token"));
         }
@@ -495,14 +495,17 @@ IVaultManager *ensureVaultManager()
     return vaultManager;
 }
 
-static IPropertyTree *getCachedLocalSecret(const char *name)
+static IPropertyTree *getCachedLocalSecret(const char *category, const char *name)
 {
     if (isEmptyString(name))
         return nullptr;
     Owned<IPropertyTree> secret;
     {
         CriticalBlock block(secretCacheCS);
-        secret.setown(secretCache->getPropTree(name));
+        IPropertyTree *tree = secretCache->queryPropTree(category);
+        if (!tree)
+            return nullptr;
+        secret.setown(tree->getPropTree(name));
         if (secret)
         {
             if (checkSecretExpired((unsigned) secret->getPropInt("@created")))
@@ -516,14 +519,15 @@ static IPropertyTree *getCachedLocalSecret(const char *name)
     return nullptr;
 }
 
-static void addCachedLocalSecret(const char *name, IPropertyTree *secret)
+static void addCachedLocalSecret(const char *category, const char *name, IPropertyTree *secret)
 {
-    if (!secret || isEmptyString(name))
+    if (!secret || isEmptyString(name) || isEmptyString(category))
         return;
     secret->setPropInt("@created", (int)msTick());
     {
         CriticalBlock block(secretCacheCS);
-        secretCache->setPropTree(name, LINK(secret));
+        IPropertyTree *tree = ensurePTree(secretCache, category);
+        tree->setPropTree(name, LINK(secret));
     }
 }
 
@@ -535,10 +539,10 @@ static const char *ensureSecretDirectory()
     return secretDirectory;
 }
 
-static IPropertyTree *loadLocalSecret(const char * name)
+static IPropertyTree *loadLocalSecret(const char *category, const char * name)
 {
     StringBuffer path;
-    addPathSepChar(path.append(ensureSecretDirectory())).append(name).append(PATHSEPCHAR);
+    addPathSepChar(path.append(ensureSecretDirectory())).append(category).append(PATHSEPCHAR).append(name).append(PATHSEPCHAR);
     Owned<IDirectoryIterator> entries = createDirectoryIterator(path);
     if (!entries || !entries->first())
         return nullptr;
@@ -559,16 +563,16 @@ static IPropertyTree *loadLocalSecret(const char * name)
             continue;
         tree->setPropBin(name, content.length(), content.bufferBase());
     }
-    addCachedLocalSecret(name, tree);
+    addCachedLocalSecret(category, name, tree);
     return tree.getClear();
 }
 
-extern jlib_decl IPropertyTree *getLocalSecret(const char * name)
+extern jlib_decl IPropertyTree *getLocalSecret(const char *category, const char * name)
 {
-    Owned<IPropertyTree> tree = getCachedLocalSecret(name);
+    Owned<IPropertyTree> tree = getCachedLocalSecret(category, name);
     if (tree)
         return tree.getClear();
-    return loadLocalSecret(name);
+    return loadLocalSecret(category, name);
 }
 
 static IPropertyTree *createPTreeFromVaultSecret(const char *content, CVaultKind kind)
@@ -648,12 +652,12 @@ extern jlib_decl IPropertyTree *getVaultSecret(const char *category, const char 
 extern jlib_decl IPropertyTree *getSecret(const char *category, const char * name)
 {
     //check for any chached first
-    Owned<IPropertyTree> secret = getCachedLocalSecret(name);
+    Owned<IPropertyTree> secret = getCachedLocalSecret(category, name);
     if (!secret)
         secret.setown(getCachedVaultSecret(category, nullptr, name, nullptr));
     //now check local, then vaults
     if (!secret)
-        secret.setown(loadLocalSecret(name));
+        secret.setown(loadLocalSecret(category, name));
     if (!secret)
         secret.setown(requestVaultSecret(category, nullptr, name, nullptr));
     return secret.getClear();

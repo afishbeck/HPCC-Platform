@@ -25,7 +25,7 @@
 extern jlib_decl void setSecretMount(const char * path);
 extern jlib_decl void setSecretTimeout(unsigned timeoutMs);
 
-extern jlib_decl IPropertyTree *getLocalSecret(const char * name);
+extern jlib_decl IPropertyTree *getLocalSecret(const char *category, const char * name);
 extern jlib_decl IPropertyTree *getVaultSecret(const char *category, const char *vaultId, const char * name, const char *version=nullptr);
 extern jlib_decl IPropertyTree *getSecret(const char *category, const char * name);
 
