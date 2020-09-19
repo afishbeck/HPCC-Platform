@@ -360,28 +360,6 @@ void CWsEclBinding::getNavigationData(IEspContext &context, IPropertyTree & data
     ensureNavDynFolder(data, "Targets", "Targets", "root=true", NULL);
 }
 
-static IStringIterator *getContainerTargetClusters()
-{
-    Owned<CStringArrayIterator> ret = new CStringArrayIterator;
-    Owned<IPropertyTreeIterator> queues = queryComponentConfig().getElements("queues");
-    ForEach(*queues)
-    {
-        IPropertyTree &queue = queues->query();
-        const char *qName = queue.queryProp("@name");
-        if (!isEmptyString(qName))
-            ret->append_unique(qName);
-    }
-    Owned<IPropertyTreeIterator> services = queryComponentConfig().getElements("services[@type='roxie']");
-    ForEach(*services)
-    {
-        IPropertyTree &service = services->query();
-        const char *targetName = service.queryProp("@target");
-        if (!isEmptyString(targetName))
-            ret->append_unique(targetName);
-    }
-    return ret.getClear();
-}
-
 void CWsEclBinding::getRootNavigationFolders(IEspContext &context, IPropertyTree & data)
 {
     DBGLOG("CScrubbedXmlBinding::getNavigationData");
@@ -393,11 +371,7 @@ void CWsEclBinding::getRootNavigationFolders(IEspContext &context, IPropertyTree
     data.addProp("@action", "NavMenuEvent");
     data.addProp("@appName", "WsECL 3.0");
 
-#ifdef _CONTAINERIZED
-    Owned<IStringIterator> envTargets = getContainerTargetClusters();
-#else
-    Owned<IStringIterator> envTargets = getTargetClusters(NULL, NULL);
-#endif
+    Owned<IStringIterator> envTargets = getAllTargetClusters();
 
     SCMStringBuffer target;
     ForEach(*envTargets)

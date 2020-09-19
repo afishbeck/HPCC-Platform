@@ -2979,6 +2979,31 @@ extern ClusterType getClusterTypeByClusterName(const char *cluster)
     return NoCluster;
 }
 
+extern IStringIterator *getContainerTargetClusters(bool includeRoxieServices)
+{
+    Owned<CStringArrayIterator> ret = new CStringArrayIterator;
+    Owned<IPropertyTreeIterator> queues = queryComponentConfig().getElements("queues");
+    ForEach(*queues)
+    {
+        IPropertyTree &queue = queues->query();
+        const char *qName = queue.queryProp("@name");
+        if (!isEmptyString(qName))
+            ret->append_unique(qName);
+    }
+    if (includeRoxieServices)
+    {
+        Owned<IPropertyTreeIterator> services = queryComponentConfig().getElements("services[@type='roxie']");
+        ForEach(*services)
+        {
+            IPropertyTree &service = services->query();
+            const char *targetName = service.queryProp("@target");
+            if (!isEmptyString(targetName))
+                ret->append_unique(targetName);
+        }
+    }
+    return ret.getClear();
+}
+
 extern IStringIterator *getTargetClusters(const char *processType, const char *processName)
 {
     Owned<CStringArrayIterator> ret = new CStringArrayIterator;
@@ -3000,6 +3025,16 @@ extern IStringIterator *getTargetClusters(const char *processType, const char *p
     }
     return ret.getClear();
 }
+
+extern IStringIterator *getAllTargetClusters()
+{
+#ifdef _CONTAINERIZED
+    return getContainerTargetClusters();
+#else
+    return getTargetClusters(NULL, NULL);
+#endif
+}
+
 
 extern bool isProcessCluster(const char *process)
 {

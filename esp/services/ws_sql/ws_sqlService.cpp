@@ -63,7 +63,8 @@ bool CwssqlEx::onGetDBMetaData(IEspContext &context, IEspGetDBMetaDataRequest &r
     if (includeStoredProcs)
     {
         const char * querysetfilter = req.getQuerySet();
-        Owned<IStringIterator> targets = getTargetClusters(NULL, NULL);
+
+        Owned<IStringIterator> targets = getAllTargetClusters();
 
         IArrayOf<IEspHPCCQuerySet> pquerysets;
 

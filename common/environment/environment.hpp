@@ -277,6 +277,9 @@ extern ENVIRONMENT_API ClusterType getClusterTypeByClusterName(const char *clust
 extern ENVIRONMENT_API StringBuffer &getClusterGroupName(StringBuffer &ret, const char *cluster);
 extern ENVIRONMENT_API StringBuffer &getClusterThorGroupName(StringBuffer &ret, const char *cluster);
 extern ENVIRONMENT_API IStringIterator *getTargetClusters(const char *processType, const char *processName);
+extern ENVIRONMENT_API IStringIterator *getContainerTargetClusters(bool includeRoxieServices);
+extern ENVIRONMENT_API IStringIterator *getAllTargetClusters();
+
 extern ENVIRONMENT_API bool validateTargetClusterName(const char *clustname);
 extern ENVIRONMENT_API IConstWUClusterInfo* getTargetClusterInfo(const char *clustname);
 typedef IArrayOf<IConstWUClusterInfo> CConstWUClusterInfoArray;
