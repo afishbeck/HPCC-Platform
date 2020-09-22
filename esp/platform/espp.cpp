@@ -428,12 +428,9 @@ int init_main(int argc, const char* argv[])
         if(!cfgfile || !*cfgfile)
             cfgfile = "esp.xml";
 
-        if (inputs->getPropInt("--wait-for-debugger", 0))
-        {
-            int x = 1;
-            while(x)
-                MilliSleep(1000);
-        }
+        int x = 1;
+        while(x)
+            MilliSleep(1000);
         Owned<IPropertyTree> envpt;
         if (application)
         {
