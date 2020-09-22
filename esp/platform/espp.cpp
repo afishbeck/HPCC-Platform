@@ -428,7 +428,7 @@ int init_main(int argc, const char* argv[])
         if(!cfgfile || !*cfgfile)
             cfgfile = "esp.xml";
 
-        int x = 1;
+        int x = 0;
         while(x)
             MilliSleep(1000);
         Owned<IPropertyTree> envpt;
