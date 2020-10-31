@@ -72,6 +72,8 @@ class EsdlServiceImpl : public CInterface, implements IEspService
 {
 private:
     IEspContainer *container;
+    Owned<IEsdlTransformMethodMap> m_transforms = createEsdlTransformMethodMap();
+
     MapStringToMyClass<ISmartSocketFactory> connMap;
     MapStringToMyClass<IEmbedServiceContext> javaServiceMap;
     MapStringToMyClass<IException> javaExceptionMap;
@@ -79,8 +81,6 @@ private:
     MapStringTo<cpp_service_method_t, cpp_service_method_t> cppProcMap;
     Owned<ILoggingManager> m_oLoggingManager;
     bool m_bGenerateLocalTrxId;
-    MapStringToMyClass<IEsdlCustomTransform> m_customRequestTransformMap;
-    Owned<IEsdlCustomTransform> m_serviceLevelRequestTransform;
     bool m_serviceLevelCrtFail = false;
     using MethodAccessMap = MapStringTo<SecAccessFlags>;
     using MethodAccessMaps = MapStringTo<Owned<MethodAccessMap> >;
@@ -103,11 +103,15 @@ public:
     StringBuffer                m_serviceNameSpaceBase;
     StringAttr                  m_namespaceScheme;
     bool                        m_usesURLNameSpace;
-    MapStringTo<StringAttr, const char *> m_methodCRTransformErrors;
+
+    using TransformErrorMap = MapStringTo<StringAttr, const char *>;
+    TransformErrorMap m_requestTransformErrors;
 
 public:
     IMPLEMENT_IINTERFACE;
-    EsdlServiceImpl(){}
+    EsdlServiceImpl()
+    {
+    }
 
     virtual ~EsdlServiceImpl();
 
@@ -156,7 +160,7 @@ public:
             m_pEsdlTransformer.clear();
         if(m_pServiceMethodTargets)
             m_pServiceMethodTargets.clear();
-        m_methodCRTransformErrors.kill();
+        m_requestTransformErrors.kill();
     }
 
     virtual bool loadLogggingManager();
@@ -165,12 +169,13 @@ public:
     void configureJavaMethod(const char *method, IPropertyTree &entry, const char *classPath);
     void configureCppMethod(const char *method, IPropertyTree &entry, IEspPlugin*& plugin);
     void configureUrlMethod(const char *method, IPropertyTree &entry);
-    void addServiceLevelRequestTransform(IPropertyTree *customRequestTransform);
-    void addMethodLevelRequestTransform(const char *method, IPropertyTree &methodCfg, IPropertyTree *customRequestTransform);
+
+    void handleTransformError(bool &serviceError, TransformErrorMap &methodErrors, IException *e, const char *service, const char *method);
+    void addTransforms(IPropertyTree *cfgParent, const char *service, const char *method);
 
     IEsdlScriptContext* checkCreateEsdlServiceScriptContext(IEspContext &context, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, IPropertyTree *tgtcfg);
 
-    virtual void handleServiceRequest(IEspContext &context, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, Owned<IPropertyTree> &tgtcfg, Owned<IPropertyTree> &tgtctx, const char *ns, const char *schema_location, IPropertyTree *req, StringBuffer &out, StringBuffer &logdata, unsigned int flags);
+    virtual void handleServiceRequest(IEspContext &context, Owned<IEsdlScriptContext> &scriptContext, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, Owned<IPropertyTree> &tgtcfg, Owned<IPropertyTree> &tgtctx, const char *ns, const char *schema_location, IPropertyTree *req, StringBuffer &out, StringBuffer &logdata, StringBuffer &origResp, StringBuffer &soapmsg, unsigned int flags);
     virtual void generateTransactionId(IEspContext & context, StringBuffer & trxid)=0;
     void generateTargetURL(IEspContext & context, IPropertyTree *srvinfo, StringBuffer & url, bool isproxy);
     void sendTargetSOAP(IEspContext & context, IPropertyTree *srvinfo, const char * req, StringBuffer &resp, bool isproxy,const char * targeturl);
