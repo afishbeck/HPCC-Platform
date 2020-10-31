@@ -12,18 +12,28 @@
     <Method name="JavaEchoPersonInfo" querytype="java" javamethod="EsdlExample.EsdlExampleService.JavaEchoPersonInfo"/>
     <Method name="CppEchoPersonInfo" querytype="cpp" method="onEsdlExampleCppEchoPersonInfo" plugin="libEsdlExampleService.so"/>
     <Method name="RoxieEchoPersonInfo" querytype="roxie" url="http://localhost:9876/roxie" queryname="RoxieEchoPersonInfo">
-         <xsdl:CustomRequestTransform target="soap:Body/{$query}">
+    <Transforms>
+      <xsdl:Request>
+        <![CDATA[ 
+          <xsdl:script target="soap:Body/{$query}">
             <xsdl:choose>
-               <xsdl:when test="$clientversion=1.9">
-                  <xsdl:SetValue target="vertest"  value="'v1.9'"/>
-                  <xsdl:SetValue target="RoxieEchoPersonInfoRequest/Row/Name/First"  value="'v1.9'"/>
-               </xsdl:when>
-               <xsdl:otherwise>
-                  <xsdl:SetValue target="vertest"  value="concat('v', $clientversion)"/>
-                  <xsdl:SetValue target="RoxieEchoPersonInfoRequest/Row/Name/Last" value="concat('v', $clientversion)"/>
-               </xsdl:otherwise>
+              <xsdl:when test="$clientversion=1.9">
+                 <xsdl:SetValue target="vertest"  value="'v1.9'"/>
+                 <xsdl:SetValue target="RoxieEchoPersonInfoRequest/Row/Name/First"  value="'v1.9'"/>
+              </xsdl:when>
+              <xsdl:otherwise>
+                 <xsdl:SetValue target="vertest"  value="concat('v', $clientversion)"/>
+                 <xsdl:SetValue target="RoxieEchoPersonInfoRequest/Row/Name/Last" value="concat('v', $clientversion)"/>
+              </xsdl:otherwise>
             </xsdl:choose>
-         </xsdl:CustomRequestTransform>
+          </xsdl:script>
+        ]]]>
+      </xsdl:Request>
+      <xsdl:Response target="soap:Body/{$query}">
+      </xsdl:Response>
+      <xsdl:Finalize>
+      </xsdl:Finalize>
+      </Transforms>
    </Method>
 </Methods>
 

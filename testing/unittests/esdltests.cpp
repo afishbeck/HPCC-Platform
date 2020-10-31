@@ -247,13 +247,21 @@ static constexpr const char* selectPathResult = R"!!(<soap:Envelope xmlns:soap="
   </soap:Body>
 </soap:Envelope>)!!";
 
+bool areEquivalentTestXMLStrings(const char *xml1, const char *xml2)
+{
+    if (isEmptyString(xml1) || isEmptyString(xml2))
+        return false;
+    Owned<IPropertyTree> tree1 = createPTreeFromXMLString(xml1);
+    Owned<IPropertyTree> tree2 = createPTreeFromXMLString(xml2);
+    return areMatchingPTrees(tree1, tree2);
+}
 
 static const char *target_config = "<method queryname='EchoPersonInfo'/>";
 
 class ESDLTests : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE( ESDLTests );
-        CPPUNIT_TEST(testEsdlTransformScript);
+      /*  CPPUNIT_TEST(testEsdlTransformScript);
         CPPUNIT_TEST(testEsdlTransformScriptNoPrefix);
         CPPUNIT_TEST(testEsdlTransformForEach);
         CPPUNIT_TEST(testEsdlTransformVarScope);
@@ -275,6 +283,7 @@ class ESDLTests : public CppUnit::TestFixture
         CPPUNIT_TEST(testEsdlTransformImplicitPrefix);
         CPPUNIT_TEST(testEsdlTransformRequestNamespaces);
         CPPUNIT_TEST(testScriptContext);
+    */    CPPUNIT_TEST(testTargetElement);
     CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -297,6 +306,7 @@ public:
         scriptContext->setAttribute(ESDLScriptCtxSection_ESDLInfo, "request", "EchoPersonInfoRequest");
 
         scriptContext->setContent(ESDLScriptCtxSection_BindingConfig, config);
+        scriptContext->setContent(ESDLScriptCtxSection_TargetConfig, target_config);
         scriptContext->setContent(ESDLScriptCtxSection_ESDLRequest, xml);
         return scriptContext.getClear();
     }
@@ -320,11 +330,14 @@ public:
 
             StringBuffer output;
             scriptContext->toXML(output.clear(), "FinalRequest");
-            if (result && !streq(result, output.str()))
+
+
+            if (result && !areEquivalentTestXMLStrings(result, output.str()))
             {
                 fputs(output.str(), stdout);
                 fflush(stdout);
-                throw MakeStringException(100, "Test failed(%s)", testname);
+                fprintf(stdout, "\nTest failed(%s)\n", testname);
+                CPPUNIT_ASSERT(false);
             }
         }
         catch (IException *E)
@@ -334,7 +347,8 @@ public:
             {
                 StringBuffer m;
                 fprintf(stdout, "\nTest(%s) Expected %d Exception %d - %s\n", testname, code, E->errorCode(), E->errorMessage(m).str());
-                throw E;
+                E->Release();
+                CPPUNIT_ASSERT(false);
             }
             E->Release();
         }
@@ -685,7 +699,7 @@ public:
       )!!";
 
       // An invalid namespace URI that is expected to throw an exception
-      runTest("invalid-uri", esdlScriptSelectPath, soapRequestNsInvalid, configInvalidURI, namespaceResult, 99);
+      runTest("invalid-uri", esdlScriptSelectPath, soapRequestNsInvalid, configInvalidURI, namespaceResult, 5684);
 
       // Weird but valid URIs for namespaces
       runTest("arbitrary-uri-1", esdlScriptSelectPath, soapRequestNsArbitrary1, configArbitraryURI1, namespaceResultArbitrary1, 0);
@@ -1079,7 +1093,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
   </Transform>
 </config>)!!";
 
-        runTest("for each garbage path error", forEachScript, input, configGarbagePathError, nullptr, -1);
+        runTest("for each garbage path error", forEachScript, input, configGarbagePathError, nullptr, 5682);
 
         constexpr const char * resultNada = R"!!(<root xmlns:xx1="urn:x1" xmlns:xx2="urn:x2">
   <extra>
@@ -1317,7 +1331,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
 
         constexpr const char *config = R"!!(<config><Transform><Param name='testcase' value="target xpath errors"/></Transform></config>)!!";
 
-        runTest("target xpath errors", script, input, config, nullptr, -1); //createPropBranch: cannot create path : ID##
+        runTest("target xpath errors", script, input, config, nullptr, 5682); //createPropBranch: cannot create path : ID##
 
         static constexpr const char * script2 = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
             <es:SetValue target="ID##" select="/root/Person/Name/First"/>
@@ -1326,7 +1340,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
         </es:CustomRequestTransform>
         )!!";
 
-        runTest("target xpath errors", script2, input, config, nullptr, -1); //createPropBranch: cannot create path : ID##
+        runTest("target xpath errors", script2, input, config, nullptr, 5682); //createPropBranch: cannot create path : ID##
 }
     void testEsdlTransformFailLevel1A()
     {
@@ -1516,7 +1530,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
 
             StringBuffer output;
             scriptContext->toXML(output, "SecondPass");
-            if (result && !streq(result, output.str()))
+            if (result && !areEquivalentTestXMLStrings(result, output.str()))
             {
                 fputs(output.str(), stdout);
                 fflush(stdout);
@@ -1527,9 +1541,73 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
         {
             StringBuffer m;
             fprintf(stdout, "\nTest(%s) Exception %d - %s\n", "script context", E->errorCode(), E->errorMessage(m).str());
-            throw E;
+            E->Release();
+            CPPUNIT_ASSERT(false);
         }
     }
+
+    void testTargetElement()
+    {
+        static constexpr const char * input = R"!!(<?xml version="1.0" encoding="UTF-8"?>
+         <root>
+            <Person>
+               <FullName>
+                  <First>Joe</First>
+                  <ID>GI101</ID>
+                  <ID>GI102</ID>
+               </FullName>
+            </Person>
+          </root>
+        )!!";
+
+        static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
+            <es:variable name='value' select="'abc'"/>
+            <es:if-target xpath='PartName'>
+               <es:set-value target="NotSet"  select="$value"/>
+            </es:if-target>
+            <es:if-target xpath='FullName'>
+               <es:set-value target="IsSet"  select="$value"/>
+            </es:if-target>
+            <es:target xpath='FullName'>
+               <es:set-value target="DidntFail"  select="$value"/>
+            </es:target>
+            <es:ensure-target xpath='How/Did/We/Get'>
+               <es:element name='Here'>
+                  <es:set-value target="@whoknows"  select="$value"/>
+                  <es:set-value target="IDontKnow"  select="$value"/>
+                  <es:element name="CopyUnderHere">
+                     <es:copy-of select="Person/FullName" newname='FullerName'/>
+                  </es:element>
+               </es:element>
+            </es:ensure-target>
+        </es:CustomRequestTransform>
+        )!!";
+
+        constexpr const char *config1 = R"!!(<config>
+          <Transform>
+            <Param name='testcase' value="new features"/>
+          </Transform>
+        </config>)!!";
+        try {
+
+            Owned<IEspContext> ctx = createEspContext(nullptr);
+            Owned<IEsdlScriptContext> scriptContext = createTestScriptContext(ctx, input, config1);
+            runTransform(scriptContext, script, ESDLScriptCtxSection_ESDLRequest, "FirstPass", "script context 1", 0);
+
+            StringBuffer output;
+            scriptContext->toXML(output, "FirstPass");
+            fputs(output.str(), stdout);
+            fflush(stdout);
+        }
+        catch (IException *E)
+        {
+            StringBuffer m;
+            fprintf(stdout, "\nTest(%s) Exception %d - %s\n", "script context", E->errorCode(), E->errorMessage(m).str());
+            E->Release();
+            CPPUNIT_ASSERT(false);
+        }
+    }
+
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION( ESDLTests );

@@ -31,19 +31,6 @@ interface IXpathContextIterator;
 
 interface XMLLIB_API IXpathContext : public IInterface
 {
-    virtual bool addVariable(const char * name, const char * val) = 0;
-    virtual bool addXpathVariable(const char * name, const char * xpath) = 0;
-    virtual bool addCompiledVariable(const char * name, ICompiledXpath * compiled) = 0;
-
-    virtual const char * getVariable(const char * name, StringBuffer & variable) = 0;
-
-    virtual bool evaluateAsBoolean(const char * xpath) = 0;
-    virtual bool evaluateAsString(const char * xpath, StringBuffer & evaluated) = 0;
-    virtual bool evaluateAsBoolean(ICompiledXpath * compiledXpath) = 0;
-    virtual const char * evaluateAsString(ICompiledXpath * compiledXpath, StringBuffer & evaluated) = 0;
-    virtual double evaluateAsNumber(ICompiledXpath * compiledXpath) = 0;
-    virtual  IXpathContextIterator *evaluateAsNodeSet(ICompiledXpath * compiledXpath) = 0;
-
     virtual bool setXmlDoc(const char * xmldoc) = 0;
     virtual void setUserData(void *) = 0;
     virtual void *getUserData() = 0;
@@ -51,14 +38,40 @@ interface XMLLIB_API IXpathContext : public IInterface
     virtual void registerFunction(const char *xmlns, const char * name, void *f) = 0;
     virtual void registerNamespace(const char *prefix, const char *uri) = 0;
     virtual const char *queryNamespace(const char *prefix) = 0;
+
     virtual void beginScope(const char *name) = 0;
     virtual void endScope() = 0;
 
+    virtual bool addVariable(const char * name, const char * val) = 0;
+    virtual bool addXpathVariable(const char * name, const char * xpath) = 0;
+    virtual bool addCompiledVariable(const char * name, ICompiledXpath * compiled) = 0;
+    virtual const char * getVariable(const char * name, StringBuffer & variable) = 0;
     virtual bool addInputXpath(const char * name, const char * xpath) = 0; //values should be declared as parameters before use, "strict parameter mode" requires it
     virtual bool addInputValue(const char * name, const char * value) = 0; //values should be declared as parameters before use, "strict parameter mode" requires it
     virtual bool declareParameter(const char * name, const char *value) = 0;
     virtual bool declareCompiledParameter(const char * name, ICompiledXpath * compiled) = 0;
     virtual void declareRemainingInputs() = 0;
+
+ 
+    virtual void pushLocation() = 0;
+    virtual void popLocation() = 0;
+    virtual bool setLocation(const char *xpath, bool required) = 0;
+    virtual bool setLocation(ICompiledXpath * compiledXpath, bool required) = 0;
+    virtual bool ensureLocation(const char *xpath, bool required) = 0;
+    virtual void setLocationNamespace(const char *prefix, const char *uri, bool current) = 0;
+    virtual void ensureSetValue(const char *xpath, const char *value, bool required) = 0;
+    virtual void ensureAddValue(const char *xpath, const char *value, bool required) = 0;
+    virtual void ensureAppendToValue(const char *xpath, const char *value, bool required) = 0;
+    virtual void rename(const char *xpath, const char *name, bool all) = 0;
+    virtual void remove(const char *xpath, bool all) = 0;
+    virtual void copyFromParentContext(ICompiledXpath *select, const char *newname) = 0;
+
+    virtual bool evaluateAsBoolean(const char * xpath) = 0;
+    virtual bool evaluateAsString(const char * xpath, StringBuffer & evaluated) = 0;
+    virtual bool evaluateAsBoolean(ICompiledXpath * compiledXpath) = 0;
+    virtual const char * evaluateAsString(ICompiledXpath * compiledXpath, StringBuffer & evaluated) = 0;
+    virtual double evaluateAsNumber(ICompiledXpath * compiledXpath) = 0;
+    virtual  IXpathContextIterator *evaluateAsNodeSet(ICompiledXpath * compiledXpath) = 0;
 };
 
 interface IXpathContextIterator : extends IIteratorOf<IXpathContext> { };
@@ -90,6 +103,22 @@ public:
     }
 };
 
+class CXpathContextLocation : CInterface
+{
+private:
+    Linked<IXpathContext> context;
+public:
+    IMPLEMENT_IINTERFACE;
+    CXpathContextLocation(IXpathContext *ctx) : context(ctx)
+    {
+        context->pushLocation();
+    }
+    virtual ~CXpathContextLocation()
+    {
+        context->popLocation();
+    }
+};
+
 extern "C" XMLLIB_API ICompiledXpath* compileXpath(const char * xpath);
 extern "C" XMLLIB_API IXpathContext*  getXpathContext(const char * xmldoc, bool strictParameterDeclaration, bool removeDocNamespaces);
 
@@ -103,7 +132,8 @@ extern "C" XMLLIB_API IXpathContext*  getXpathContext(const char * xmldoc, bool 
 
 interface IEsdlScriptContext : extends IInterface
 {
-    virtual IXpathContext* createXpathContext(const char *section, bool strictParameterDeclaration) = 0;
+    virtual IXpathContext* createXpathContext(IXpathContext *parent, const char *section, bool strictParameterDeclaration) = 0;
+    virtual IXpathContext *getCopiedSectionXpathContext(IXpathContext *parent, const char *tgtSection, const char *srcSection, bool strictParameterDeclaration) = 0;
     virtual void *queryEspContext() = 0;
     virtual void setContent(const char *section, const char *xml) = 0;
     virtual void setContent(const char *section, IPropertyTree *tree) = 0;

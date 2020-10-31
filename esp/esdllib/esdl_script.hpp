@@ -47,14 +47,32 @@
 interface IEsdlCustomTransform : extends IInterface
 {
     virtual void processTransform(IEsdlScriptContext * context, const char *srcSection, const char *tgtSection) = 0;
-    virtual void appendEsdlURIPrefixes(StringArray &prefixes) = 0;
-    virtual void toDBGLog() = 0;
+    virtual void processTransformImpl(IEsdlScriptContext * scriptContext, const char *srcSection, const char *tgtSection, IXpathContext *xpathContext, const char *target) = 0;
+    virtual void appendPrefixes(StringArray &prefixes) = 0;
+    virtual void toDBGLogx() = 0;
 };
 
-esdl_decl void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::initializer_list<IEsdlCustomTransform *> const &transforms, const char *srcSection, const char *tgtSection);
+interface IEsdlTransformSet : extends IInterface
+{
+    virtual void processTransformImpl(IEsdlScriptContext * scriptContext, const char *srcSection, const char *tgtSection, IXpathContext *xpathContext, const char *target) = 0;
+    virtual void appendPrefixes(StringArray &prefixes) = 0;
+};
 
+
+interface IEsdlTransformMap : extends IInterface
+{
+    virtual void addTransformSet(const char *name, IEsdlTransformSet *tfs) = 0;
+    virtual void addTransformSet(const char *name, IPropertyTree *parent, const char *prefix, const char *tag) = 0;
+    virtual IEsdlTransformSet *query(const char *name) = 0;
+    virtual void remove(const char *name) = 0;
+};
+
+esdl_decl IEsdlTransformMap *createEsdlTransformMap();
+
+esdl_decl IEsdlTransformSet *createEsdlTransformSet(IPropertyTree *parent, const char *prefix, const char *tag);
 esdl_decl IEsdlCustomTransform *createEsdlCustomTransform(IPropertyTree &customRequestTransform, const char *ns_prefix);
 
+esdl_decl void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::initializer_list<IEsdlTransformSet *> const &transforms, const char *srcSection, const char *tgtSection);
 esdl_decl void registerEsdlXPathExtensions(IXpathContext *xpathCtx, IEsdlScriptContext *scriptCtx, const StringArray &prefixes);
 
 #endif /* ESDL_SCRIPT_HPP_ */

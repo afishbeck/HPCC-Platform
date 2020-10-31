@@ -410,74 +410,42 @@ void EsdlServiceImpl::configureUrlMethod(const char *method, IPropertyTree &entr
     }
 }
 
-void EsdlServiceImpl::addServiceLevelRequestTransform(IPropertyTree *customRequestTransform)
+void EsdlServiceImpl::handleTransformError(bool &serviceError, MapStringTo<StringAttr, const char *> &methodErrors, IException *e, const char *tag, const char *service, const char *method)
 {
-    if (!customRequestTransform)
-        return;
+    VStringBuffer msg("Encountered error while fetching '%s' transforms for service '%s'", tag, service);
+    if (!isEmptyString(method))
+        msg.appendf(" method '%s'", method);
+    msg.append(": ");
+    if (e)
+        e->errorMessage(msg);
+    IERRLOG("%s", msg.str());
 
+    if (!isEmptyString(method))
+        methodErrors.setValue(method, msg.str());
+    else
+        serviceError = true;
+}
+
+void EsdlServiceImpl::addTransforms(IEsdlTransformMap *tfm, IPropertyTree *cfgParent, const char *tag, const char *service, const char *method)
+{
     try
     {
-        m_serviceLevelRequestTransform.setown(createEsdlCustomTransform(*customRequestTransform, nullptr));
+        tfm->addTransformSet(method, cfgParent, "xsdl", tag);
     }
-    catch(IException* e)
+    catch (IException *e)
     {
-        m_serviceLevelCrtFail = true;
-        StringBuffer msg;
-        e->errorMessage(msg);
-        IERRLOG("Service Level Custom Request Transform could not be processed!!: \n\t%s", msg.str());
+        handleTransformError(m_serviceLevelCrtFail, m_requestTransformErrors, e, tag, service, method);
         e->Release();
     }
     catch (...)
     {
-        m_serviceLevelCrtFail = true;
-        IERRLOG("Service Level Custom Request Transform could not be processed!!");
+        handleTransformError(m_serviceLevelCrtFail, m_requestTransformErrors, nullptr, tag, service, method);
     }
 }
 
-void EsdlServiceImpl::addMethodLevelRequestTransform(const char *method, IPropertyTree &methodCfg, IPropertyTree *customRequestTransform)
+void EsdlServiceImpl::addServiceTransforms(IEsdlTransformMap *tfm, IPropertyTree *cfgParent, const char *tag, const char *service)
 {
-    if (!method || !*method || !customRequestTransform)
-        return;
-
-    try
-    {
-        Owned<IEsdlCustomTransform> crt = createEsdlCustomTransform(*customRequestTransform, nullptr);
-        m_customRequestTransformMap.setValue(method, crt.get());
-    }
-    catch(IException* e)
-    {
-        StringBuffer msg;
-        e->errorMessage(msg);
-        VStringBuffer errmsg("Custom Request Transform for method %s could not be processed!!: %s", method, msg.str());
-
-        m_methodCRTransformErrors.setValue(method, errmsg.str());
-        IERRLOG("%s", errmsg.str());
-        e->Release();
-    }
-    catch (...)
-    {
-        VStringBuffer errmsg("Custom Request Transform for method %s could not be processed!!", method);
-        m_methodCRTransformErrors.setValue(method, errmsg.str());
-        IERRLOG("%s", errmsg.str());
-    }
-}
-
-static void ensureMergeOrderedEsdlTransform(Owned<IPropertyTree> &dest, IPropertyTree *src)
-{
-    if (!src)
-        return;
-    if (!dest)
-        dest.setown(createPTree(src->queryName(), ipt_ordered));
-    //copy so we can make changes, like adding calculated targets
-    Owned<IPropertyTree> copy = createPTreeFromIPT(src, ipt_ordered);
-    const char *target = copy->queryProp("@target");
-    if (target && *target)
-    {
-        Owned<IPropertyTreeIterator> children = copy->getElements("*");
-        ForEach(*children)
-            children->query().setProp("@_crtTarget", target); //internal use only attribute
-    }
-    mergePTree(dest, copy);
+    addTransforms(tfm, cfgParent, tag, service, "");
 }
 
 void EsdlServiceImpl::configureTargets(IPropertyTree *cfg, const char *service)
@@ -494,26 +462,7 @@ void EsdlServiceImpl::configureTargets(IPropertyTree *cfg, const char *service)
 
     if (target_cfg)
     {
-        Owned<IPropertyTree> serviceCrt;
-        try
-        {
-            ensureMergeOrderedEsdlTransform(serviceCrt, target_cfg->queryPropTree("xsdl:CustomRequestTransform"));
-            Owned<IPropertyTreeIterator> transforms =  target_cfg->getElements("Transforms/xsdl:CustomRequestTransform");
-            ForEach(*transforms)
-                ensureMergeOrderedEsdlTransform(serviceCrt, &transforms->query());
-        }
-        catch (IPTreeException *e)
-        {
-            StringBuffer msg;
-            e->errorMessage(msg);
-            VStringBuffer errmsg("Encountered error while fetching \"xsdl:CustomRequestTransform\" from service \"%s\" ESDL configuration: %s ", service, msg.str());
-
-            m_serviceLevelCrtFail = true;
-            OERRLOG("%s", errmsg.str());
-            e->Release();
-        }
-
-        addServiceLevelRequestTransform(serviceCrt);
+        addServiceTransforms(m_requestTransforms, target_cfg, "CustomRequestTransform", service);
 
         m_pServiceMethodTargets.setown(createPTree(ipt_caseInsensitive));
         Owned<IPropertyTreeIterator> itns = target_cfg->getElements("Method");
@@ -563,29 +512,10 @@ void EsdlServiceImpl::configureTargets(IPropertyTree *cfg, const char *service)
             if (generator.generateMap())
                 m_methodAccessMaps.setValue(mthDef->queryMethodName(), authMap.getLink());
 
-            m_methodCRTransformErrors.remove(method);
-            m_customRequestTransformMap.remove(method);
+            m_requestTransformErrors.remove(method);
+            m_requestTransforms->remove(method);
 
-            Owned<IPropertyTree> methodCrt;
-            try
-            {
-                ensureMergeOrderedEsdlTransform(methodCrt, methodCfg.queryPropTree("xsdl:CustomRequestTransform"));
-                Owned<IPropertyTreeIterator> transforms =  methodCfg.getElements("Transforms/xsdl:CustomRequestTransform");
-                ForEach(*transforms)
-                    ensureMergeOrderedEsdlTransform(methodCrt, &transforms->query());
-            }
-            catch (IException *e)
-            {
-                StringBuffer msg;
-                e->errorMessage(msg);
-                VStringBuffer errmsg("Encountered error while fetching 'xsdl:CustomRequestTransform' from service '%s', method '%s' ESDL configuration: %s ", service, method, msg.str());
-
-                m_methodCRTransformErrors.setValue(method, errmsg.str());
-                OERRLOG("%s", errmsg.str());
-                e->Release();
-            }
-
-            addMethodLevelRequestTransform(method, methodCfg, methodCrt);
+            addTransforms(m_requestTransforms, &methodCfg, "CustomRequestTransform", service, method);
 
             const char *type = methodCfg.queryProp("@querytype");
             if (type && strieq(type, "java"))
@@ -652,8 +582,9 @@ static inline bool isPublishedQuery(EsdlMethodImplType implType)
 
 IEsdlScriptContext* EsdlServiceImpl::checkCreateEsdlServiceScriptContext(IEspContext &context, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, IPropertyTree *tgtcfg)
 {
-    IEsdlCustomTransform *methodCrt = m_customRequestTransformMap.getValue(mthdef.queryMethodName());
-    if (!m_serviceLevelRequestTransform && !methodCrt)
+    IEsdlTransformSet *serviceTfs = m_requestTransforms->query("");
+    IEsdlTransformSet *methodTfs = m_requestTransforms->query(mthdef.queryMethodName());
+    if (!serviceTfs && !methodTfs)
         return nullptr;
 
     Owned<IEsdlScriptContext> scriptContext = createEsdlScriptContext(&context);
@@ -671,6 +602,7 @@ IEsdlScriptContext* EsdlServiceImpl::checkCreateEsdlServiceScriptContext(IEspCon
 }
 
 void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
+                                           Owned<IEsdlScriptContext> &scriptContext,
                                            IEsdlDefService &srvdef,
                                            IEsdlDefMethod &mthdef,
                                            Owned<IPropertyTree> &tgtcfg,
@@ -680,10 +612,10 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
                                            IPropertyTree *req,
                                            StringBuffer &out,
                                            StringBuffer &logdata,
+                                           StringBuffer &origResp,
+                                           StringBuffer &soapmsg,
                                            unsigned int flags)
 {
-    Owned<IEsdlScriptContext> scriptContext;
-
     const char *mthName = mthdef.queryName();
     context.addTraceSummaryValue(LogMin, "method", mthName);
     const char* srvName = srvdef.queryName();
@@ -748,7 +680,6 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
     else
         ESPLOG(LogMin,"DESDL: Transaction ID could not be generated!");
 
-    StringBuffer origResp, soapmsg;
     EsdlMethodImplType implType = EsdlMethodImplUnknown;
 
     if(stricmp(mthName, "echotest")==0 || mthdef.hasProp("EchoTest"))
@@ -773,7 +704,7 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
         if (!tgtcfg)
             throw makeWsException( ERR_ESDL_BINDING_BADREQUEST, WSERR_CLIENT, "ESDL", "Target not configured for method: %s", mthName );
 
-        StringAttr *crtErrorMessage = m_methodCRTransformErrors.getValue(mthName);
+        StringAttr *crtErrorMessage = m_requestTransformErrors.getValue(mthName);
         if (crtErrorMessage && !crtErrorMessage->isEmpty())
             throw makeWsException( ERR_ESDL_BINDING_INTERNERR, WSERR_CLIENT, "ESDL", "%s", crtErrorMessage->str());
 
@@ -919,15 +850,13 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
         }
     }
 
-    context.addTraceSummaryTimeStamp(LogNormal, "srt-resLogging");
-    handleResultLogging(context, scriptContext, tgtctx.get(), req, soapmsg.str(), origResp.str(), out.str(), logdata.str());
-    context.addTraceSummaryTimeStamp(LogNormal, "end-resLogging");
     ESPLOG(LogMax,"Customer Response: %s", out.str());
 }
 
 bool EsdlServiceImpl::handleResultLogging(IEspContext &espcontext, IEsdlScriptContext *scriptContext, IPropertyTree * reqcontext, IPropertyTree * request,const char *rawreq, const char * rawresp, const char * finalresp, const char * logdata)
 {
     bool success = true;
+    espcontext.addTraceSummaryTimeStamp(LogNormal, "srt-resLogging");
     if (m_oLoggingManager)
     {
         Owned<IEspLogEntry> entry = m_oLoggingManager->createLogEntry();
@@ -945,7 +874,7 @@ bool EsdlServiceImpl::handleResultLogging(IEspContext &espcontext, IEsdlScriptCo
         success = m_oLoggingManager->updateLog(entry, logresp);
         ESPLOG(LogMin,"ESDLService: Attempted to log ESP transaction: %s", logresp.str());
     }
-
+    espcontext.addTraceSummaryTimeStamp(LogNormal, "end-resLogging");
     return success;
 }
 
@@ -1454,18 +1383,19 @@ void EsdlServiceImpl::prepareFinalRequest(IEspContext &context,
     if (m_serviceLevelCrtFail)
         throw MakeStringException(-1, "%s::%s disabled due to service-level Custom Transform errors. Review transform template in configuration.", srvdef.queryName(), mthName);
 
-    StringAttr *crtErrorMessage = m_methodCRTransformErrors.getValue(mthName);
+    StringAttr *crtErrorMessage = m_requestTransformErrors.getValue(mthName);
     if (crtErrorMessage && !crtErrorMessage->isEmpty())
         throw MakeStringException(-1, "%s::%s disabled due to method-level Custom Transform errors: %s. Review transform template in configuration.", srvdef.queryName(), mthName, crtErrorMessage->str());
 
     if (scriptContext)
     {
-        IEsdlCustomTransform *methodCrt = m_customRequestTransformMap.getValue(mthName);
+        IEsdlTransformSet *serviceTfs = m_requestTransforms->query("");
+        IEsdlTransformSet *methodTfs = m_requestTransforms->query(mthName);
 
         context.addTraceSummaryTimeStamp(LogNormal, "srt-custreqtrans");
         scriptContext->setContent(ESDLScriptCtxSection_ESDLRequest, reqProcessed.str());
-        if (m_serviceLevelRequestTransform || methodCrt) //slightly redundant, but less fragile to future changes to check again here
-            processServiceAndMethodTransforms(scriptContext, {m_serviceLevelRequestTransform, methodCrt}, ESDLScriptCtxSection_ESDLRequest, ESDLScriptCtxSection_FinalRequest);
+        if (serviceTfs || methodTfs) //slightly redundant, but less fragile to future changes to check again here
+            processServiceAndMethodTransforms(scriptContext, {serviceTfs, methodTfs}, ESDLScriptCtxSection_ESDLRequest, ESDLScriptCtxSection_FinalRequest);
         scriptContext->toXML(reqProcessed.clear(), ESDLScriptCtxSection_FinalRequest);
 
         context.addTraceSummaryTimeStamp(LogNormal, "end-custreqtrans");
@@ -2058,7 +1988,11 @@ int EsdlBindingImpl::onGetInstantQuery(IEspContext &context,
 
                     getSchemaLocation(context, request, schemaLocation);
                     context.setESDLBindingID(m_bindingId.get());
-                    m_pESDLService->handleServiceRequest(context, *srvdef, *mthdef, tgtcfg, tgtctx, ns.str(), schemaLocation.str(), req_pt.get(), out, logdata, 0);
+
+                    StringBuffer origResp;
+                    StringBuffer soapmsg;
+                    Owned<IEsdlScriptContext> scriptContext;
+                    m_pESDLService->handleServiceRequest(context, scriptContext, *srvdef, *mthdef, tgtcfg, tgtctx, ns.str(), schemaLocation.str(), req_pt.get(), out, logdata, origResp, soapmsg, 0);
 
                     response->setContent(out.str());
 
@@ -2074,7 +2008,7 @@ int EsdlBindingImpl::onGetInstantQuery(IEspContext &context,
 
                     ESPLOG(LogMax,"EsdlBindingImpl:onGetInstantQuery response: %s", out.str());
 
-                    m_pESDLService->esdl_log(context, *srvdef, *mthdef, tgtcfg.get(), tgtctx.get(), req_pt.get(), out.str(), logdata.str(), timetaken);
+                    m_pESDLService->handleResultLogging(context, scriptContext, tgtctx.get(), req_pt.get(), soapmsg.str(), origResp.str(), out.str(), logdata.str());
                     context.addTraceSummaryTimeStamp(LogMin, "respLogged");
 
                     return 0;
@@ -2365,7 +2299,11 @@ int EsdlBindingImpl::HandleSoapRequest(CHttpRequest* request,
             getSchemaLocation(*ctx, request, schemaLocation);
 
             ctx->setESDLBindingID(m_bindingId.get());
-            m_pESDLService->handleServiceRequest(*ctx, *srvdef, *mthdef, tgtcfg, tgtctx, ns.str(), schemaLocation.str(), pt, baseout, logdata, 0);
+
+            StringBuffer origResp;
+            StringBuffer soapmsg;
+            Owned<IEsdlScriptContext> scriptContext;
+            m_pESDLService->handleServiceRequest(*ctx, scriptContext, *srvdef, *mthdef, tgtcfg, tgtctx, ns.str(), schemaLocation.str(), pt, baseout, logdata, origResp, soapmsg, 0);
 
             StringBuffer out;
             out.append(
@@ -2386,7 +2324,7 @@ int EsdlBindingImpl::HandleSoapRequest(CHttpRequest* request,
             unsigned timetaken = msTick() - ctx->queryCreationTime();
             ctx->addTraceSummaryTimeStamp(LogMin, "respSent");
 
-             m_pESDLService->esdl_log(*ctx, *srvdef, *mthdef, tgtcfg.get(), tgtctx.get(), pt, baseout.str(), logdata.str(), timetaken);
+            m_pESDLService->handleResultLogging(*ctx, scriptContext, tgtctx.get(), pt, soapmsg.str(), origResp.str(), out.str(), logdata.str());
 
             ESPLOG(LogMax,"EsdlBindingImpl:HandleSoapRequest response: %s", xmlout.str());
         }
@@ -3062,57 +3000,55 @@ void EsdlBindingImpl::handleJSONPost(CHttpRequest *request, CHttpResponse *respo
             DBGLOG("EsdlBinding::%s::%s: JSON request: %s", serviceName, methodName, content.str());
 
         Owned<IPropertyTree> contentTree = createPTreeFromJSONString(content.str());
-        if (contentTree)
-        {
-            StringBuffer requestName;
-            if (stricmp(methodName, "ping") == 0)
-                requestName.append(serviceName);
-            requestName.append(methodName).append("Request");
-
-            Owned<IPropertyTree> reqTree = contentTree->getBranch(requestName.str());
-            if (!reqTree)
-                throw MakeStringException(-1, "EsdlBinding::%s::%s: Could not find \"%s\" section in JSON request", serviceName, methodName, requestName.str());
-
-            if (!m_esdl)
-            {
-                throw MakeStringException(-1, "EsdlBinding::%s: Service definition has not been loaded", serviceName);
-            }
-            else
-            {
-                IEsdlDefService *srvdef = m_esdl->queryService(serviceName);
-
-                if (!srvdef)
-                    throw MakeStringException(-1, "EsdlBinding::%s: Service definition not found", serviceName);
-                else
-                {
-                    IEsdlDefMethod *mthdef = srvdef->queryMethodByName(methodName);
-                    if (!mthdef)
-                        throw MakeStringException(-1, "EsdlBinding::%s::%s: Method definition not found", serviceName, methodName);
-                    else
-                    {
-                        jsonresp.append("{");
-                        StringBuffer logdata; //RODRIGO: What are we doing w/ the logdata?
-
-                        Owned<IPropertyTree> tgtcfg;
-                        Owned<IPropertyTree> tgtctx;
-
-                        StringBuffer ns, schemaLocation;
-                        generateNamespace(*ctx, request, serviceName, methodName, ns);
-                        getSchemaLocation(*ctx, request, schemaLocation);
-
-                        ctx->setESDLBindingID(m_bindingId.get());
-                        m_pESDLService->handleServiceRequest(*ctx, *srvdef, *mthdef, tgtcfg, tgtctx, ns.str(), schemaLocation.str(), reqTree.get(), jsonresp, logdata, ESDL_BINDING_RESPONSE_JSON);
-
-                        jsonresp.append("}");
-                    }
-                }
-            }
-
-            if (getEspLogLevel()>LogNormal)
-                DBGLOG("json response: %s", jsonresp.str());
-        }
-        else
+        if (!contentTree)
             throw MakeStringException(-1, "EsdlBinding::%s::%s: Could not process JSON request", serviceName, methodName);
+
+        StringBuffer requestName;
+        if (stricmp(methodName, "ping") == 0)
+            requestName.append(serviceName);
+        requestName.append(methodName).append("Request");
+
+        Owned<IPropertyTree> reqTree = contentTree->getBranch(requestName.str());
+        if (!reqTree)
+            throw MakeStringException(-1, "EsdlBinding::%s::%s: Could not find \"%s\" section in JSON request", serviceName, methodName, requestName.str());
+
+        if (!m_esdl)
+            throw MakeStringException(-1, "EsdlBinding::%s: Service definition has not been loaded", serviceName);
+        IEsdlDefService *srvdef = m_esdl->queryService(serviceName);
+
+        if (!srvdef)
+            throw MakeStringException(-1, "EsdlBinding::%s: Service definition not found", serviceName);
+        IEsdlDefMethod *mthdef = srvdef->queryMethodByName(methodName);
+        if (!mthdef)
+            throw MakeStringException(-1, "EsdlBinding::%s::%s: Method definition not found", serviceName, methodName);
+        jsonresp.append("{");
+        StringBuffer logdata; //RODRIGO: What are we doing w/ the logdata?
+
+        Owned<IPropertyTree> tgtcfg;
+        Owned<IPropertyTree> tgtctx;
+
+        StringBuffer ns, schemaLocation;
+        generateNamespace(*ctx, request, serviceName, methodName, ns);
+        getSchemaLocation(*ctx, request, schemaLocation);
+
+        ctx->setESDLBindingID(m_bindingId.get());
+        StringBuffer origResp;
+        StringBuffer soapmsg;
+        Owned<IEsdlScriptContext> scriptContext;
+        m_pESDLService->handleServiceRequest(*ctx, scriptContext, *srvdef, *mthdef, tgtcfg, tgtctx, ns.str(), schemaLocation.str(), reqTree.get(), jsonresp, logdata, origResp, soapmsg, ESDL_BINDING_RESPONSE_JSON);
+
+        jsonresp.append("}");
+
+        response->setContent(jsonresp.str());
+        response->setContentType("application/json");
+        response->setStatus("200 OK");
+        response->send();
+
+        m_pESDLService->handleResultLogging(*ctx, scriptContext, tgtctx.get(), reqTree, soapmsg.str(), origResp.str(), jsonresp.str(), logdata.str());
+
+        if (getEspLogLevel()>LogNormal)
+            DBGLOG("json response: %s", jsonresp.str());
+        return;
     }
     catch (IWsException * iwse)
     {
