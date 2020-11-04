@@ -18,6 +18,7 @@
 #include "espcontext.hpp"
 #include "esdl_script.hpp"
 #include "wsexcept.hpp"
+#include "httpclient.hpp"
 
 #include <xpp/XmlPullParser.h>
 using namespace xpp;
@@ -109,9 +110,10 @@ class CEsdlTransformOperationWithChildren : public CEsdlTransformOperationBase
 {
 protected:
     IArrayOf<IEsdlTransformOperation> m_children;
+    bool m_withVariables = false;
 
 public:
-    CEsdlTransformOperationWithChildren(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix, bool withVariables, esdlOperationsFactory_t factory) : CEsdlTransformOperationBase(xpp, stag, prefix)
+    CEsdlTransformOperationWithChildren(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix, bool withVariables, esdlOperationsFactory_t factory) : CEsdlTransformOperationBase(xpp, stag, prefix), m_withVariables(withVariables)
     {
         //load children
         if (factory)
@@ -124,6 +126,10 @@ public:
 
     virtual bool processChildren(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext)
     {
+        if (!m_children.length())
+            return false;
+
+        Owned<CXpathContextScope> scope = m_withVariables ? new CXpathContextScope(xpathContext, m_tagname) : nullptr;
         bool ret = false;
         ForEachItemIn(i, m_children)
         {
@@ -183,9 +189,7 @@ public:
             return xpathContext->addCompiledVariable(m_name, m_select);
         else if (m_children.length())
         {
-            VStringBuffer xpath("/temp/%s", m_name.str());
-
-            CXpathContextScope scope(xpathContext, m_name); //can use temporary variables to organize calculations inside variable body
+            VStringBuffer xpath("/esdl_script_context/temporaries/%s", m_name.str());
             CXpathContextLocation location(targetContext);
 
             targetContext->ensureLocation(xpath, true);
@@ -199,6 +203,233 @@ public:
     {
 #if defined(_DEBUG)
         DBGLOG(">%s> %s with select(%s)", m_name.str(), m_tagname.str(), m_select.get() ? m_select->getXpath() : "");
+#endif
+    }
+};
+
+class CEsdlTransformOperationHttpContentXml : public CEsdlTransformOperationWithChildren
+{
+
+public:
+    CEsdlTransformOperationHttpContentXml(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithChildren(xpp, stag, prefix, true, nullptr)
+    {
+    }
+
+    virtual ~CEsdlTransformOperationHttpContentXml(){}
+
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    {
+        CXpathContextLocation location(targetContext);
+        targetContext->addElementToLocation("content");
+        return processChildren(scriptContext, targetContext, xpathContext);
+    }
+
+    virtual void toDBGLog () override
+    {
+    #if defined(_DEBUG)
+        DBGLOG (">>>>>>>>>>> %s >>>>>>>>>>", m_tagname.str());
+        CEsdlTransformOperationWithChildren::toDBGLog();
+        DBGLOG (">>>>>>>>>>> %s >>>>>>>>>>", m_tagname.str());
+    #endif
+    }
+};
+
+interface IEsdlTransformOperationHttpHeader : public IInterface
+{
+    virtual bool processHeader(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, IProperties *headers) = 0;
+};
+
+
+class CEsdlTransformOperationHttpHeader : public CEsdlTransformOperationWithoutChildren, implements IEsdlTransformOperationHttpHeader
+{
+protected:
+    StringAttr m_name;
+    Owned<ICompiledXpath> m_xpath_name;
+    Owned<ICompiledXpath> m_value;
+
+public:
+    IMPLEMENT_IINTERFACE_USING(CEsdlTransformOperationWithoutChildren)
+
+    CEsdlTransformOperationHttpHeader(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithoutChildren(xpp, stag, prefix)
+    {
+        m_name.set(stag.getValue("name"));
+        const char *xpath_name = stag.getValue("xpath_name");
+        if (m_name.isEmpty() && isEmptyString(xpath_name))
+            esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, m_tagname, "without name or xpath_name", m_traceName, !m_ignoreCodingErrors);
+        if (!isEmptyString(xpath_name))
+            m_xpath_name.setown(compileXpath(xpath_name));
+
+        const char *value = stag.getValue("value");
+        if (isEmptyString(value))
+            esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, m_tagname, "without value", m_traceName, !m_ignoreCodingErrors);
+        m_value.setown(compileXpath(value));
+    }
+
+    virtual ~CEsdlTransformOperationHttpHeader(){}
+
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    {
+        return processHeader(scriptContext, targetContext, xpathContext, nullptr);
+    }
+
+    bool processHeader(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, IProperties *headers) override
+    {
+        CXpathContextLocation location(targetContext);
+        targetContext->addElementToLocation("header");
+        StringBuffer name;
+        if (m_xpath_name)
+            xpathContext->evaluateAsString(m_xpath_name, name);
+        else
+            name.set(m_name);
+
+        StringBuffer value;
+        if (m_value)
+            xpathContext->evaluateAsString(m_value, value);
+        if (name.length() && value.length())
+        {
+            if (headers)
+                headers->setProp(name, value);
+            targetContext->ensureSetValue("@name", name, true);
+            targetContext->ensureSetValue("@value", value, true);
+        }
+        return false;
+    }
+
+    virtual void toDBGLog () override
+    {
+    #if defined(_DEBUG)
+        DBGLOG ("> %s (%s, value(%s)) >>>>>>>>>>", m_tagname.str(), m_xpath_name ? m_xpath_name->getXpath() : m_name.str(), m_value ? m_value->getXpath() : "");
+    #endif
+    }
+};
+
+
+
+class CEsdlTransformOperationHttpPostXml : public CEsdlTransformOperationBase
+{
+protected:
+    StringAttr m_name;
+    StringAttr m_section;
+    Owned<ICompiledXpath> m_url;
+    IArrayOf<IEsdlTransformOperationHttpHeader> m_headers;
+    Owned<IEsdlTransformOperation> m_content;
+
+public:
+    CEsdlTransformOperationHttpPostXml(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationBase(xpp, stag, prefix)
+    {
+        if (m_traceName.isEmpty())
+            m_traceName.set(stag.getValue("name"));
+        m_name.set(stag.getValue("name"));
+        m_section.set(stag.getValue("section"));
+        if (m_section.isEmpty())
+            m_section.set("temporaries");
+        if (m_name.isEmpty())
+            esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, m_tagname, "without name", m_traceName, !m_ignoreCodingErrors);
+        const char *url = stag.getValue("url");
+        if (isEmptyString(url))
+            esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, m_tagname, "without url", m_traceName, !m_ignoreCodingErrors);
+        m_url.setown(compileXpath(url));
+
+        int type = 0;
+        while((type = xpp.next()) != XmlPullParser::END_DOCUMENT)
+        {
+            switch(type)
+            {
+                case XmlPullParser::START_TAG:
+                {
+                    StartTag stag;
+                    xpp.readStartTag(stag);
+                    const char *op = stag.getLocalName();
+                    if (isEmptyString(op))
+                        esdlOperationError(ESDL_SCRIPT_Error, m_tagname, "unknown error", m_traceName, !m_ignoreCodingErrors);
+                    if (streq(op, "http-header"))
+                        m_headers.append(*new CEsdlTransformOperationHttpHeader(xpp, stag, prefix));
+                    else if (streq(op, "content"))
+                        m_content.setown(new CEsdlTransformOperationHttpContentXml(xpp, stag, prefix));
+                    else
+                        xpp.skipSubTree();
+                    break;
+                }
+                case XmlPullParser::END_TAG:
+                case XmlPullParser::END_DOCUMENT:
+                    return;
+            }
+        }
+    }
+
+    virtual ~CEsdlTransformOperationHttpPostXml()
+    {
+    }
+
+    void buildHeaders(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, IProperties *headers)
+    {
+        if (!m_headers.length())
+            return;
+        CXpathContextLocation location(targetContext);
+        targetContext->addElementToLocation("headers");
+        ForEachItemIn(i, m_headers)
+            m_headers.item(i).processHeader(scriptContext, targetContext, xpathContext, headers);
+    }
+
+    void buildRequest(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, const char *url, IProperties *headers)
+    {
+        CXpathContextLocation location(targetContext);
+        targetContext->addElementToLocation("request");
+        targetContext->ensureSetValue("@url", url, true);
+        buildHeaders(scriptContext, targetContext, xpathContext, headers);
+        if (m_content)
+            m_content->process(scriptContext, targetContext, xpathContext);
+    }
+
+    void postRequest(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, const char *url, IProperties *headers)
+    {
+        VStringBuffer xpath("/esdl_script_context/%s/%s/request/content/*[1]", m_section.str(), m_name.str());
+
+        StringBuffer content;
+        xpathContext->toXml(xpath, content);
+        if (!content)
+            return;
+        CXpathContextLocation location(targetContext);
+        targetContext->addElementToLocation("response");
+
+        Owned<IHttpClientContext> httpCtx = getHttpClientContext();
+        Owned<IHttpClient> httpclient = httpCtx->createHttpClient(NULL, url);
+        if (!httpclient)
+            return;
+
+        StringBuffer status;
+        StringBuffer response;
+        httpclient->sendRequest(headers, "POST", "text/xml", content, response, status);
+        targetContext->ensureSetValue("@status", status.str(), true);
+        if (response.trim().length() && *response.str()=='<')
+        {
+            CXpathContextLocation content_location(targetContext);
+            targetContext->addElementToLocation("content");
+            targetContext->addXmlContent(response.str());
+        }
+    }
+
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    {
+        VStringBuffer xpath("/esdl_script_context/%s/%s", m_section.str(), m_name.str());
+        CXpathContextLocation location(targetContext);
+        targetContext->ensureLocation(xpath, true);
+        StringBuffer url;
+        if (m_url)
+            xpathContext->evaluateAsString(m_url, url);
+
+        Owned<IProperties> headers = createProperties();
+        buildRequest(scriptContext, targetContext, xpathContext, url, headers);
+        postRequest(scriptContext, targetContext, xpathContext, url, headers);
+
+        xpathContext->addXpathVariable(m_name, xpath.append("/*"));
+        return false;
+    }
+
+    virtual void toDBGLog() override
+    {
+#if defined(_DEBUG)
+        DBGLOG(">%s> %s with name(%s) url(%s)", m_name.str(), m_tagname.str(), m_name.str(), m_url ? m_url->getXpath() : "url error");
 #endif
     }
 };
@@ -783,7 +1014,6 @@ public:
             return false;
         if (!contexts->first())
             return false;
-        CXpathContextScope scope(xpathContext, "for-each"); //new variables are scoped
         ForEach(*contexts)
             processChildren(scriptContext, targetContext, &contexts->query());
         return true;
@@ -857,7 +1087,6 @@ public:
     {
         if (!evaluate(xpathContext))
             return false;
-        CXpathContextScope scope(xpathContext, m_tagname); //child variables are scoped
         processChildren(scriptContext, targetContext, xpathContext);
         return true; //just means that evaluation succeeded and attempted to process children
     }
@@ -945,10 +1174,14 @@ public:
 
     virtual bool processChildren(IEsdlScriptContext * scriptContext, IXpathContext *targetContext, IXpathContext * xpathContext) override
     {
-        ForEachItemIn(i, m_children)
+        if (m_children.length())
         {
-            if (m_children.item(i).process(scriptContext, targetContext, xpathContext))
-                return true;
+            CXpathContextScope scope(xpathContext, "choose");
+            ForEachItemIn(i, m_children)
+            {
+                if (m_children.item(i).process(scriptContext, targetContext, xpathContext))
+                    return true;
+            }
         }
         return false;
     }
@@ -971,7 +1204,7 @@ protected:
     bool m_ensure = false;
 
 public:
-    CEsdlTransformOperationTarget(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithChildren(xpp, stag, prefix, false, nullptr)
+    CEsdlTransformOperationTarget(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithChildren(xpp, stag, prefix, true, nullptr)
     {
         const char *xpath = stag.getValue("xpath");
         if (isEmptyString(xpath))
@@ -1085,7 +1318,7 @@ protected:
     StringBuffer m_nsuri;
 
 public:
-    CEsdlTransformOperationElement(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithChildren(xpp, stag, prefix, false, nullptr)
+    CEsdlTransformOperationElement(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithChildren(xpp, stag, prefix, true, nullptr)
     {
         m_name.set(stag.getValue("name"));
         if (m_name.isEmpty())
@@ -1194,6 +1427,10 @@ IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const 
         return new CEsdlTransformOperationElement(xpp, stag, prefix);
     if (streq(op, "copy-of"))
         return new CEsdlTransformOperationCopyOf(xpp, stag, prefix);
+    if (streq(op, "namespace"))
+        return new CEsdlTransformOperationNamespace(xpp, stag, prefix);
+    if (streq(op, "http-post-xml"))
+        return new CEsdlTransformOperationHttpPostXml(xpp, stag, prefix);
     return nullptr;
 }
 

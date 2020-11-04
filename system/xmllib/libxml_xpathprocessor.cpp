@@ -135,9 +135,10 @@ class CLibXpathScope
 public:
     StringAttr name; //in future allow named parent access?
     XPathObjectMap variables;
+    bool ceiling = false; //calling a template is a whole new context and creates a ceiling.  want to use explictly passed params not globals
 
 public:
-    CLibXpathScope(const char *_name) : name(_name){}
+    CLibXpathScope(const char *_name, bool _ceiling) : name(_name), ceiling(_ceiling){}
     ~CLibXpathScope()
     {
         for (XPathObjectMap::iterator it=variables.begin(); it!=variables.end(); ++it)
@@ -162,6 +163,11 @@ public:
         if (it == variables.end())
             return nullptr;
         return it->second;
+    }
+
+    bool isCeiling()
+    {
+        return ceiling;
     }
 };
 
@@ -282,7 +288,7 @@ public:
     void beginScope(const char *name) override
     {
         WriteLockBlock wblock(m_rwlock);
-        scopes.emplace_back(new CLibXpathScope(name));
+        scopes.emplace_back(new CLibXpathScope(name, false));
     }
 
     void endScope() override
@@ -373,7 +379,7 @@ public:
         if (scope)
             return scope->getObject(fullname);
 
-        for (XPathScopeVector::const_reverse_iterator it=scopes.crbegin(); !obj && it!=scopes.crend(); ++it)
+        for (XPathScopeVector::const_reverse_iterator it=scopes.crbegin(); !obj && it!=scopes.crend() && !it->get()->isCeiling(); ++it)
             obj = it->get()->getObject(fullname);
 
         //check libxml2 level variables, shouldn't happen currently but we may want to wrap existing xpathcontexts in the future
@@ -464,6 +470,21 @@ public:
         setLocation(location);
     }
 
+    virtual void addXmlContent(const char *xml) override
+    {
+        xmlNodePtr location = m_xpathContext->node;
+        xmlParserCtxtPtr parserCtx = xmlCreateDocParserCtxt((const xmlChar *)xml);
+        if (!parserCtx)
+            throw MakeStringException(-1, "CEsdlTransformOperationHttpPostXml:postRequest: Unable to parse response");
+        parserCtx->node = location;
+        xmlParseDocument(parserCtx);
+        int wellFormed = parserCtx->wellFormed;
+        xmlFreeDoc(parserCtx->myDoc); //dummy document
+        xmlFreeParserCtxt(parserCtx);
+        if (!wellFormed)
+            throw MakeStringException(-1, "XpathContext:addXmlContent: Unable to parse %s XML content", xml);
+
+    }
     virtual bool ensureLocation(const char *xpath, bool required) override
     {
         if (isEmptyString(xpath))
@@ -475,8 +496,11 @@ public:
         xmlNodePtr node = current;
         if (*xpath=='/')
         {
-            node = xmlDocGetRootElement(m_xmlDoc); //valuable, but very dangerous
             xpath++;
+            if (strncmp(xpath, "esdl_script_context/", 20)!=0)
+                throw MakeStringException(XPATHERR_InvalidState,"XpathContext:ensureLocation: incorect first absolute path node '%s'", xpath);
+            xpath+=20;
+            node = xmlDocGetRootElement(m_xmlDoc);
         }
 
         StringArray xpathnodes;
@@ -900,6 +924,26 @@ public:
         if (!xpath || !*xpath)
             throw MakeStringException(XPATHERR_MissingInput,"XpathProcessor:evaluateAsBoolean: Error: Could not evaluate empty XPATH");
         return evaluateAsBoolean(evaluate(xpath), xpath);
+    }
+
+    virtual StringBuffer &toXml(const char *xpath, StringBuffer & xml) override
+    {
+        xmlXPathObjectPtr obj = evaluate(xpath);
+        if (!obj || !obj->type==XPATH_NODESET || !obj->nodesetval || !obj->nodesetval->nodeTab || obj->nodesetval->nodeNr!=1)
+            return xml;
+        xmlNodePtr node = obj->nodesetval->nodeTab[0];
+        if (!node)
+            return xml;
+
+        xmlOutputBufferPtr xmlOut = xmlAllocOutputBuffer(nullptr);
+        xmlNodeDumpOutput(xmlOut, node->doc, node, 0, 1, nullptr);
+        xmlOutputBufferFlush(xmlOut);
+        xmlBufPtr buf = (xmlOut->conv != nullptr) ? xmlOut->conv : xmlOut->buffer;
+        if (xmlBufUse(buf))
+            xml.append(xmlBufUse(buf), (const char *)xmlBufContent(buf));
+        xmlOutputBufferClose(xmlOut);
+        xmlXPathFreeObject(obj);
+        return xml;
     }
 
     virtual bool evaluateAsString(const char * xpath, StringBuffer & evaluated) override
@@ -1550,6 +1594,30 @@ private:
         xmlFree(val);
         return s;
     }
+    virtual bool tokenize(const char *str, const char *delimeters, StringBuffer &resultPath)
+    {
+        xmlNodePtr sect = ensureSection("temporaries");
+        if (!sect)
+            return false;
+
+        StringBuffer unique("T");
+        appendGloballyUniqueId(unique);
+        xmlNodePtr container = xmlNewChild(sect, nullptr, (const xmlChar *) unique.str(), nullptr);
+        if (!container)
+            return false;
+
+        resultPath.set("/esdl_script_context/temporaries/").append(unique.str()).append("/token");
+
+        StringArray tkns;
+        tkns.appendList(str, delimeters);
+        ForEachItemIn(i, tkns)
+        {
+            const char *tkn = tkns.item(i);
+            xmlNewChild(container, nullptr, (const xmlChar *) "token", (const xmlChar *) tkn);
+        }
+        return true;
+    }
+
 
     virtual void toXML(StringBuffer &xml, const char *section, bool includeParentNode=false) override
     {
@@ -1568,7 +1636,6 @@ private:
         if (xmlBufUse(buf))
             xml.append(xmlBufUse(buf), (const char *)xmlBufContent(buf));
         xmlOutputBufferClose(xmlOut);
-
     }
     virtual IPropertyTree *createPTreeFromSection(const char *section) override
     {

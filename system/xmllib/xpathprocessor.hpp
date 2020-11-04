@@ -73,6 +73,8 @@ interface XMLLIB_API IXpathContext : public IInterface
     virtual const char * evaluateAsString(ICompiledXpath * compiledXpath, StringBuffer & evaluated) = 0;
     virtual double evaluateAsNumber(ICompiledXpath * compiledXpath) = 0;
     virtual  IXpathContextIterator *evaluateAsNodeSet(ICompiledXpath * compiledXpath) = 0;
+    virtual StringBuffer &toXml(const char *xpath, StringBuffer & xml) = 0;
+    virtual void addXmlContent(const char *xml) = 0;
 };
 
 interface IXpathContextIterator : extends IIteratorOf<IXpathContext> { };
@@ -138,6 +140,7 @@ interface IEsdlScriptContext : extends IInterface
     virtual void *queryEspContext() = 0;
     virtual void setContent(const char *section, const char *xml) = 0;
     virtual void setContent(const char *section, IPropertyTree *tree) = 0;
+    virtual bool tokenize(const char *str, const char *delimeters, StringBuffer &resultPath) = 0;
     virtual void setAttribute(const char *section, const char *name, const char *value) = 0;
     virtual const char *queryAttribute(const char *section, const char *name) = 0;
     virtual const char *getAttribute(const char *section, const char *name, StringBuffer &s) = 0;

@@ -269,7 +269,7 @@ static const char *target_config = "<method queryname='EchoPersonInfo'/>";
 class ESDLTests : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE( ESDLTests );
-        CPPUNIT_TEST(testEsdlTransformScript);
+       /* CPPUNIT_TEST(testEsdlTransformScript);
         CPPUNIT_TEST(testEsdlTransformScriptNoPrefix);
         CPPUNIT_TEST(testEsdlTransformForEach);
         CPPUNIT_TEST(testEsdlTransformVarScope);
@@ -291,7 +291,8 @@ class ESDLTests : public CppUnit::TestFixture
         CPPUNIT_TEST(testEsdlTransformImplicitPrefix);
         CPPUNIT_TEST(testEsdlTransformRequestNamespaces);
         CPPUNIT_TEST(testScriptContext);
-        CPPUNIT_TEST(testTargetElement);
+        CPPUNIT_TEST(testTargetElement); */
+        CPPUNIT_TEST(testHTTPPostXml);
     CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -1581,8 +1582,12 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
             <es:source xpath="Person">
               <es:ensure-target xpath='How/Did/We/Get'>
                  <es:element name='Here'>
+                    <es:variable name="tkns" select="es:tokenize('aaa,bbb;ccc+yyy', ',;+')"/>
                     <es:set-value target="@whoknows" select="$value"/>
                     <es:set-value target="IDontKnow" select="$value"/>
+                    <es:element name="CopyTokens">
+                      <es:copy-of select="$tkns"/>
+                    </es:element>
                     <es:element name="CopyFields">
                       <es:for-each select="FullName/*">
                           <es:element name="CopyField">
@@ -1630,6 +1635,12 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
           <Get>
             <Here whoknows="abc">
               <IDontKnow>abc</IDontKnow>
+              <CopyTokens>
+                <token>aaa</token>
+                <token>bbb</token>
+                <token>ccc</token>
+                <token>yyy</token>
+              </CopyTokens>
               <CopyFields>
                 <CopyField>
                   <First>Joe</First>
@@ -1681,6 +1692,85 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
         }
     }
 
+    void testHTTPPostXml()
+    {
+        static constexpr const char * input = R"!!(<?xml version="1.0" encoding="UTF-8"?>
+         <root>
+            <Person>
+               <FullName>
+                  <First>Joe</First>
+                  <ID>GI101</ID>
+                  <ID>GI102</ID>
+               </FullName>
+            </Person>
+          </root>
+        )!!";
+
+        static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
+            <es:variable name='value' select="'abc'"/>
+            <es:http-post-xml url="'http://127.0.0.1:9876'" section="logging" name="roxiestuff">
+              <es:content>
+                <es:element name="Envelope">
+                  <es:namespace prefix="soap" uri="http://schemas.xmlsoap.org/soap/envelope/" current="true" />
+                  <es:element name="Body">
+                    <es:element name="roxieechopersoninfo2Request">
+                      <es:namespace uri="urn:hpccsystems:ecl:roxieechopersoninfo" current="true" />
+                      <es:element name="roxieechopersoninfo2request">
+                        <es:element name="Row">
+                          <es:element name="Name">
+                            <es:set-value target="First" value="'aaa'"/>
+                            <es:set-value target="Last" value="'bbb'"/>
+                            <es:element name="Aliases">
+                              <es:set-value target="Alias" value="'ccc'"/>
+                              <es:set-value target="Alias" value="'ddd'"/>
+                            </es:element>
+                          </es:element>
+                        </es:element>
+                      </es:element>
+                    </es:element>
+                  </es:element>
+                </es:element>
+              </es:content>
+            </es:http-post-xml>
+            <es:element name="HttpPostStuff">
+              <es:copy-of select="$roxiestuff"/>
+            </es:element>
+        </es:CustomRequestTransform>
+        )!!";
+
+        constexpr const char *config1 = R"!!(<config>
+          <Transform>
+            <Param name='testcase' value="new features"/>
+          </Transform>
+        </config>)!!";
+
+            constexpr const char * result = R"!!(<root>
+</root>)!!";
+
+
+        try {
+
+            Owned<IEspContext> ctx = createEspContext(nullptr);
+            Owned<IEsdlScriptContext> scriptContext = createTestScriptContext(ctx, input, config1);
+            runTransform(scriptContext, script, ESDLScriptCtxSection_ESDLRequest, "FirstPass", "http post xml", 0);
+
+            StringBuffer output;
+            scriptContext->toXML(output);//, "FirstPass");
+            if (result && !areEquivalentTestXMLStrings(result, output.str()))
+            {
+                fputs(output.str(), stdout);
+                fflush(stdout);
+                throw MakeStringException(100, "Test failed(%s)", "http post xml");
+            }
+        }
+        catch (IException *E)
+        {
+            StringBuffer m;
+            fprintf(stdout, "\nTest(%s) Exception %d - %s\n", "http post xml", E->errorCode(), E->errorMessage(m).str());
+            E->Release();
+            CPPUNIT_ASSERT(false);
+        }
+    }
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION( ESDLTests );
