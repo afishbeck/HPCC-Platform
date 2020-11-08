@@ -292,7 +292,8 @@ class ESDLTests : public CppUnit::TestFixture
         CPPUNIT_TEST(testEsdlTransformRequestNamespaces);
         CPPUNIT_TEST(testScriptContext);
         CPPUNIT_TEST(testTargetElement); */
-        CPPUNIT_TEST(testHTTPPostXml);
+//        CPPUNIT_TEST(testHTTPPostXml);
+        CPPUNIT_TEST(testTemplate);
     CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -1767,6 +1768,71 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
         {
             StringBuffer m;
             fprintf(stdout, "\nTest(%s) Exception %d - %s\n", "http post xml", E->errorCode(), E->errorMessage(m).str());
+            E->Release();
+            CPPUNIT_ASSERT(false);
+        }
+    }
+
+    void testTemplate()
+    {
+        static constexpr const char * input = R"!!(<?xml version="1.0" encoding="UTF-8"?>
+         <root>
+            <Person>
+               <FullName>
+                  <First>Joe</First>
+                  <ID>GI101</ID>
+                  <ID>GI102</ID>
+               </FullName>
+            </Person>
+          </root>
+        )!!";
+
+        static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
+            <es:variable name='FirstName' select="'Joe'"/>
+            <es:template name='mytemplate'>
+              <es:param name='FN' select="'John'"/>
+              <es:element name="element1">
+                <es:set-value target="FirstNM" value="$FN"/>
+              </es:element>
+            </es:template>
+            <es:call-template name="mytemplate">
+              <es:with-parameter name="FN" select="'Jerry'"/>
+            </es:call-template>
+            <es:call-template name="mytemplate">
+              <es:with-parameter name="FN" select="'Julie'"/>
+            </es:call-template>
+        </es:CustomRequestTransform>
+        )!!";
+
+        constexpr const char *config1 = R"!!(<config>
+          <Transform>
+            <Param name='testcase' value="new features"/>
+          </Transform>
+        </config>)!!";
+
+            constexpr const char * result = R"!!(<root>
+</root>)!!";
+
+
+        try {
+
+            Owned<IEspContext> ctx = createEspContext(nullptr);
+            Owned<IEsdlScriptContext> scriptContext = createTestScriptContext(ctx, input, config1);
+            runTransform(scriptContext, script, ESDLScriptCtxSection_ESDLRequest, "FirstPass", "http post xml", 0);
+
+            StringBuffer output;
+            scriptContext->toXML(output);//, "FirstPass");
+            if (result && !areEquivalentTestXMLStrings(result, output.str()))
+            {
+                fputs(output.str(), stdout);
+                fflush(stdout);
+                throw MakeStringException(100, "Test failed(%s)", "template");
+            }
+        }
+        catch (IException *E)
+        {
+            StringBuffer m;
+            fprintf(stdout, "\nTest(%s) Exception %d - %s\n", "template", E->errorCode(), E->errorMessage(m).str());
             E->Release();
             CPPUNIT_ASSERT(false);
         }

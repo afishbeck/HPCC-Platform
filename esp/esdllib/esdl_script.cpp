@@ -30,7 +30,9 @@ interface IEsdlTransformOperation : public IInterface
     virtual void toDBGLog() = 0;
 };
 
-IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables);
+typedef MapStringToMyClass<IEsdlTransformOperation> transformTemplateMap;
+
+IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, transformTemplateMap *templates);
 void createEsdlTransformOperations(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables);
 void createEsdlTransformChooseOperations(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables);
 typedef void (*esdlOperationsFactory_t)(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables);
@@ -129,7 +131,7 @@ public:
         if (!m_children.length())
             return false;
 
-        Owned<CXpathContextScope> scope = m_withVariables ? new CXpathContextScope(xpathContext, m_tagname) : nullptr;
+        Owned<CXpathContextScope> scope = m_withVariables ? new CXpathContextScope(xpathContext, m_tagname, nullptr, nullptr) : nullptr;
         bool ret = false;
         ForEachItemIn(i, m_children)
         {
@@ -430,6 +432,170 @@ public:
     {
 #if defined(_DEBUG)
         DBGLOG(">%s> %s with name(%s) url(%s)", m_name.str(), m_tagname.str(), m_name.str(), m_url ? m_url->getXpath() : "url error");
+#endif
+    }
+};
+
+interface IEsdlTransformOperationWithParameter : public IInterface
+{
+    virtual bool processWithParameter(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, ICXpathMap *inputs) = 0;
+};
+
+class CEsdlTransformOperationTemplate : public CEsdlTransformOperationWithChildren
+{
+protected:
+    StringAttr m_name;
+
+public:
+    CEsdlTransformOperationTemplate(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithChildren(xpp, stag, prefix, true, nullptr)
+    {
+        m_name.set(stag.getValue("name"));
+        if (m_name.isEmpty())
+            esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, "template", "without name parameter", m_traceName.str(), !m_ignoreCodingErrors);
+    }
+
+    virtual ~CEsdlTransformOperationTemplate(){}
+
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    {
+        return processChildren(scriptContext, targetContext, xpathContext);
+    }
+
+    virtual void toDBGLog () override
+    {
+    #if defined(_DEBUG)
+        DBGLOG(">>>%s> %s(%s)>>>>", m_traceName.str(), m_tagname.str(), m_name.str());
+        CEsdlTransformOperationWithChildren::toDBGLog();
+        DBGLOG (">>>>>>>>>>> %s >>>>>>>>>>", m_tagname.str());
+    #endif
+    }
+    const char *queryName()
+    {
+        return m_name.str();
+    }
+};
+
+
+class CEsdlTransformOperationWithParameter : public CEsdlTransformOperationWithoutChildren, implements IEsdlTransformOperationWithParameter
+{
+protected:
+    StringAttr m_name;
+    Owned<ICompiledXpath> m_select;
+
+public:
+    IMPLEMENT_IINTERFACE_USING(CEsdlTransformOperationWithoutChildren)
+
+    CEsdlTransformOperationWithParameter(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithoutChildren(xpp, stag, prefix)
+    {
+        m_name.set(stag.getValue("name"));
+        const char *select = stag.getValue("select");
+        if (m_name.isEmpty())
+            esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, m_tagname, "without name", m_traceName, !m_ignoreCodingErrors);
+        if (isEmptyString(select))
+            esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, m_tagname, "without select", m_traceName, !m_ignoreCodingErrors);
+        m_select.setown(compileXpath(select));
+    }
+
+    virtual ~CEsdlTransformOperationWithParameter(){}
+
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    {
+        return processWithParameter(scriptContext, targetContext, xpathContext, nullptr);
+    }
+
+    virtual bool processWithParameter(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, ICXpathMap *inputs) override
+    {
+        inputs->setValue(m_name.str(), m_select.getLink());
+        return false;
+    }
+
+    virtual void toDBGLog () override
+    {
+    #if defined(_DEBUG)
+        DBGLOG ("> %s (%s, value(%s)) >>>>>>>>>>", m_tagname.str(), m_name.str(), m_select ? m_select->getXpath() : "");
+    #endif
+    }
+};
+
+class CXpathParameterInputResolver : public CInterfaceOf<IXpathParameterInputResolver>
+{
+protected:
+    ICXpathMap &m_inputs;
+
+public:
+    CXpathParameterInputResolver(ICXpathMap &mapInputs) : m_inputs(mapInputs) {}
+    virtual ICompiledXpath *findInput(const char *name) override
+    {
+        return m_inputs.getValue(name);
+    }
+};
+
+class CEsdlTransformOperationCallTemplate : public CEsdlTransformOperationBase
+{
+protected:
+    StringAttr m_name;
+    IArrayOf<IEsdlTransformOperationWithParameter> m_with_parameters;
+
+public:
+    CEsdlTransformOperationCallTemplate(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationBase(xpp, stag, prefix)
+    {
+        if (m_traceName.isEmpty())
+            m_traceName.set(stag.getValue("name"));
+        m_name.set(stag.getValue("name"));
+
+        int type = 0;
+        while((type = xpp.next()) != XmlPullParser::END_DOCUMENT)
+        {
+            switch(type)
+            {
+                case XmlPullParser::START_TAG:
+                {
+                    StartTag stag;
+                    xpp.readStartTag(stag);
+                    const char *op = stag.getLocalName();
+                    if (isEmptyString(op))
+                        esdlOperationError(ESDL_SCRIPT_Error, m_tagname, "unknown error", m_traceName, !m_ignoreCodingErrors);
+                    if (streq(op, "with-parameter"))
+                        m_with_parameters.append(*new CEsdlTransformOperationWithParameter(xpp, stag, prefix));
+                    else
+                        xpp.skipSubTree();
+                    break;
+                }
+                case XmlPullParser::END_TAG:
+                case XmlPullParser::END_DOCUMENT:
+                    return;
+            }
+        }
+    }
+
+    virtual ~CEsdlTransformOperationCallTemplate()
+    {
+    }
+
+    void processWithParameterInputs(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, ICXpathMap *inputs)
+    {
+        if (!inputs)
+            return;
+        ForEachItemIn(i, m_with_parameters)
+            m_with_parameters.item(i).processWithParameter(scriptContext, targetContext, xpathContext, inputs);
+    }
+
+    
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    {
+        ICXpathMap mapInputs;
+        processWithParameterInputs(scriptContext, targetContext, xpathContext, &mapInputs);
+
+        CXpathParameterInputResolver inputResolver(mapInputs);
+        IEsdlTemplateResolver *templateResolver = scriptContext->queryTemplateResolver();
+        templateResolver->processTemplate(m_name.str(), scriptContext, targetContext, xpathContext, &inputResolver);
+        return false;
+    }
+
+    virtual void toDBGLog() override
+    {
+#if defined(_DEBUG)
+        DBGLOG(">%s> %s with name(%s)", m_name.str(), m_tagname.str(), m_name.str());
 #endif
     }
 };
@@ -1145,6 +1311,8 @@ void loadChooseChildren(IArrayOf<IEsdlTransformOperation> &operations, XmlPullPa
                     operations.append(*new CEsdlTransformOperationConditional(xpp, opTag, prefix));
                 else if (streq(op, "otherwise"))
                     otherwise.setown(new CEsdlTransformOperationConditional(xpp, opTag, prefix));
+                else
+                    xpp.skipSubTree();
                 break;
             }
             case XmlPullParser::END_TAG:
@@ -1176,7 +1344,7 @@ public:
     {
         if (m_children.length())
         {
-            CXpathContextScope scope(xpathContext, "choose");
+            CXpathContextScope scope(xpathContext, "choose", nullptr, nullptr);
             ForEachItemIn(i, m_children)
             {
                 if (m_children.item(i).process(scriptContext, targetContext, xpathContext))
@@ -1360,7 +1528,7 @@ void createEsdlTransformOperations(IArrayOf<IEsdlTransformOperation> &operations
         {
             case XmlPullParser::START_TAG:
             {
-                Owned<IEsdlTransformOperation> operation = createEsdlTransformOperation(xpp, prefix, withVariables);
+                Owned<IEsdlTransformOperation> operation = createEsdlTransformOperation(xpp, prefix, withVariables, nullptr);
                 if (operation)
                     operations.append(*operation.getClear());
                 break;
@@ -1373,13 +1541,25 @@ void createEsdlTransformOperations(IArrayOf<IEsdlTransformOperation> &operations
     }
 }
 
-IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables)
+IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, transformTemplateMap *templates)
 {
     StartTag stag;
     xpp.readStartTag(stag);
     const char *op = stag.getLocalName();
     if (isEmptyString(op))
         return nullptr;
+    if (streq(op, "template"))
+    {
+        if (templates)
+        {
+            Owned<CEsdlTransformOperationTemplate> templ = new CEsdlTransformOperationTemplate(xpp, stag, prefix);
+            const char *name = templ->queryName();
+            templates->setValue(name, templ.getClear());
+        }
+        else
+            xpp.skipSubTree();
+        return nullptr;
+    }
     if (withVariables)
     {
         if (streq(op, "variable"))
@@ -1431,6 +1611,11 @@ IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const 
         return new CEsdlTransformOperationNamespace(xpp, stag, prefix);
     if (streq(op, "http-post-xml"))
         return new CEsdlTransformOperationHttpPostXml(xpp, stag, prefix);
+    if (streq(op, "template"))
+        return new CEsdlTransformOperationTemplate(xpp, stag, prefix);
+    if (streq(op, "call-template"))
+        return new CEsdlTransformOperationCallTemplate(xpp, stag, prefix);
+    xpp.skipSubTree();
     return nullptr;
 }
 
@@ -1445,10 +1630,38 @@ static inline void replaceVariable(StringBuffer &s, IXpathContext *xpathContext,
     }
 }
 
+class CEsdlTemplateResolver : public CInterfaceOf<IEsdlTemplateResolver>
+{
+protected:
+    transformTemplateMap &m_templates;
+
+public:
+    CEsdlTemplateResolver(transformTemplateMap &templates) : m_templates(templates)
+    {
+    }
+
+    bool processTemplate(const char *name, IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, IXpathParameterInputResolver *inputResolver) override
+    {
+        if (!inputResolver)
+            return false;
+        IEsdlTransformOperation *tfo = m_templates.getValue(name);
+        if (tfo)
+        {
+            CXpathContextScope scope(xpathContext, "transform", nullptr, inputResolver);
+
+            tfo->process(scriptContext, targetContext, xpathContext);
+            return true;
+        }
+        return false;
+    }
+};
+
 class CEsdlCustomTransform : public CInterfaceOf<IEsdlCustomTransform>
 {
 private:
     IArrayOf<IEsdlTransformOperation> m_operations;
+    transformTemplateMap m_templates;
+    Owned<CEsdlTemplateResolver> m_template_resolver = new CEsdlTemplateResolver(m_templates);
     Owned<IProperties> namespaces = createProperties(false);
     StringAttr m_name;
     StringAttr m_target;
@@ -1459,6 +1672,7 @@ public:
 
     CEsdlCustomTransform(XmlPullParser &xpp, StartTag &stag, const char *ns_prefix) : m_prefix(ns_prefix)
     {
+
         const char *tag = stag.getLocalName();
 
         m_name.set(stag.getValue("name"));
@@ -1481,7 +1695,7 @@ public:
             {
                 case XmlPullParser::START_TAG:
                 {
-                    Owned<IEsdlTransformOperation> operation = createEsdlTransformOperation(xpp, m_prefix, true);
+                    Owned<IEsdlTransformOperation> operation = createEsdlTransformOperation(xpp, m_prefix, true, &m_templates);
                     if (operation)
                         m_operations.append(*operation.getClear());
                     break;
@@ -1526,9 +1740,10 @@ public:
             savedNamespaces->setProp(prefix, isEmptyString(existing) ? "" : existing);
             xpathContext->registerNamespace(prefix, namespaces->queryProp(prefix));
         }
-        CXpathContextScope scope(xpathContext, "transform", savedNamespaces);
+        CXpathContextScope scope(xpathContext, "transform", savedNamespaces, nullptr);
         if (m_target.length())
             target = m_target.str();
+        scriptContext->registerTemplateResolver(m_template_resolver);
         Owned<IXpathContext> targetXpath = scriptContext->getCopiedSectionXpathContext(xpathContext, tgtSection, srcSection, true);
         targetXpath->setLocation(target, true);
         ForEachItemIn(i, m_operations)
@@ -1536,6 +1751,7 @@ public:
     }
 
     void processTransform(IEsdlScriptContext * scriptCtx, const char *srcSection, const char *tgtSection) override;
+
 };
 
 class CEsdlCustomTransformWrapper : public CInterfaceOf<IEsdlTransformSet>

@@ -20,11 +20,19 @@
 
 #include "xmllib.hpp"
 #include "jliball.hpp"
+#include <map>
 
 interface XMLLIB_API ICompiledXpath : public IInterface
 {
     virtual const char * getXpath() = 0;
     virtual void extractReferences(StringArray &functions, StringArray &variables) = 0;
+};
+
+typedef MapStringToMyClass<ICompiledXpath> ICXpathMap;
+
+interface XMLLIB_API IXpathParameterInputResolver : public IInterface
+{
+    virtual ICompiledXpath *findInput(const char *name) = 0;
 };
 
 interface IXpathContextIterator;
@@ -39,7 +47,7 @@ interface XMLLIB_API IXpathContext : public IInterface
     virtual void registerNamespace(const char *prefix, const char *uri) = 0;
     virtual const char *queryNamespace(const char *prefix) = 0;
 
-    virtual void beginScope(const char *name) = 0;
+    virtual void beginScope(const char *name, IXpathParameterInputResolver *inputResolver) = 0;
     virtual void endScope() = 0;
 
     virtual bool addVariable(const char * name, const char * val) = 0;
@@ -86,9 +94,9 @@ private:
     Linked<IProperties> namespaces;
 public:
     IMPLEMENT_IINTERFACE;
-    CXpathContextScope(IXpathContext *ctx, const char *name, IProperties *ns=nullptr) : context(ctx), namespaces(ns)
+    CXpathContextScope(IXpathContext *ctx, const char *name, IProperties *ns, IXpathParameterInputResolver *inputResolver) : context(ctx), namespaces(ns)
     {
-        context->beginScope(name);
+        context->beginScope(name, inputResolver);
     }
     virtual ~CXpathContextScope()
     {
@@ -133,6 +141,8 @@ extern "C" XMLLIB_API IXpathContext*  getXpathContext(const char * xmldoc, bool 
 #define ESDLScriptCtxSection_ESDLRequest "ESDLRequest"
 #define ESDLScriptCtxSection_FinalRequest "FinalRequest"
 
+interface IEsdlTemplateResolver;
+
 interface IEsdlScriptContext : extends IInterface
 {
     virtual IXpathContext* createXpathContext(IXpathContext *parent, const char *section, bool strictParameterDeclaration) = 0;
@@ -150,8 +160,16 @@ interface IEsdlScriptContext : extends IInterface
     virtual void toXML(StringBuffer &xml, const char *section, bool includeParentNode=false) = 0;
     virtual void toXML(StringBuffer &xml) = 0;
     virtual IPropertyTree *createPTreeFromSection(const char *section) = 0;
+    virtual void registerTemplateResolver(IEsdlTemplateResolver *tmpl) = 0;
+    virtual IEsdlTemplateResolver *queryTemplateResolver() = 0;
 };
 
 extern "C" XMLLIB_API IEsdlScriptContext *createEsdlScriptContext(void * espContext);
+
+interface IEsdlTemplateResolver : public IInterface
+{
+    virtual bool processTemplate(const char *name, IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, IXpathParameterInputResolver *templateResolver) = 0;
+};
+
 
 #endif /* XPATH_MANAGER_HPP_ */

@@ -135,10 +135,12 @@ class CLibXpathScope
 public:
     StringAttr name; //in future allow named parent access?
     XPathObjectMap variables;
-    bool ceiling = false; //calling a template is a whole new context and creates a ceiling.  want to use explictly passed params not globals
+    Linked<IXpathParameterInputResolver> inputResolver;
 
 public:
-    CLibXpathScope(const char *_name, bool _ceiling) : name(_name), ceiling(_ceiling){}
+    CLibXpathScope(const char *_name, IXpathParameterInputResolver* resolver) : name(_name), inputResolver(resolver)
+    {
+    }
     ~CLibXpathScope()
     {
         for (XPathObjectMap::iterator it=variables.begin(); it!=variables.end(); ++it)
@@ -167,12 +169,19 @@ public:
 
     bool isCeiling()
     {
-        return ceiling;
+        return (inputResolver.get()!=nullptr);
     }
+
+    ICompiledXpath *findInput(const char *name)
+    {
+        if (inputResolver)
+            return inputResolver->findInput(name);
+        return nullptr;
+    }
+
 };
 
 typedef std::vector<std::unique_ptr<CLibXpathScope>> XPathScopeVector;
-typedef std::map<std::string, ICompiledXpath*> XPathInputMap;
 
 class XpathContextState
 {
@@ -199,7 +208,28 @@ public:
     }
 };
 
+class CLiftScopeCeiling
+{
+private:
+    XPathScopeVector &scopes;
+    std::unique_ptr<CLibXpathScope> scope;
+public:
+    CLiftScopeCeiling(XPathScopeVector &_scopes) : scopes(_scopes)
+    {
+        if (scopes.size())
+        {
+            scope.reset(scopes.back().release());
+            scopes.pop_back();
+        }
+    }
+    ~CLiftScopeCeiling()
+    {
+        scopes.emplace_back(scope.release());
+    }
+};
+
 typedef std::vector<XpathContextState> XPathContextStateVector;
+typedef std::map<std::string, ICompiledXpath*> XPathInputMap;
 
 class CLibXpathContext : public CInterfaceOf<IXpathContext>, implements IVariableSubstitutionHelper
 {
@@ -224,7 +254,7 @@ public:
     CLibXpathContext(const char * xmldoc, bool _strictParameterDeclaration, bool removeDocNs) : strictParameterDeclaration(_strictParameterDeclaration), removeDocNamespaces(removeDocNs)
     {
         xmlKeepBlanksDefault(0);
-        beginScope("/");
+        beginScope("/", nullptr);
         setXmlDoc(xmldoc);
         registerExslt();
     }
@@ -233,7 +263,7 @@ public:
     {
         xmlKeepBlanksDefault(0);
         parent.set(_parent);
-        beginScope("/");
+        beginScope("/", nullptr);
         setContextDocument(doc, node);
         registerExslt();
     }
@@ -285,10 +315,11 @@ public:
         saved.pop_back();
     }
 
-    void beginScope(const char *name) override
+    void beginScope(const char *name, IXpathParameterInputResolver *inputResolver) override
     {
         WriteLockBlock wblock(m_rwlock);
-        scopes.emplace_back(new CLibXpathScope(name, false));
+        CLibXpathScope *x = new CLibXpathScope(name, inputResolver);
+        scopes.emplace_back(x);
     }
 
     void endScope() override
@@ -844,16 +875,35 @@ public:
             return nullptr;
          return it->second;
     }
-
+    bool checkDeclaredParameterInput(const char *name)
+    {
+        CLibXpathScope *currentScope = getCurrentScope();
+        if (hasVariable(name, nullptr, currentScope))
+            return true;
+        ICompiledXpath *inputxp = nullptr;
+        if (currentScope && currentScope->isCeiling())
+        {
+            inputxp = currentScope->findInput(name);
+            if (inputxp)
+            {
+                //Lift the lid because these input xpaths were declared above the lid
+                CLiftScopeCeiling lid(scopes);
+                return addCompiledVariable(name, inputxp);
+            }
+        }
+        else
+        {
+            //use input value
+            ICompiledXpath *inputxp = findInput(name);
+            if (inputxp)
+                return addCompiledVariable(name, inputxp, currentScope);
+        }
+        return false;
+    }
     virtual bool declareCompiledParameter(const char * name, ICompiledXpath * compiled) override
     {
-        if (hasVariable(name, nullptr, getCurrentScope()))
-            return false;
-
-        //use input value
-        ICompiledXpath *inputxp = findInput(name);
-        if (inputxp)
-            return addCompiledVariable(name, inputxp, getCurrentScope());
+        if (checkDeclaredParameterInput(name))
+            return true;
 
         //use default provided
         return addCompiledVariable(name, compiled, getCurrentScope());
@@ -867,13 +917,8 @@ public:
 
     virtual bool declareParameter(const char * name, const char *value) override
     {
-        if (hasVariable(name, nullptr, getCurrentScope()))
-            return false;
-
-        //use input value
-        ICompiledXpath *input = findInput(name);
-        if (input)
-            return addCompiledVariable(name, input, getCurrentScope());
+        if (checkDeclaredParameterInput(name))
+            return true;
 
         //use default provided
         return addStringVariable(name, value, getCurrentScope());
@@ -1357,6 +1402,7 @@ private:
     xmlDocPtr doc = nullptr;
     xmlNodePtr root = nullptr;
     xmlXPathContextPtr xpathCtx = nullptr;
+    Owned<IEsdlTemplateResolver> templateResolver;
 
 public:
     CEsdlScriptContext(void *ctx) : espCtx(ctx)
@@ -1675,6 +1721,14 @@ private:
         return createXpathContext(parent, tgtSection, strictParameterDeclaration);
     }
 
+    virtual void registerTemplateResolver(IEsdlTemplateResolver *tmpl)
+    {
+        templateResolver.set(tmpl);
+    }
+    virtual IEsdlTemplateResolver *queryTemplateResolver()
+    {
+        return templateResolver.get();
+    }
 };
 
 IEsdlScriptContext *createEsdlScriptContext(void * espCtx)
