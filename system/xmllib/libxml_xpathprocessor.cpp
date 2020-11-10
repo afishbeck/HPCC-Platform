@@ -730,6 +730,7 @@ public:
         {
             xmlUnlinkNode(nodes[i]);
             xmlFreeNode(nodes[i]);
+            nodes[i]=nullptr;
         }
         xmlXPathFreeObject(obj);
     }
@@ -746,7 +747,10 @@ public:
         if (!obj)
             throw MakeStringException(XPATHERR_InvalidState, "XpathContext:copyof xpath syntax error '%s'", ccXpath->getXpath());
         if (obj->type!=xmlXPathObjectType::XPATH_NODESET || !obj->nodesetval || obj->nodesetval->nodeNr==0)
+        {
+            xmlXPathFreeObject(obj);
             return;
+        }
         xmlNodePtr *nodes = obj->nodesetval->nodeTab;
         for (int i = 0; i < obj->nodesetval->nodeNr; i++)
         {
@@ -757,6 +761,7 @@ public:
                 xmlNodeSetName(copy, (const xmlChar *)newname);
             xmlAddChild(current, copy);
         }
+        xmlXPathFreeObject(obj);
     }
 
 

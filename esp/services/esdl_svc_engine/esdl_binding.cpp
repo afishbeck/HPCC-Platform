@@ -426,6 +426,85 @@ void EsdlServiceImpl::handleTransformError(bool &serviceError, MapStringTo<Strin
         serviceError = true;
 }
 
+enum class scriptXmlChildMode { raised, lowered, kept };
+
+StringBuffer &toScriptXML(IPropertyTree *tree, const StringArray &raise, const StringArray &lower, StringBuffer &xml, int indent);
+
+StringBuffer &toScriptXMLNamedChildren(IPropertyTree *tree, const char *name, const StringArray &raise, const StringArray &lower, bool excludeNotKept, StringBuffer &xml, int indent)
+{
+    Owned<IPropertyTreeIterator> children = tree->getElements(name);
+    ForEach(*children)
+    {
+        IPropertyTree &child = children->query();
+        const char *name = child.queryName();
+        if (!excludeNotKept || (!raise.contains(name) && !lower.contains(name)))
+            toScriptXML(&child, raise, lower, xml, indent + 2);
+    }
+    return xml;
+}
+
+StringBuffer &toScriptXMLChildren(IPropertyTree *tree, scriptXmlChildMode mode, const StringArray &raise, const StringArray &lower, StringBuffer &xml, int indent)
+{
+    switch (mode)
+    {
+    case scriptXmlChildMode::kept:
+        return toScriptXMLNamedChildren(tree, "*", raise, lower, true, xml, indent);
+    case scriptXmlChildMode::raised:
+    {
+        ForEachItemIn(i, raise)
+            toScriptXMLNamedChildren(tree, raise.item(i), raise, lower, false, xml, indent);
+        return xml;
+    }
+    case scriptXmlChildMode::lowered:
+    {
+        ForEachItemIn(i, lower)
+            toScriptXMLNamedChildren(tree, lower.item(i), raise, lower, false, xml, indent);
+        return xml;
+    }
+    default:
+        return xml;
+    }
+}
+
+StringBuffer &toScriptXML(IPropertyTree *tree, const StringArray &raise, const StringArray &lower, StringBuffer &xml, int indent)
+{
+    const char *name = tree->queryName();
+    if (!name)
+        name = "__unnamed__";
+
+    appendXMLOpenTag(xml.pad(indent), name, nullptr, false);
+
+    Owned<IAttributeIterator> it = tree->getAttributes(true);
+    ForEach(*it)
+        appendXMLAttr(xml, it->queryName()+1, it->queryValue());
+
+    if (!tree->hasChildren())
+        return xml.append("/>\n");
+
+    xml.append(">\n");
+
+    toScriptXMLChildren(tree, scriptXmlChildMode::raised, raise, lower, xml, indent);
+    toScriptXMLChildren(tree, scriptXmlChildMode::kept, raise, lower, xml, indent);
+    toScriptXMLChildren(tree, scriptXmlChildMode::lowered, raise, lower, xml, indent);
+
+    return appendXMLCloseTag(xml.pad(indent), name).append("\n");
+}
+
+//Need to fix up serialized PTREE order for backward compatability of scripts
+
+StringBuffer &toScriptXML(IPropertyTree *tree, StringBuffer &xml, int indent)
+{
+    StringArray raise;
+    raise.append("xsdl:param");
+    raise.append("xsdl:variable");
+
+    StringArray lower;
+    lower.append("xsdl:otherwise");
+
+    return toScriptXML(tree, raise, lower, xml, indent);
+
+}
+
 StringBuffer &buildScriptXml(IPropertyTree *cfgParent, StringBuffer &xml)
 {
     if (!cfgParent)
@@ -436,12 +515,15 @@ StringBuffer &buildScriptXml(IPropertyTree *cfgParent, StringBuffer &xml)
     xml.append('>');
     IPropertyTree *crt = cfgParent->queryPropTree("xsdl:CustomRequestTransform");
     if (crt)
-        toXML(crt, xml);
+        toScriptXML(crt, xml, 2);
     IPropertyTree *transforms = cfgParent->queryPropTree("Transforms");
     if (transforms)
-        toXML(transforms, xml);
+        toScriptXML(transforms, xml, 2);
     appendXMLCloseTag(xml, "Scripts");
     xml.replaceString("&apos;", "'");
+    StringBuffer direct;
+    toXML(cfgParent, direct);
+    DBGLOG("ptree toxml script: \n%s\n", direct.str());
     DBGLOG("built script: \n%s\n", xml.str());
     return xml;
 }

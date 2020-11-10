@@ -269,7 +269,7 @@ static const char *target_config = "<method queryname='EchoPersonInfo'/>";
 class ESDLTests : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE( ESDLTests );
-       /* CPPUNIT_TEST(testEsdlTransformScript);
+        CPPUNIT_TEST(testEsdlTransformScript);
         CPPUNIT_TEST(testEsdlTransformScriptNoPrefix);
         CPPUNIT_TEST(testEsdlTransformForEach);
         CPPUNIT_TEST(testEsdlTransformVarScope);
@@ -291,8 +291,8 @@ class ESDLTests : public CppUnit::TestFixture
         CPPUNIT_TEST(testEsdlTransformImplicitPrefix);
         CPPUNIT_TEST(testEsdlTransformRequestNamespaces);
         CPPUNIT_TEST(testScriptContext);
-        CPPUNIT_TEST(testTargetElement); */
-        CPPUNIT_TEST(testHTTPPostXml);
+        CPPUNIT_TEST(testTargetElement);
+        //CPPUNIT_TEST(testHTTPPostXml);
     CPPUNIT_TEST_SUITE_END();
 
 public:

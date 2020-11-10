@@ -925,7 +925,7 @@ public:
             m_traceName.set(stag.getValue("name"));
 
         const char *code = stag.getValue("code");
-        const char *message = stag.getValue("code");
+        const char *message = stag.getValue("message");
         if (isEmptyString(code))
             esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, m_tagname, "without code", m_traceName.str(), true);
         if (isEmptyString(message))
