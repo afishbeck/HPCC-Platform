@@ -64,7 +64,7 @@ interface XMLLIB_API IXpathContext : public IInterface
     virtual void ensureAppendToValue(const char *xpath, const char *value, bool required) = 0;
     virtual void rename(const char *xpath, const char *name, bool all) = 0;
     virtual void remove(const char *xpath, bool all) = 0;
-    virtual void copyFromParentContext(ICompiledXpath *select, const char *newname) = 0;
+    virtual void copyFromPrimaryContext(ICompiledXpath *select, const char *newname) = 0;
 
     virtual bool evaluateAsBoolean(const char * xpath) = 0;
     virtual bool evaluateAsString(const char * xpath, StringBuffer & evaluated) = 0;
@@ -113,11 +113,13 @@ public:
     IMPLEMENT_IINTERFACE;
     CXpathContextLocation(IXpathContext *ctx) : context(ctx)
     {
-        context->pushLocation();
+        if (context)
+            context->pushLocation();
     }
     virtual ~CXpathContextLocation()
     {
-        context->popLocation();
+        if (context)
+            context->popLocation();
     }
 };
 

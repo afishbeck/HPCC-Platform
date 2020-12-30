@@ -291,8 +291,8 @@ class ESDLTests : public CppUnit::TestFixture
         CPPUNIT_TEST(testEsdlTransformImplicitPrefix);
         CPPUNIT_TEST(testEsdlTransformRequestNamespaces);
         CPPUNIT_TEST(testScriptContext);
-        CPPUNIT_TEST(testScriptMap);
         CPPUNIT_TEST(testTargetElement);
+      //CPPUNIT_TEST(testScriptMap); //requires a particular roxie query
       //CPPUNIT_TEST(testHTTPPostXml); //requires a particular roxie query
     CPPUNIT_TEST_SUITE_END();
 
@@ -384,7 +384,7 @@ public:
         <config strictParams='true'>
           <Transform>
             <Param name='testcase' value="absolute-soap-path"/>
-            <Param name='selectPath' select="/esdl_script_context/ESDLRequest/soap:Envelope/soap:Body/extra/EchoPersonInfo/EchoPersonInfoRequest/Row/Name/First"/>
+            <Param name='selectPath' select="/esdl_script_context/esdl_request/soap:Envelope/soap:Body/extra/EchoPersonInfo/EchoPersonInfoRequest/Row/Name/First"/>
           </Transform>
         </config>
       )!!";

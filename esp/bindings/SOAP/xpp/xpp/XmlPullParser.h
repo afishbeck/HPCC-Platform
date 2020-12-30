@@ -174,7 +174,8 @@ namespace xpp {
     }
 
 
-    int skipSubTree()  {
+    bool skipSubTree()  {
+      bool hasChildren = false;
       int level = 1;
       StartTag stag;
       int type = XmlPullParser::END_TAG;
@@ -184,13 +185,14 @@ namespace xpp {
         case XmlPullParser::START_TAG:
           readStartTag(stag);
           ++level;
+          hasChildren = true;
           break;
         case XmlPullParser::END_TAG:
           --level;
           break;
         }
       }
-      return type;
+      return hasChildren;
     }
 
     const SXT_STRING getPosDesc() const {
