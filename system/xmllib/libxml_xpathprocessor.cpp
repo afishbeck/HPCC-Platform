@@ -203,7 +203,7 @@ public:
     xmlXPathContextPtr m_xpathContext = nullptr;
     ReadWriteLock m_rwlock;
     XPathScopeVector scopes;
-    Owned<CLibXpathContext> parent; //if set will lookup variables from parent
+    Owned<CLibXpathContext> primaryContext; //if set will lookup variables from primaryContext (secondary context is generally target not source)
 
     bool strictParameterDeclaration = true;
     bool removeDocNamespaces = false;
@@ -223,10 +223,10 @@ public:
         registerExslt();
     }
 
-    CLibXpathContext(CLibXpathContext *_parent, xmlDocPtr doc, xmlNodePtr node, bool _strictParameterDeclaration) : strictParameterDeclaration(_strictParameterDeclaration)
+    CLibXpathContext(CLibXpathContext *_primary, xmlDocPtr doc, xmlNodePtr node, bool _strictParameterDeclaration) : strictParameterDeclaration(_strictParameterDeclaration)
     {
         xmlKeepBlanksDefault(0);
-        parent.set(_parent);
+        primaryContext.set(_primary);
         beginScope("/");
         setContextDocument(doc, node);
         registerExslt();
@@ -358,9 +358,10 @@ public:
     xmlXPathObjectPtr findVariable(const char *name, const char *ns_uri, CLibXpathScope *scope)
     {
         xmlXPathObjectPtr obj = nullptr;
-        if (parent)
+        if (primaryContext)
         {
-            obj = parent->findVariable(name, ns_uri, scope);
+            //could always return from here, but may find a use for secondary variables, they currently can't be defined from esdl script, so can't hurt there
+            obj = primaryContext->findVariable(name, ns_uri, scope);
             if (obj)
                 return obj;
         }
@@ -469,7 +470,7 @@ public:
         xmlNodePtr location = m_xpathContext->node;
         xmlParserCtxtPtr parserCtx = xmlCreateDocParserCtxt((const xmlChar *)xml);
         if (!parserCtx)
-            throw MakeStringException(-1, "CEsdlTransformOperationHttpPostXml:postRequest: Unable to parse response");
+            throw MakeStringException(-1, "CLibXpathContext:addXmlContent: Unable to parse xml");
         parserCtx->node = location;
         xmlParseDocument(parserCtx);
         int wellFormed = parserCtx->wellFormed;
@@ -700,7 +701,7 @@ public:
         if (obj->nodesetval->nodeNr>1 && !all)
         {
             xmlXPathFreeObject(obj);
-            throw MakeStringException(XPATHERR_InvalidState,"XpathContext:rename: ambiguous xpath xpath '%s' to rename all set 'all'", xpath);
+            throw MakeStringException(XPATHERR_InvalidState,"XpathContext:rename: ambiguous xpath '%s' to rename all set 'all'", xpath);
         }
         xmlNodePtr *nodes = obj->nodesetval->nodeTab;
         for (int i = 0; i < obj->nodesetval->nodeNr; i++)
@@ -718,10 +719,10 @@ public:
         if (obj->nodesetval->nodeNr>1 && !all)
         {
             xmlXPathFreeObject(obj);
-            throw MakeStringException(XPATHERR_InvalidState,"XpathContext:remove: ambiguous xpath xpath '%s' to remove all set 'all'", xpath);
+            throw MakeStringException(XPATHERR_InvalidState,"XpathContext:remove: ambiguous xpath '%s' to remove all set 'all'", xpath);
         }
         xmlNodePtr *nodes = obj->nodesetval->nodeTab;
-        for (int i = 0; i < obj->nodesetval->nodeNr; i++)
+        for (int i = obj->nodesetval->nodeNr; i >= 0; i--)
         {
             xmlUnlinkNode(nodes[i]);
             xmlFreeNode(nodes[i]);
@@ -730,15 +731,15 @@ public:
         xmlXPathFreeObject(obj);
     }
 
-    virtual void copyFromParentContext(ICompiledXpath *select, const char *newname) override
+    virtual void copyFromPrimaryContext(ICompiledXpath *select, const char *newname) override
     {
-        if (!parent)
+        if (!primaryContext)
             return;
         xmlNodePtr current = m_xpathContext->node;
         if (!current || !select)
             return;
         CLibCompiledXpath * ccXpath = static_cast<CLibCompiledXpath *>(select);
-        xmlXPathObjectPtr obj = parent->evaluate(ccXpath->getCompiledXPathExpression(), ccXpath->getXpath());
+        xmlXPathObjectPtr obj = primaryContext->evaluate(ccXpath->getCompiledXPathExpression(), ccXpath->getXpath());
         if (!obj)
             throw MakeStringException(XPATHERR_InvalidState, "XpathContext:copyof xpath syntax error '%s'", ccXpath->getXpath());
         if (obj->type!=xmlXPathObjectType::XPATH_NODESET || !obj->nodesetval || obj->nodesetval->nodeNr==0)
@@ -1692,7 +1693,7 @@ private:
     {
         toXML(xml, nullptr, true);
     }
-    IXpathContext* createXpathContext(IXpathContext *parent, const char *section, bool strictParameterDeclaration) override
+    IXpathContext* createXpathContext(IXpathContext *primaryContext, const char *section, bool strictParameterDeclaration) override
     {
         xmlNodePtr sect = nullptr;
         if (!isEmptyString(section))
@@ -1701,7 +1702,7 @@ private:
             if (!sect)
                 throw MakeStringException(-1, "CEsdlScriptContext:createXpathContext: section not found %s", section);
         }
-        CLibXpathContext *xpathContext = new CLibXpathContext(static_cast<CLibXpathContext *>(parent), doc, sect, strictParameterDeclaration);
+        CLibXpathContext *xpathContext = new CLibXpathContext(static_cast<CLibXpathContext *>(primaryContext), doc, sect, strictParameterDeclaration);
         StringBuffer val;
         xpathContext->addVariable("method", getAttribute("esdl", "method", val));
         xpathContext->addVariable("service", getAttribute("esdl", "service", val.clear()));
@@ -1714,10 +1715,10 @@ private:
 
         return xpathContext;
     }
-    IXpathContext *getCopiedSectionXpathContext(IXpathContext *parent, const char *tgtSection, const char *srcSection, bool strictParameterDeclaration) override
+    IXpathContext *getCopiedSectionXpathContext(IXpathContext *primaryContext, const char *tgtSection, const char *srcSection, bool strictParameterDeclaration) override
     {
         ensureCopiedSection(tgtSection, srcSection, false);
-        return createXpathContext(parent, tgtSection, strictParameterDeclaration);
+        return createXpathContext(primaryContext, tgtSection, strictParameterDeclaration);
     }
     virtual void cleanupBetweenScripts() override
     {

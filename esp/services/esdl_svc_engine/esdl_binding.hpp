@@ -84,7 +84,7 @@ private:
     Owned<ILoggingManager> m_oDynamicLoggingManager;
     Owned<ILoggingManager> m_oStaticLoggingManager;
     bool m_bGenerateLocalTrxId;
-    bool m_serviceLevelCrtFail = false;
+    StringAttr m_serviceScriptError;
     using MethodAccessMap = MapStringTo<SecAccessFlags>;
     using MethodAccessMaps = MapStringTo<Owned<MethodAccessMap> >;
     MethodAccessMaps            m_methodAccessMaps;
@@ -108,7 +108,7 @@ public:
     bool                        m_usesURLNameSpace;
 
     using TransformErrorMap = MapStringTo<StringAttr, const char *>;
-    TransformErrorMap m_requestTransformErrors;
+    TransformErrorMap m_methodScriptErrors;
 
 public:
     IMPLEMENT_IINTERFACE;
@@ -163,7 +163,7 @@ public:
             m_pEsdlTransformer.clear();
         if(m_pServiceMethodTargets)
             m_pServiceMethodTargets.clear();
-        m_requestTransformErrors.kill();
+        m_methodScriptErrors.kill();
     }
 
     virtual bool loadLoggingManager(Owned<ILoggingManager>& manager, IPTree* configuration);
@@ -174,7 +174,7 @@ public:
     void configureCppMethod(const char *method, IPropertyTree &entry, IEspPlugin*& plugin);
     void configureUrlMethod(const char *method, IPropertyTree &entry);
 
-    void handleTransformError(bool &serviceError, TransformErrorMap &methodErrors, IException *e, const char *service, const char *method);
+    void handleTransformError(StringAttr &serviceError, TransformErrorMap &methodErrors, IException *e, const char *service, const char *method);
     void addTransforms(IPropertyTree *cfgParent, const char *service, const char *method, bool removeCfgIEntries);
 
     IEsdlScriptContext* checkCreateEsdlServiceScriptContext(IEspContext &context, IEsdlDefService &srvdef, IEsdlDefMethod &mthdef, IPropertyTree *tgtcfg);

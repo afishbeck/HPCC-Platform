@@ -385,7 +385,7 @@ void EsdlServiceImpl::configureUrlMethod(const char *method, IPropertyTree &entr
     }
 }
 
-void EsdlServiceImpl::handleTransformError(bool &serviceError, MapStringTo<StringAttr, const char *> &methodErrors, IException *e, const char *service, const char *method)
+void EsdlServiceImpl::handleTransformError(StringAttr &serviceError, MapStringTo<StringAttr, const char *> &methodErrors, IException *e, const char *service, const char *method)
 {
     VStringBuffer msg("Encountered error while fetching transforms for service '%s'", service);
     if (!isEmptyString(method))
@@ -398,7 +398,7 @@ void EsdlServiceImpl::handleTransformError(bool &serviceError, MapStringTo<Strin
     if (!isEmptyString(method))
         methodErrors.setValue(method, msg.str());
     else
-        serviceError = true;
+        serviceError.set(msg.str());
 }
 
 enum class scriptXmlChildMode { raised, lowered, kept };
@@ -496,10 +496,6 @@ StringBuffer &buildScriptXml(IPropertyTree *cfgParent, StringBuffer &xml)
         toScriptXML(transforms, xml, 2);
     appendXMLCloseTag(xml, "Scripts");
     xml.replaceString("&apos;", "'");
-    StringBuffer direct;
-    toXML(cfgParent, direct);
-    DBGLOG("ptree toxml script: \n%s\n", direct.str());
-    DBGLOG("built script: \n%s\n", xml.str());
     return xml;
 }
 
@@ -510,10 +506,7 @@ void EsdlServiceImpl::addTransforms(IPropertyTree *cfgParent, const char *servic
         StringBuffer xml;
         const char *scriptXml = nullptr;
         if (cfgParent->hasProp("Scripts"))
-        {
             scriptXml = cfgParent->queryProp("Scripts");
-            DBGLOG("cdata script: \n%s\n", xml.str());
-        }
         else
             scriptXml = buildScriptXml(cfgParent, xml).str();
         if (!isEmptyString(scriptXml))
@@ -527,12 +520,12 @@ void EsdlServiceImpl::addTransforms(IPropertyTree *cfgParent, const char *servic
     }
     catch (IException *e)
     {
-        handleTransformError(m_serviceLevelCrtFail, m_requestTransformErrors, e, service, method);
+        handleTransformError(m_serviceScriptError, m_methodScriptErrors, e, service, method);
         e->Release();
     }
     catch (...)
     {
-        handleTransformError(m_serviceLevelCrtFail, m_requestTransformErrors, nullptr, service, method);
+        handleTransformError(m_serviceScriptError, m_methodScriptErrors, nullptr, service, method);
     }
 }
 
@@ -599,7 +592,7 @@ void EsdlServiceImpl::configureTargets(IPropertyTree *cfg, const char *service)
             if (generator.generateMap())
                 m_methodAccessMaps.setValue(mthDef->queryMethodName(), authMap.getLink());
 
-            m_requestTransformErrors.remove(method);
+            m_methodScriptErrors.remove(method);
             m_transforms->removeMethod(method);
 
             addTransforms(&methodCfg, service, method, true);
@@ -712,8 +705,8 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
     context.addTraceSummaryValue(LogMin, "method", mthName);
     const char* srvName = srvdef.queryName();
 
-    if (m_serviceLevelCrtFail) //checked further along in shared code, but might as well avoid extra overhead
-        throw MakeStringException(-1, "%s::%s disabled due to Custom Transform errors. Review transform template in configuration.", srvdef.queryName(), mthName);
+    if (m_serviceScriptError.length()) //checked further along in shared code, but might as well avoid extra overhead
+        throw MakeStringException(-1, "%s::%s disabled due to ESDL Script error(s). [%s]. Review transform template in configuration.", srvdef.queryName(), mthName, m_serviceScriptError.str());
 
     Owned<MethodAccessMap>* authMap = m_methodAccessMaps.getValue(mthdef.queryMethodName());
     if (authMap != nullptr && authMap->get() != nullptr)
@@ -796,7 +789,7 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
         if (!tgtcfg)
             throw makeWsException( ERR_ESDL_BINDING_BADREQUEST, WSERR_CLIENT, "ESDL", "Target not configured for method: %s", mthName );
 
-        StringAttr *crtErrorMessage = m_requestTransformErrors.getValue(mthName);
+        StringAttr *crtErrorMessage = m_methodScriptErrors.getValue(mthName);
         if (crtErrorMessage && !crtErrorMessage->isEmpty())
             throw makeWsException( ERR_ESDL_BINDING_INTERNERR, WSERR_CLIENT, "ESDL", "%s", crtErrorMessage->str());
 
@@ -955,12 +948,12 @@ bool EsdlServiceImpl::handleResultLogging(IEspContext &espcontext, IEsdlScriptCo
         IEsdlTransformSet *servicePLTs = m_transforms->queryMethodEntryPoint("", ESDLScriptEntryPoint_PreLogging);
         IEsdlTransformSet *methodPLTs = m_transforms->queryMethodEntryPoint(mthdef.queryName(), ESDLScriptEntryPoint_PreLogging);
 
-        scriptContext->appendContent(ESDLScriptCtxSection_LogData, "LogDataset", logdata);
+        scriptContext->appendContent(ESDLScriptCtxSection_LogData, "LogDatasets", logdata);
 
         if (servicePLTs || methodPLTs)
         {
             processServiceAndMethodTransforms(scriptContext, {servicePLTs, methodPLTs}, ESDLScriptCtxSection_LogData, nullptr);
-            scriptContext->toXML(temp, ESDLScriptCtxSection_PreESDLResponse);
+            scriptContext->toXML(temp, ESDLScriptCtxSection_LogData);
             logdata = temp.str();
         }
     }
@@ -1506,10 +1499,10 @@ void EsdlServiceImpl::prepareFinalRequest(IEspContext &context,
 
     // Process Custom Request Transforms
 
-    if (m_serviceLevelCrtFail)
-        throw MakeStringException(-1, "%s::%s disabled due to service-level Custom Transform errors. Review transform template in configuration.", srvdef.queryName(), mthName);
+    if (m_serviceScriptError.length())
+        throw MakeStringException(-1, "%s::%s disabled due to service-level Custom Transform errors. [%s]. Review transform template in configuration.", srvdef.queryName(), mthName, m_serviceScriptError.str());
 
-    StringAttr *crtErrorMessage = m_requestTransformErrors.getValue(mthName);
+    StringAttr *crtErrorMessage = m_methodScriptErrors.getValue(mthName);
     if (crtErrorMessage && !crtErrorMessage->isEmpty())
         throw MakeStringException(-1, "%s::%s disabled due to method-level Custom Transform errors: %s. Review transform template in configuration.", srvdef.queryName(), mthName, crtErrorMessage->str());
 
@@ -1524,8 +1517,10 @@ void EsdlServiceImpl::prepareFinalRequest(IEspContext &context,
         context.addTraceSummaryTimeStamp(LogNormal, "srt-custreqtrans");
         scriptContext->setContent(ESDLScriptCtxSection_ESDLRequest, reqProcessed.str());
         if (serviceCRTs || serviceRTs || methodCRTs || methodRTs)
+        {
             processServiceAndMethodTransforms(scriptContext, {serviceCRTs, serviceRTs, methodCRTs, methodRTs}, ESDLScriptCtxSection_ESDLRequest, ESDLScriptCtxSection_FinalRequest);
-        scriptContext->toXML(reqProcessed.clear(), ESDLScriptCtxSection_FinalRequest);
+            scriptContext->toXML(reqProcessed.clear(), ESDLScriptCtxSection_FinalRequest);
+        }
 
         context.addTraceSummaryTimeStamp(LogNormal, "end-custreqtrans");
     }

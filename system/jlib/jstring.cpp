@@ -1010,8 +1010,6 @@ public:
 
 StringBuffer &replaceEnvVariables(StringBuffer & result, const char *source, bool exceptions, const char* delim, const char* term)
 {
-    if (isEmptyString(source) || isEmptyString(delim) || isEmptyString(term))
-        return result;
     CEnvVariableSubstitutionHelper helper;
     return replaceVariables(result, source, exceptions, &helper, delim, term);
 }

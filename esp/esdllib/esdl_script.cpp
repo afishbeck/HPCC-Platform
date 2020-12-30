@@ -25,15 +25,14 @@ using namespace xpp;
 
 interface IEsdlTransformOperation : public IInterface
 {
-    virtual const char *queryMergedTarget() = 0;
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) = 0;
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) = 0;
     virtual void toDBGLog() = 0;
 };
 
-IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables);
-void createEsdlTransformOperations(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables);
-void createEsdlTransformChooseOperations(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables);
-typedef void (*esdlOperationsFactory_t)(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables);
+IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, bool ignoreCodingErrors);
+void createEsdlTransformOperations(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, bool ignoreCodingErrors);
+void createEsdlTransformChooseOperations(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, bool ignoreCodingErrors);
+typedef void (*esdlOperationsFactory_t)(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, bool ignoreCodingErrors);
 
 bool getStartTagValueBool(StartTag &stag, const char *name, bool defaultValue)
 {
@@ -86,7 +85,6 @@ static inline StringBuffer &makeOperationTagName(StringBuffer &s, const StringBu
 class CEsdlTransformOperationBase : public CInterfaceOf<IEsdlTransformOperation>
 {
 protected:
-    StringAttr m_mergedTarget;
     StringAttr m_tagname;
     StringAttr m_traceName;
     bool m_ignoreCodingErrors = false; //ideally used only for debugging
@@ -96,13 +94,7 @@ public:
     {
         m_tagname.set(stag.getLocalName());
         m_traceName.set(stag.getValue("trace"));
-        m_mergedTarget.set(stag.getValue("_crtTarget"));
         m_ignoreCodingErrors = getStartTagValueBool(stag, "optional", false);
-    }
-
-    virtual const char *queryMergedTarget() override
-    {
-        return m_mergedTarget;
     }
 };
 
@@ -117,23 +109,23 @@ public:
     {
         //load children
         if (factory)
-            factory(m_children, xpp, prefix, withVariables);
+            factory(m_children, xpp, prefix, withVariables, m_ignoreCodingErrors);
         else
-            createEsdlTransformOperations(m_children, xpp, prefix, withVariables);
+            createEsdlTransformOperations(m_children, xpp, prefix, withVariables, m_ignoreCodingErrors);
     }
 
     virtual ~CEsdlTransformOperationWithChildren(){}
 
-    virtual bool processChildren(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext)
+    virtual bool processChildren(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext)
     {
         if (!m_children.length())
             return false;
 
-        Owned<CXpathContextScope> scope = m_withVariables ? new CXpathContextScope(xpathContext, m_tagname) : nullptr;
+        Owned<CXpathContextScope> scope = m_withVariables ? new CXpathContextScope(sourceContext, m_tagname) : nullptr;
         bool ret = false;
         ForEachItemIn(i, m_children)
         {
-            if (m_children.item(i).process(scriptContext, targetContext, xpathContext))
+            if (m_children.item(i).process(scriptContext, targetContext, sourceContext))
                 ret = true;
         }
         return ret;
@@ -153,7 +145,8 @@ class CEsdlTransformOperationWithoutChildren : public CEsdlTransformOperationBas
 public:
     CEsdlTransformOperationWithoutChildren(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationBase(xpp, stag, prefix)
     {
-        xpp.skipSubTree();
+        if (xpp.skipSubTree())
+            esdlOperationError(ESDL_SCRIPT_Error, m_tagname, "should not have child tags", m_traceName, !m_ignoreCodingErrors);
     }
 
     virtual ~CEsdlTransformOperationWithoutChildren(){}
@@ -183,20 +176,22 @@ public:
     {
     }
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         if (m_select)
-            return xpathContext->addCompiledVariable(m_name, m_select);
+            return sourceContext->addCompiledVariable(m_name, m_select);
         else if (m_children.length())
         {
             VStringBuffer xpath("/esdl_script_context/temporaries/%s", m_name.str());
             CXpathContextLocation location(targetContext);
 
             targetContext->ensureLocation(xpath, true);
-            processChildren(scriptContext, targetContext, xpathContext); //bulid nodeset
-            xpathContext->addXpathVariable(m_name, xpath);
+            processChildren(scriptContext, targetContext, sourceContext); //bulid nodeset
+            sourceContext->addXpathVariable(m_name, xpath);
+            return false;
         }
-        return xpathContext->addVariable(m_name, "");
+        sourceContext->addVariable(m_name, "");
+        return false;
     }
 
     virtual void toDBGLog() override
@@ -217,11 +212,11 @@ public:
 
     virtual ~CEsdlTransformOperationHttpContentXml(){}
 
-    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         CXpathContextLocation location(targetContext);
         targetContext->addElementToLocation("content");
-        return processChildren(scriptContext, targetContext, xpathContext);
+        return processChildren(scriptContext, targetContext, sourceContext);
     }
 
     virtual void toDBGLog () override
@@ -236,7 +231,7 @@ public:
 
 interface IEsdlTransformOperationHttpHeader : public IInterface
 {
-    virtual bool processHeader(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, IProperties *headers) = 0;
+    virtual bool processHeader(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext, IProperties *headers) = 0;
 };
 
 
@@ -267,24 +262,24 @@ public:
 
     virtual ~CEsdlTransformOperationHttpHeader(){}
 
-    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
-        return processHeader(scriptContext, targetContext, xpathContext, nullptr);
+        return processHeader(scriptContext, targetContext, sourceContext, nullptr);
     }
 
-    bool processHeader(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, IProperties *headers) override
+    bool processHeader(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext, IProperties *headers) override
     {
         CXpathContextLocation location(targetContext);
         targetContext->addElementToLocation("header");
         StringBuffer name;
         if (m_xpath_name)
-            xpathContext->evaluateAsString(m_xpath_name, name);
+            sourceContext->evaluateAsString(m_xpath_name, name);
         else
             name.set(m_name);
 
         StringBuffer value;
         if (m_value)
-            xpathContext->evaluateAsString(m_value, value);
+            sourceContext->evaluateAsString(m_value, value);
         if (name.length() && value.length())
         {
             if (headers)
@@ -317,9 +312,9 @@ protected:
 public:
     CEsdlTransformOperationHttpPostXml(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationBase(xpp, stag, prefix)
     {
-        if (m_traceName.isEmpty())
-            m_traceName.set(stag.getValue("name"));
         m_name.set(stag.getValue("name"));
+        if (m_traceName.isEmpty())
+            m_traceName.set(m_name.str());
         m_section.set(stag.getValue("section"));
         if (m_section.isEmpty())
             m_section.set("temporaries");
@@ -361,32 +356,32 @@ public:
     {
     }
 
-    void buildHeaders(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, IProperties *headers)
+    void buildHeaders(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext, IProperties *headers)
     {
         if (!m_headers.length())
             return;
         CXpathContextLocation location(targetContext);
         targetContext->addElementToLocation("headers");
         ForEachItemIn(i, m_headers)
-            m_headers.item(i).processHeader(scriptContext, targetContext, xpathContext, headers);
+            m_headers.item(i).processHeader(scriptContext, targetContext, sourceContext, headers);
     }
 
-    void buildRequest(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, const char *url, IProperties *headers)
+    void buildRequest(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext, const char *url, IProperties *headers)
     {
         CXpathContextLocation location(targetContext);
         targetContext->addElementToLocation("request");
         targetContext->ensureSetValue("@url", url, true);
-        buildHeaders(scriptContext, targetContext, xpathContext, headers);
+        buildHeaders(scriptContext, targetContext, sourceContext, headers);
         if (m_content)
-            m_content->process(scriptContext, targetContext, xpathContext);
+            m_content->process(scriptContext, targetContext, sourceContext);
     }
 
-    void postRequest(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext, const char *url, IProperties *headers)
+    void postRequest(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext, const char *url, IProperties *headers)
     {
         VStringBuffer xpath("/esdl_script_context/%s/%s/request/content/*[1]", m_section.str(), m_name.str());
 
         StringBuffer content;
-        xpathContext->toXml(xpath, content);
+        sourceContext->toXml(xpath, content);
         if (!content)
             return;
         CXpathContextLocation location(targetContext);
@@ -443,20 +438,20 @@ public:
         }
     }
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         VStringBuffer xpath("/esdl_script_context/%s/%s", m_section.str(), m_name.str());
         CXpathContextLocation location(targetContext);
         targetContext->ensureLocation(xpath, true);
         StringBuffer url;
         if (m_url)
-            xpathContext->evaluateAsString(m_url, url);
+            sourceContext->evaluateAsString(m_url, url);
 
         Owned<IProperties> headers = createProperties();
-        buildRequest(scriptContext, targetContext, xpathContext, url, headers);
-        postRequest(scriptContext, targetContext, xpathContext, url, headers);
+        buildRequest(scriptContext, targetContext, sourceContext, url, headers);
+        postRequest(scriptContext, targetContext, sourceContext, url, headers);
 
-        xpathContext->addXpathVariable(m_name, xpath);
+        sourceContext->addXpathVariable(m_name, xpath);
         return false;
     }
 
@@ -479,11 +474,11 @@ public:
     {
     }
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         if (m_select)
-            return xpathContext->declareCompiledParameter(m_name, m_select);
-        return xpathContext->declareParameter(m_name, "");
+            return sourceContext->declareCompiledParameter(m_name, m_select);
+        return sourceContext->declareParameter(m_name, "");
     }
 };
 
@@ -529,7 +524,7 @@ public:
 
     virtual const char *getSectionName() = 0;
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         if ((!m_name && !m_xpath_name) || !m_select)
             return false; //only here if "optional" backward compatible support for now (optional syntax errors aren't actually helpful)
@@ -537,12 +532,12 @@ public:
         {
             StringBuffer name;
             if (m_xpath_name)
-                xpathContext->evaluateAsString(m_xpath_name, name);
+                sourceContext->evaluateAsString(m_xpath_name, name);
             else
                 name.set(m_name);
 
             StringBuffer value;
-            xpathContext->evaluateAsString(m_select, value);
+            sourceContext->evaluateAsString(m_select, value);
             scriptContext->setAttribute(getSectionName(), name, value);
         }
         catch (IException* e)
@@ -637,15 +632,15 @@ public:
 
     virtual ~CEsdlTransformOperationSetValue(){}
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         if ((!m_xpath_target && m_target.isEmpty()) || !m_select)
             return false; //only here if "optional" backward compatible support for now (optional syntax errors aren't actually helpful
         try
         {
             StringBuffer value;
-            xpathContext->evaluateAsString(m_select, value);
-            return doSet(xpathContext, targetContext, value);
+            sourceContext->evaluateAsString(m_select, value);
+            return doSet(sourceContext, targetContext, value);
         }
         catch (IException* e)
         {
@@ -671,10 +666,10 @@ public:
         }
         return m_target.str();
     }
-    virtual bool doSet(IXpathContext * xpathContext, IXpathContext *targetContext, const char *value)
+    virtual bool doSet(IXpathContext * sourceContext, IXpathContext *targetContext, const char *value)
     {
         StringBuffer xpath;
-        const char *target = getTargetPath(xpathContext, xpath);
+        const char *target = getTargetPath(sourceContext, xpath);
         targetContext->ensureSetValue(target, value, m_required);
         return true;
     }
@@ -711,7 +706,7 @@ public:
 
     virtual ~CEsdlTransformOperationNamespace(){}
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         targetContext->setLocationNamespace(m_prefix, m_uri, m_current);
         return false;
@@ -764,7 +759,7 @@ public:
 
     virtual ~CEsdlTransformOperationRenameNode(){}
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         if ((!m_xpath_target && m_target.isEmpty()) || (!m_xpath_new_name && m_new_name.isEmpty()))
             return false; //only here if "optional" backward compatible support for now (optional syntax errors aren't actually helpful
@@ -772,13 +767,13 @@ public:
         {
             StringBuffer path;
             if (m_xpath_target)
-                xpathContext->evaluateAsString(m_xpath_target, path);
+                sourceContext->evaluateAsString(m_xpath_target, path);
             else
                 path.set(m_target);
 
             StringBuffer name;
             if (m_xpath_new_name)
-                xpathContext->evaluateAsString(m_xpath_new_name, name);
+                sourceContext->evaluateAsString(m_xpath_new_name, name);
             else
                 name.set(m_new_name);
 
@@ -828,11 +823,11 @@ public:
 
     virtual ~CEsdlTransformOperationCopyOf(){}
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         try
         {
-            targetContext->copyFromParentContext(m_select, m_new_name);
+            targetContext->copyFromPrimaryContext(m_select, m_new_name);
         }
         catch (IException* e)
         {
@@ -884,7 +879,7 @@ public:
 
     virtual ~CEsdlTransformOperationRemoveNode(){}
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         if ((!m_xpath_target && m_target.isEmpty()))
             return false; //only here if "optional" backward compatible support for now (optional syntax errors aren't actually helpful
@@ -892,7 +887,7 @@ public:
         {
             StringBuffer path;
             if (m_xpath_target)
-                xpathContext->evaluateAsString(m_xpath_target, path);
+                sourceContext->evaluateAsString(m_xpath_target, path);
             else
                 path.set(m_target);
 
@@ -921,10 +916,10 @@ public:
 
     virtual ~CEsdlTransformOperationAppendValue(){}
 
-    virtual bool doSet(IXpathContext * xpathContext, IXpathContext *targetContext, const char *value) override
+    virtual bool doSet(IXpathContext * sourceContext, IXpathContext *targetContext, const char *value) override
     {
         StringBuffer xpath;
-        const char *target = getTargetPath(xpathContext, xpath);
+        const char *target = getTargetPath(sourceContext, xpath);
         targetContext->ensureAppendToValue(target, value, m_required);
         return true;
     }
@@ -937,10 +932,10 @@ public:
 
     virtual ~CEsdlTransformOperationAddValue(){}
 
-    virtual bool doSet(IXpathContext * xpathContext, IXpathContext *targetContext, const char *value) override
+    virtual bool doSet(IXpathContext * sourceContext, IXpathContext *targetContext, const char *value) override
     {
         StringBuffer xpath;
-        const char *target = getTargetPath(xpathContext, xpath);
+        const char *target = getTargetPath(sourceContext, xpath);
         targetContext->ensureAddValue(target, value, m_required);
         return true;
     }
@@ -973,12 +968,12 @@ public:
     {
     }
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
-        int code = m_code.get() ? (int) xpathContext->evaluateAsNumber(m_code) : ESDL_SCRIPT_Error;
+        int code = m_code.get() ? (int) sourceContext->evaluateAsNumber(m_code) : ESDL_SCRIPT_Error;
         StringBuffer msg;
         if (m_message.get())
-            xpathContext->evaluateAsString(m_message, msg);
+            sourceContext->evaluateAsString(m_message, msg);
         throw makeStringException(code, msg.str());
         return true; //avoid compilation error
     }
@@ -1009,11 +1004,11 @@ public:
     {
     }
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
-        if (m_test && xpathContext->evaluateAsBoolean(m_test))
+        if (m_test && sourceContext->evaluateAsBoolean(m_test))
             return false;
-        return CEsdlTransformOperationFail::process(scriptContext, targetContext, xpathContext);
+        return CEsdlTransformOperationFail::process(scriptContext, targetContext, sourceContext);
     }
 
     virtual void toDBGLog() override
@@ -1041,9 +1036,9 @@ public:
 
     virtual ~CEsdlTransformOperationForEach(){}
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
-        Owned<IXpathContextIterator> contexts = evaluate(xpathContext);
+        Owned<IXpathContextIterator> contexts = evaluate(sourceContext);
         if (!contexts)
             return false;
         if (!contexts->first())
@@ -1097,15 +1092,18 @@ public:
     CEsdlTransformOperationConditional(XmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithChildren(xpp, stag, prefix, true, nullptr)
     {
         const char *op = stag.getLocalName();
-        if (isEmptyString(op))
-            esdlOperationError(ESDL_SCRIPT_UnknownOperation, m_tagname, "unrecognized conditional", !m_ignoreCodingErrors);
+        if (isEmptyString(op)) //should never get here, we checked alreay, but
+            esdlOperationError(ESDL_SCRIPT_UnknownOperation, m_tagname, "unrecognized conditional missing tag name", !m_ignoreCodingErrors);
         //m_ignoreCodingErrors means op may still be null
-        if (!op || streq(op, "if"))
+        else if (!op || streq(op, "if"))
             m_op = 'i';
         else if (streq(op, "when"))
             m_op = 'w';
         else if (streq(op, "otherwise"))
             m_op = 'o';
+        else //should never get here either, but
+            esdlOperationError(ESDL_SCRIPT_UnknownOperation, m_tagname, "unrecognized conditional tag name", !m_ignoreCodingErrors);
+
         if (m_op!='o')
         {
             const char *test = stag.getValue("test");
@@ -1117,11 +1115,11 @@ public:
 
     virtual ~CEsdlTransformOperationConditional(){}
 
-    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    virtual bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
-        if (!evaluate(xpathContext))
+        if (!evaluate(sourceContext))
             return false;
-        processChildren(scriptContext, targetContext, xpathContext);
+        processChildren(scriptContext, targetContext, sourceContext);
         return true; //just means that evaluation succeeded and attempted to process children
     }
 
@@ -1161,7 +1159,7 @@ private:
     }
 };
 
-void loadChooseChildren(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables)
+void loadChooseChildren(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, bool ignoreCodingErrors)
 {
     Owned<CEsdlTransformOperationConditional> otherwise;
 
@@ -1178,7 +1176,11 @@ void loadChooseChildren(IArrayOf<IEsdlTransformOperation> &operations, XmlPullPa
                 if (streq(op, "when"))
                     operations.append(*new CEsdlTransformOperationConditional(xpp, opTag, prefix));
                 else if (streq(op, "otherwise"))
+                {
+                    if (otherwise)
+                        esdlOperationError(ESDL_SCRIPT_Error, op, "only 1 otherwise per choose statement allowed", ignoreCodingErrors);
                     otherwise.setown(new CEsdlTransformOperationConditional(xpp, opTag, prefix));
+                }
                 break;
             }
             case XmlPullParser::END_TAG:
@@ -1201,19 +1203,19 @@ public:
 
     virtual ~CEsdlTransformOperationChoose(){}
 
-    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
-        return processChildren(scriptContext, targetContext, xpathContext);
+        return processChildren(scriptContext, targetContext, sourceContext);
     }
 
-    virtual bool processChildren(IEsdlScriptContext * scriptContext, IXpathContext *targetContext, IXpathContext * xpathContext) override
+    virtual bool processChildren(IEsdlScriptContext * scriptContext, IXpathContext *targetContext, IXpathContext * sourceContext) override
     {
         if (m_children.length())
         {
-            CXpathContextScope scope(xpathContext, "choose");
+            CXpathContextScope scope(sourceContext, "choose");
             ForEachItemIn(i, m_children)
             {
-                if (m_children.item(i).process(scriptContext, targetContext, xpathContext))
+                if (m_children.item(i).process(scriptContext, targetContext, sourceContext))
                     return true;
             }
         }
@@ -1245,12 +1247,12 @@ public:
             esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, "target", "without xpath parameter", m_traceName.str(), !m_ignoreCodingErrors);
 
         m_xpath.setown(compileXpath(xpath));
-        m_required = getStartTagValueBool(stag, "required", true);
+        m_required = getStartTagValueBool(stag, "required", m_required);
     }
 
     virtual ~CEsdlTransformOperationTarget(){}
 
-    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         CXpathContextLocation location(targetContext);
         bool success = false;
@@ -1260,7 +1262,7 @@ public:
             success = targetContext->setLocation(m_xpath, m_required);
 
         if (success)
-            return processChildren(scriptContext, targetContext, xpathContext);
+            return processChildren(scriptContext, targetContext, sourceContext);
         return false;
     }
 
@@ -1310,16 +1312,16 @@ public:
             esdlOperationError(ESDL_SCRIPT_MissingOperationAttr, "target", "without xpath parameter", m_traceName.str(), !m_ignoreCodingErrors);
 
         m_xpath.setown(compileXpath(xpath));
-        m_required = getStartTagValueBool(stag, "required", true);
+        m_required = getStartTagValueBool(stag, "required", m_required);
     }
 
     virtual ~CEsdlTransformOperationSource(){}
 
-    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
-        CXpathContextLocation location(xpathContext);
-        if (xpathContext->setLocation(m_xpath, m_required))
-            return processChildren(scriptContext, targetContext, xpathContext);
+        CXpathContextLocation location(sourceContext);
+        if (sourceContext->setLocation(m_xpath, m_required))
+            return processChildren(scriptContext, targetContext, sourceContext);
         return false;
     }
 
@@ -1368,11 +1370,11 @@ public:
 
     virtual ~CEsdlTransformOperationElement(){}
 
-    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * xpathContext) override
+    bool process(IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
     {
         CXpathContextLocation location(targetContext);
         targetContext->addElementToLocation(m_name);
-        return processChildren(scriptContext, targetContext, xpathContext);
+        return processChildren(scriptContext, targetContext, sourceContext);
     }
 
     virtual void toDBGLog () override
@@ -1385,7 +1387,7 @@ public:
     }
 };
 
-void createEsdlTransformOperations(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables)
+void createEsdlTransformOperations(IArrayOf<IEsdlTransformOperation> &operations, XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, bool ignoreCodingErrors)
 {
     int type = 0;
     while((type = xpp.next()) != XmlPullParser::END_DOCUMENT)
@@ -1394,7 +1396,7 @@ void createEsdlTransformOperations(IArrayOf<IEsdlTransformOperation> &operations
         {
             case XmlPullParser::START_TAG:
             {
-                Owned<IEsdlTransformOperation> operation = createEsdlTransformOperation(xpp, prefix, withVariables);
+                Owned<IEsdlTransformOperation> operation = createEsdlTransformOperation(xpp, prefix, withVariables, ignoreCodingErrors);
                 if (operation)
                     operations.append(*operation.getClear());
                 break;
@@ -1407,7 +1409,7 @@ void createEsdlTransformOperations(IArrayOf<IEsdlTransformOperation> &operations
     }
 }
 
-IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables)
+IEsdlTransformOperation *createEsdlTransformOperation(XmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, bool ignoreCodingErrors)
 {
     StartTag stag;
     xpp.readStartTag(stag);
@@ -1486,6 +1488,7 @@ private:
     Owned<IProperties> namespaces = createProperties(false);
     StringAttr m_name;
     StringAttr m_target;
+    StringAttr m_source;
     StringBuffer m_prefix;
 
 public:
@@ -1497,6 +1500,7 @@ public:
 
         m_name.set(stag.getValue("name"));
         m_target.set(stag.getValue("target"));
+        m_source.set(stag.getValue("source"));
 
         DBGLOG("Compiling ESDL Transform: '%s'", m_name.str());
 
@@ -1515,7 +1519,7 @@ public:
             {
                 case XmlPullParser::START_TAG:
                 {
-                    Owned<IEsdlTransformOperation> operation = createEsdlTransformOperation(xpp, m_prefix, true);
+                    Owned<IEsdlTransformOperation> operation = createEsdlTransformOperation(xpp, m_prefix, true, false);
                     if (operation)
                         m_operations.append(*operation.getClear());
                     break;
@@ -1549,31 +1553,33 @@ public:
 
     virtual ~CEsdlCustomTransform(){}
 
-    void processTransformImpl(IEsdlScriptContext * scriptContext, const char *srcSection, const char *tgtSection, IXpathContext *xpathContext, const char *target) override
+    void processTransformImpl(IEsdlScriptContext * scriptContext, const char *srcSection, const char *tgtSection, IXpathContext *sourceContext, const char *target) override
     {
         if (m_target.length())
             target = m_target.str();
         Owned<IXpathContext> targetXpath = nullptr;
         if (isEmptyString(tgtSection))
-            targetXpath.setown(scriptContext->createXpathContext(xpathContext, srcSection, true));
+            targetXpath.setown(scriptContext->createXpathContext(sourceContext, srcSection, true));
         else
-            targetXpath.setown(scriptContext->getCopiedSectionXpathContext(xpathContext, tgtSection, srcSection, true));
+            targetXpath.setown(scriptContext->getCopiedSectionXpathContext(sourceContext, tgtSection, srcSection, true));
 
         Owned<IProperties> savedNamespaces = createProperties(false);
         Owned<IPropertyIterator> ns = namespaces->getIterator();
         ForEach(*ns)
         {
             const char *prefix = ns->getPropKey();
-            const char *existing = xpathContext->queryNamespace(prefix);
+            const char *existing = sourceContext->queryNamespace(prefix);
             savedNamespaces->setProp(prefix, isEmptyString(existing) ? "" : existing);
-            xpathContext->registerNamespace(prefix, namespaces->queryProp(prefix));
+            sourceContext->registerNamespace(prefix, namespaces->queryProp(prefix));
             targetXpath->registerNamespace(prefix, namespaces->queryProp(prefix));
         }
-        CXpathContextScope scope(xpathContext, "transform", savedNamespaces);
+        CXpathContextScope scope(sourceContext, "transform", savedNamespaces);
         if (!isEmptyString(target) && !streq(target, "."))
             targetXpath->setLocation(target, true);
+        if (!m_source.isEmpty() && !streq(m_source, "."))
+            sourceContext->setLocation(m_source, true);
         ForEachItemIn(i, m_operations)
-            m_operations.item(i).process(scriptContext, targetXpath, xpathContext);
+            m_operations.item(i).process(scriptContext, targetXpath, sourceContext);
         scriptContext->cleanupBetweenScripts();
     }
 
@@ -1585,9 +1591,9 @@ class CEsdlCustomTransformWrapper : public CInterfaceOf<IEsdlTransformSet>
     Linked<CEsdlCustomTransform> crt;
 public:
     CEsdlCustomTransformWrapper(CEsdlCustomTransform *t) : crt(t) {}
-    void processTransformImpl(IEsdlScriptContext * context, const char *srcSection, const char *tgtSection, IXpathContext *xpathContext, const char *target) override
+    void processTransformImpl(IEsdlScriptContext * context, const char *srcSection, const char *tgtSection, IXpathContext *sourceContext, const char *target) override
     {
-        crt->processTransformImpl(context, srcSection, tgtSection, xpathContext, target);
+        crt->processTransformImpl(context, srcSection, tgtSection, sourceContext, target);
     }
     void appendPrefixes(StringArray &prefixes) override
     {
@@ -1643,7 +1649,7 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
     }
 
     bool strictParams = scriptCtx->getXPathBool("config/*/@strictParams", false);
-    Owned<IXpathContext> xpathContext = scriptCtx->createXpathContext(nullptr, srcSection, strictParams);
+    Owned<IXpathContext> sourceContext = scriptCtx->createXpathContext(nullptr, srcSection, strictParams);
 
     StringArray prefixes;
     for ( IEsdlTransformSet * const & item : transforms)
@@ -1652,16 +1658,16 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
             item->appendPrefixes(prefixes);
     }
 
-    registerEsdlXPathExtensions(xpathContext, scriptCtx, prefixes);
+    registerEsdlXPathExtensions(sourceContext, scriptCtx, prefixes);
 
     VStringBuffer ver("%g", context->getClientVersion());
-    if(!xpathContext->addVariable("clientversion", ver.str()))
+    if(!sourceContext->addVariable("clientversion", ver.str()))
         OERRLOG("Could not set ESDL Script variable: clientversion:'%s'", ver.str());
 
     //in case transform wants to make use of these values:
     //make them few well known values variables rather than inputs so they are automatically available
     StringBuffer temp;
-    xpathContext->addVariable("query", scriptCtx->getXPathString("target/*/@queryname", temp));
+    sourceContext->addVariable("query", scriptCtx->getXPathString("target/*/@queryname", temp));
 
     ISecUser *user = context->queryUser();
     if (user)
@@ -1688,28 +1694,28 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
         {
             const char *name = userPropIt->getPropKey();
             if (name && *name)
-                xpathContext->addInputValue(name, user->getProperty(name));
+                sourceContext->addInputValue(name, user->getProperty(name));
         }
 
         auto it = statusLabels.find(user->getStatus());
 
-        xpathContext->addInputValue("espUserName", user->getName());
-        xpathContext->addInputValue("espUserRealm", user->getRealm() ? user->getRealm() : "");
-        xpathContext->addInputValue("espUserPeer", user->getPeer() ? user->getPeer() : "");
-        xpathContext->addInputValue("espUserStatus", VStringBuffer("%d", int(user->getStatus())));
+        sourceContext->addInputValue("espUserName", user->getName());
+        sourceContext->addInputValue("espUserRealm", user->getRealm() ? user->getRealm() : "");
+        sourceContext->addInputValue("espUserPeer", user->getPeer() ? user->getPeer() : "");
+        sourceContext->addInputValue("espUserStatus", VStringBuffer("%d", int(user->getStatus())));
         if (it != statusLabels.end())
-            xpathContext->addInputValue("espUserStatusString", it->second);
+            sourceContext->addInputValue("espUserStatusString", it->second);
         else
             throw MakeStringException(ESDL_SCRIPT_Error, "encountered unexpected secure user status (%d) while processing transform", int(user->getStatus()));
     }
     else
     {
         // enable transforms to distinguish secure versus insecure requests
-        xpathContext->addInputValue("espUserName", "");
-        xpathContext->addInputValue("espUserRealm", "");
-        xpathContext->addInputValue("espUserPeer", "");
-        xpathContext->addInputValue("espUserStatus", "");
-        xpathContext->addInputValue("espUserStatusString", "");
+        sourceContext->addInputValue("espUserName", "");
+        sourceContext->addInputValue("espUserRealm", "");
+        sourceContext->addInputValue("espUserPeer", "");
+        sourceContext->addInputValue("espUserStatus", "");
+        sourceContext->addInputValue("espUserStatusString", "");
     }
 
     StringBuffer defaultTarget; //This default gives us backward compatibility with only being able to write to the actual request
@@ -1722,7 +1728,7 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
     {
         if (item)
         {
-            item->processTransformImpl(scriptCtx, srcSection, tgtSection, xpathContext, defaultTarget);
+            item->processTransformImpl(scriptCtx, srcSection, tgtSection, sourceContext, defaultTarget);
         }
     }
 
@@ -1774,10 +1780,10 @@ public:
             transforms.item(i).appendPrefixes(prefixes);
     }
 
-    virtual void processTransformImpl(IEsdlScriptContext * scriptContext, const char *srcSection, const char *tgtSection, IXpathContext *xpathContext, const char *target) override
+    virtual void processTransformImpl(IEsdlScriptContext * scriptContext, const char *srcSection, const char *tgtSection, IXpathContext *sourceContext, const char *target) override
     {
         ForEachItemIn(i, transforms)
-            transforms.item(i).processTransformImpl(scriptContext, srcSection, tgtSection, xpathContext, target);
+            transforms.item(i).processTransformImpl(scriptContext, srcSection, tgtSection, sourceContext, target);
     }
     virtual void add(XmlPullParser &xpp, StartTag &stag)
     {

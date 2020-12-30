@@ -88,21 +88,21 @@
               </es:content>
             </es:http-post-xml>
             <es:target xpath="soap:Body">
-            <es:target xpath="resp:RoxieEchoPersonInfoResponse">
-            <es:target xpath="resp:Results/resp:Result">
-            <es:target xpath="ds1:Dataset[@name='RoxieEchoPersonInfoResponse']">
-               <es:source xpath="$roxie_call_success/response/content">
-                 <es:source xpath="soap:Envelope/soap:Body">
-                   <es:source xpath="resp:roxieechopersoninfoResponse/resp:Results/resp:Result">
-                     <es:source xpath="ds1:Dataset/ds1:Row">
-                       <es:append-to-value target="ds1:Row/ds1:Name/ds1:Last" value="concat('-plus-echoed-alias-', ds1:Name/ds1:Aliases/ds1:Alias[2])" />
-                     </es:source>
-                   </es:source>
-                 </es:source>
-               </es:source>
-            </es:target>
-            </es:target>
-            </es:target>
+              <es:target xpath="resp:RoxieEchoPersonInfoResponse">
+                <es:target xpath="resp:Results/resp:Result">
+                  <es:target xpath="ds1:Dataset[@name='RoxieEchoPersonInfoResponse']">
+                    <es:source xpath="$roxie_call_success/response/content">
+                      <es:source xpath="soap:Envelope/soap:Body">
+                        <es:source xpath="resp:roxieechopersoninfoResponse/resp:Results/resp:Result">
+                          <es:source xpath="ds1:Dataset/ds1:Row">
+                            <es:append-to-value target="ds1:Row/ds1:Name/ds1:Last" value="concat('-plus-echoed-alias-', ds1:Name/ds1:Aliases/ds1:Alias[2])" />
+                          </es:source>
+                        </es:source>
+                      </es:source>
+                    </es:source>
+                  </es:target>
+                </es:target>
+              </es:target>
             </es:target>
          </es:BackendResponse>
          <es:BackendResponse>
