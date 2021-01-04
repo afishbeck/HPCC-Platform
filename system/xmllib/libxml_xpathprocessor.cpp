@@ -618,7 +618,28 @@ public:
                         throw MakeStringException(XPATHERR_InvalidState,"XpathContext:ensureValue: xpath node not found '%s' in xpath '%s'", finger, xpath);
                     return;
                 }
-                node = xmlNewChild(node, nullptr, (const xmlChar *) finger, last ? (const xmlChar *) value : nullptr);
+                const char *nsx = strchr(finger, ':');
+                if (nsx)
+                {
+                    StringAttr prefix(finger, nsx-finger);
+                    finger = nsx+1;
+                    //translate the xpath namespace into one defined in the content xml
+                    const char *uri = queryNamespace(prefix.str());
+                    if (isEmptyString(uri))
+                        throw MakeStringException(XPATHERR_InvalidState,"XpathContext:ensureValue: xpath namespace not defined '%s' in xpath '%s'", prefix.str(), xpath);
+                    xmlNsPtr ns = xmlSearchNsByHref(m_xmlDoc, node, (const xmlChar *) uri);
+                    if (!ns)
+                        throw MakeStringException(XPATHERR_InvalidState,"XpathContext:ensureValue: xml document namespace not defined '%s' specified by xpath prefix '%s'", uri, prefix.str());
+                    node = xmlNewChild(node, ns, (const xmlChar *) finger, last ? (const xmlChar *) value : nullptr);
+                }
+                else
+                {
+                    //ensure with no prefix will become a node with no namespace. To match the parent default namespace, define an xpath prefix for it.
+                    //It should still end up without an xml document prefix because the xpath prefixes are mapped to the nearest xml document prefix for the same HREF/URI
+                    node = xmlNewChild(node, nullptr, (const xmlChar *) finger, last ? (const xmlChar *) value : nullptr);
+                    xmlSetNs(node, nullptr);
+                }
+
                 if (!node)
                 {
                     if (required)
@@ -655,7 +676,7 @@ public:
                         case ensureValueMode::add:
                         {
                             StringBuffer name((const char *)node->name);
-                            xmlNewChild(parent, nullptr, (const xmlChar *) name.str(), (const xmlChar *) value);
+                            xmlNewChild(parent, node->ns, (const xmlChar *) name.str(), (const xmlChar *) value);
                             break;
                         }
                         case ensureValueMode::appendto:
