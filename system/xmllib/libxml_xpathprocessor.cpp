@@ -618,7 +618,29 @@ public:
                         throw MakeStringException(XPATHERR_InvalidState,"XpathContext:ensureValue: xpath node not found '%s' in xpath '%s'", finger, xpath);
                     return;
                 }
-                node = xmlNewChild(node, nullptr, (const xmlChar *) finger, last ? (const xmlChar *) value : nullptr);
+                const char *nsx = strchr(finger, ':');
+                if (nsx)
+                {
+                    StringAttr prefix(finger, nsx-finger);
+                    finger = nsx+1;
+                    //translate the xpath xmlns prefix into the one defined in the content xml (exception if not found)
+                    const char *uri = queryNamespace(prefix.str());
+                    if (isEmptyString(uri))
+                        throw MakeStringException(XPATHERR_InvalidState,"XpathContext:ensureValue: xmlns prefix '%s' not defined in script used in xpath '%s'", prefix.str(), xpath);
+                    xmlNsPtr ns = xmlSearchNsByHref(m_xmlDoc, node, (const xmlChar *) uri);
+                    if (!ns)
+                        throw MakeStringException(XPATHERR_InvalidState,"XpathContext:ensureValue: namespace uri '%s' (referenced as xmlns prefix '%s') not declared in xml ", uri, prefix.str());
+                    node = xmlNewChild(node, ns, (const xmlChar *) finger, last ? (const xmlChar *) value : nullptr);
+                }
+                else
+                {
+                    node = xmlNewChild(node, nullptr, (const xmlChar *) finger, last ? (const xmlChar *) value : nullptr);
+                    //default libxml2 behavior here would be very confusing for scripts.  After adding a tag with no prefix you would need a tag on the xpath to read it.
+                    //Instead when there is no prefix, create a node with no namespace. To match the parent default namespace, define an xpath prefix for it.
+                    //You can always add the namespace you want by declaring it both in the xml (<es:namespace>) and the script (xmlns:prefix on the root node of the script) and then using it on the xpath.
+                    xmlSetNs(node, nullptr);
+                }
+
                 if (!node)
                 {
                     if (required)
@@ -655,7 +677,7 @@ public:
                         case ensureValueMode::add:
                         {
                             StringBuffer name((const char *)node->name);
-                            xmlNewChild(parent, nullptr, (const xmlChar *) name.str(), (const xmlChar *) value);
+                            xmlNewChild(parent, node->ns, (const xmlChar *) name.str(), (const xmlChar *) value);
                             break;
                         }
                         case ensureValueMode::appendto:
