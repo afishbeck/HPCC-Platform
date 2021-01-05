@@ -1469,12 +1469,12 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
         )!!";
 
         static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
-            <es:param name="testpass"/> 
+            <es:param name="testpass"/>
             <es:if test="es:storedValueExists('myvalue')">
               <es:set-value xpath_target="concat('check-value1-pass-', $testpass)" select="concat('already set as of pass-', $testpass)"/>
               <es:set-value target="myvalue" select="es:getStoredStringValue('myvalue')"/>
               <es:remove-node target="Name/ID[1]"/> //removing first one changes the index count so each is 1
-              <es:remove-node target="Name/ID[1]"/> 
+              <es:remove-node target="Name/ID[1]"/>
             </es:if>
             <es:if test="es:storedValueExists('myvalue2')">
               <es:set-value xpath_target="concat('check-value2-pass-', $testpass)" select="concat('already set in pass-', $testpass)"/>
@@ -1493,7 +1493,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
               <es:set-log-option name="option1" select="'this is a logging option value'"/>
               <es:set-log-option xpath_name="'option2'" select="'this is an xpath named logging option value'"/>
               <es:set-log-profile select="'myprofile'"/>
-              <es:rename-node target="FullName" new_name="Name"/> 
+              <es:rename-node target="FullName" new_name="Name"/>
             </es:if>
         </es:CustomRequestTransform>
         )!!";
