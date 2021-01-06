@@ -1760,7 +1760,7 @@ IEsdlCustomTransform *createEsdlCustomTransform(const char *scriptXml, const cha
         {
             StartTag stag;
             xpp->readStartTag(stag);
-            if (stricmp(stag.getLocalName(), "Transforms")) //allow common mistake,.. starting with the outer tag, not the script
+            if (strieq(stag.getLocalName(), "Transforms")) //allow common mistake,.. starting with the outer tag, not the script
                 continue;
             return new CEsdlCustomTransform(*xpp, stag, ns_prefix);
         }
