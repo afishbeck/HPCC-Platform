@@ -5,6 +5,8 @@
 IMPORT Std;
 IMPORT $ AS Certification;
 
+STD.System.Debug.Sleep(600000);
+
 Base := Certification.Setup.NodeMult1;     //max = 20
 Mult := Certification.Setup.NodeMult2;     //max = 20
 //base * Mult = number of millions of records to generate

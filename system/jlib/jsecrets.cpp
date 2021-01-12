@@ -713,3 +713,30 @@ extern jlib_decl bool getSecretValue(StringBuffer & result, const char *category
     return true;
 }
 
+//For testing now, can refactor before merging
+//
+extern jlib_decl bool getSecretUdpKey(MemoryAttr &updkey)
+{
+    bool ret = false;
+    updkey.clear();
+#ifdef _USE_OPENSSL
+    BIO *in = BIO_new_file("/opt/HPCCSystems/secrets/certificates/udp/tls.key", "r");
+    if (in == nullptr)
+        return false;
+    EC_KEY *eckey = PEM_read_bio_ECPrivateKey(in, nullptr, nullptr, nullptr);
+    if (eckey)
+    {
+        unsigned char *priv = NULL;
+        size_t privlen = EC_KEY_priv2buf(eckey, &priv);
+        if (privlen != 0)
+        {
+            updkey.set(privlen, priv);
+            OPENSSL_clear_free(priv, privlen);
+            ret = true;
+        }
+        EC_KEY_free(eckey);
+    }
+    BIO_free(in);
+#endif
+    return ret;
+}
