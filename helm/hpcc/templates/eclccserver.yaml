@@ -50,11 +50,13 @@ data:
 {{ include "hpcc.addDataVolumeMount" . | indent 12 }}
 {{ include "hpcc.addDllVolumeMount" . | indent 12 }}
 {{ include "hpcc.addSecretVolumeMounts" (dict "root" .root "categories" (list "system" "codeVerify" ) ) | indent 12 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "name" .me.name "component" "compile") | indent 12 }}
           volumes:
 {{ include "hpcc.addConfigMapVolume" .me | indent 10 }}
 {{ include "hpcc.addDataVolume" . | indent 10 }}
 {{ include "hpcc.addDllVolume" . | indent 10 }}
 {{ include "hpcc.addSecretVolumes" (dict "root" .root "categories" (list "system" "codeVerify" ) ) | indent 10 }}
+{{ include "hpcc.addCertificateVolume" (dict "name" .me.name "component" "compile") | indent 10 }}
           restartPolicy: Never
       backoffLimit: 0
 {{- end }}
@@ -109,6 +111,7 @@ spec:
 {{ include "hpcc.addDataVolumeMount" $commonCtx | indent 8 }}
 {{ include "hpcc.addDllVolumeMount" $commonCtx | indent 8 }}
 {{ include "hpcc.addSecretVolumeMounts" (dict "root" $ "categories" (list "system" "codeVerify" ) ) | indent 8 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "name" .name "component" "eclccserver") | indent 8 }}
         - name: "hpccbundles"
           mountPath: "/home/hpcc/.HPCCSystems"
       volumes:
@@ -116,6 +119,7 @@ spec:
 {{ include "hpcc.addDataVolume" $commonCtx | indent 6 }}
 {{ include "hpcc.addDllVolume" $commonCtx | indent 6 }}
 {{ include "hpcc.addSecretVolumes" (dict "root" $ "categories" (list "system" "codeVerify" ) ) | indent 6 }}
+{{ include "hpcc.addCertificateVolume" (dict "name" .name "component" "eclccserver") | indent 6 }}
       - name: hpccbundles
         emptyDir: {}
 ---
@@ -123,5 +127,8 @@ kind: ConfigMap
 {{ include "hpcc.eclccServerConfigMap" $commonCtx }}
 
 ---
+{{ include "hpcc.addCertificate" (dict "root" $ "name" .name "component" "eclccserver") }}
+{{ include "hpcc.addCertificate" (dict "root" $ "name" .name "component" "compile") }}
+
 {{- end }}
 {{- end }}

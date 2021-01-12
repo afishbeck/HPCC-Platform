@@ -606,7 +606,11 @@ Generate list of available services
 - name: {{ $esp.name }}
   type: {{ $esp.application }}
   port: {{ $esp.servicePort }}
+  {{- if hasKey $esp "tls" }}
   tls: {{ $esp.tls }}
+  {{- else }}
+  tls: {{- and $.Values.certificates $.Values.certificates.enbabled }}
+  {{- end }}
   public: {{ $esp.public }}
 {{ end -}}
 {{- range $dali := $.Values.dali -}}
@@ -835,3 +839,176 @@ spec:
 {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/*
+Use cert-manager to create a public certificate and private key for use with TLS
+There are separate certificate issuers for internal and external certificates
+by default external certificates are self-signed and internal certificates are signed
+by our own certificate authority.  A CA certificate is also provided to the pod
+so that we can recognize the signature of our own CA.
+*/}}
+{{- define "hpcc.addCertificate" }}
+{{- if .root.Values.certificates -}}
+{{- if .root.Values.certificates.enabled -}}
+{{- $externalCert := and (hasKey . "external") .external -}}
+{{- $issuer := ternary .root.Values.certificates.issuers.external .root.Values.certificates.issuers.local $externalCert -}}
+{{- if $issuer -}}
+{{- $namespace := .root.Release.Namespace -}}
+{{- $exposure := ternary "external" "local" $externalCert -}}
+{{- $name := .name }}
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .component }}-{{ $exposure }}-{{ $name }}-cert
+  namespace: {{ $namespace }}
+spec:
+  # Secret names are always required.
+  secretName: {{ .component }}-{{ $exposure }}-{{ $name }}-tls
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  subject:
+    organizations:
+    - HPCC Systems
+  commonName: {{ $name }}.{{ $namespace }}
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+ # for internal access the first entry is a wildcard used when the pod is accessed directly (not via a service) for peer to peer communication
+ {{- if not $externalCert }}
+  - "{{ $name }}*.{{ $namespace }}"
+  - "{{ $name }}*"
+ {{- end }}
+ #if servicename parameter is passed we simply create a service entry of that name
+ {{- if .servicename }}
+  - {{ .servicename }}.{{ $namespace }}
+ {{- end }}
+ #if service parameter is passed in we are using the component config as a service config entry
+ {{- if .service -}}
+   {{- $public := and (hasKey .service "public") .service.public -}}
+   {{- if eq $public $externalCert }}
+  - {{ .service.name }}.{{ $namespace }}
+   {{- end }}
+ {{- end }}
+ #if services parameter is passed in the component has an array of services to configure
+ {{- if .services -}}
+  {{- range $service := .services }}
+   {{- $external := and (hasKey $service "external") $service.external -}}
+   {{- if eq $external $externalCert }}
+  - {{ $service.name }}.{{ $namespace }}
+   {{- end }}
+  {{- end }}
+ {{- end }}
+  uris:
+  - spiffe://hpcc.{{ $namespace }}/{{ .component }}/{{ $name }}
+  # Issuer references are always required.
+  issuerRef:
+    name: {{ $issuer.name }}
+    # We can reference ClusterIssuers by changing the kind here.
+    # The default value is Issuer (i.e. a locally namespaced Issuer)
+    kind: {{ $issuer.kind }}
+    # This is optional since cert-manager will default to this value however
+    # if you are using an external issuer, change this to that issuer group.
+    group: cert-manager.io
+---
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Experimental: Use certmanager to generate a key for roxie udp encryption.
+A public certificate and private key are generated under /opt/HPCCSystems/secrets/certificates/udp.
+Current udp encryption design would only use the private key.
+Key is in pem format and the private key would need to be extracted.
+*/}}
+{{- define "hpcc.addUDPCertificate" }}
+{{- if .root.Values.certificates -}}
+{{- if .root.Values.certificates.enabled -}}
+{{- $issuer := .root.Values.certificates.issuers.local -}}
+{{- $namespace := .root.Release.Namespace -}}
+{{- $name := .name -}}
+{{- if $issuer }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .component }}-udp-{{ $name }}-cert
+  namespace: {{ $namespace }}
+spec:
+  # Secret names are always required.
+  secretName: {{ .component }}-udp-{{ $name }}-dtls
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  subject:
+    organizations:
+    - HPCC Systems
+  commonName: {{ $name }}.{{ $namespace }}
+  isCA: false
+  privateKey:
+    algorithm: ECDSA
+    encoding: PKCS1
+    size: 256
+  usages:
+    - server auth
+    - client auth
+  # At least one of a DNS Name, URI, or IP address is required.
+  uris:
+  - spiffe://hpcc.{{ $namespace }}/{{ .component }}/{{ $name }}
+  # Issuer references are always required.
+  issuerRef:
+    name: {{ $issuer.name }}
+    # We can reference ClusterIssuers by changing the kind here.
+    # The default value is Issuer (i.e. a locally namespaced Issuer)
+    kind: {{ $issuer.kind }}
+    # This is optional since cert-manager will default to this value however
+    # if you are using an external issuer, change this to that issuer group.
+    group: cert-manager.io
+---
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Add a certficate volume mount for a component
+*/}}
+{{- define "hpcc.addCertificateVolumeMount" -}}
+{{- $externalCert := and (hasKey . "external") .external -}}
+{{- $exposure := ternary "external" "local" $externalCert }}
+- name: certificate-{{ .component }}-{{ $exposure }}-{{ .name }}
+  mountPath: /opt/HPCCSystems/secrets/certificates/{{ $exposure }}
+{{- end -}}
+
+{{/*
+Add a secret volume for a certificate
+*/}}
+{{- define "hpcc.addCertificateVolume" -}}
+{{- $externalCert := and (hasKey . "external") .external -}}
+{{- $exposure := ternary "external" "local" $externalCert }}
+- name: certificate-{{ .component }}-{{ $exposure }}-{{ .name }}
+  secret:
+    secretName: {{ .component }}-{{ $exposure }}-{{ .name }}-tls
+{{ end -}}
+
+{{/*
+Add the certficate volume mount for a roxie udp key
+*/}}
+{{- define "hpcc.addUDPCertificateVolumeMount" }}
+- name: certificate-{{ .component }}-udp-{{ .name }}
+  mountPath: /opt/HPCCSystems/secrets/certificates/udp
+{{- end -}}
+
+{{/*
+Add a secret volume for a roxie udp key
+*/}}
+{{- define "hpcc.addUDPCertificateVolume" }}
+- name: certificate-{{ .component }}-udp-{{ .name }}
+  secret:
+    secretName: {{ .component }}-udp-{{ .name }}-dtls
+{{ end -}}
