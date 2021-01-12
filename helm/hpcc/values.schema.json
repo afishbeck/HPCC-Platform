@@ -39,6 +39,26 @@
       },
       "additionalProperties": false
     },
+    "certificates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "issuers": {
+          "type": "object",
+          "properties": {
+            "local": {
+              "$ref": "#/definitions/issuer"
+            },
+            "external": {
+              "$ref": "#/definitions/issuer"
+            }
+          }
+        }
+      }
+    },
     "secrets": {
       "description": "configuration for secrets accessed by the components",
       "type": "object",
@@ -987,6 +1007,27 @@
         }
       },
       "additionalProperties": false
+    },
+    "issuer": {
+      "type": "object",
+      "required": [ "name" ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the issuer which will be referenced in certificate objects"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+              "Issuer",
+              "ClusterIssuer"
+          ]
+        },
+        "spec": {
+          "description": "The cert-manager spec for the issuer. Should match issuer spec(s) defined by https://cert-manager.io/docs/configuration/",
+          "type": "object"
+        }
+      }
     }
   }
 }
