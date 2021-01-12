@@ -14,14 +14,14 @@ esp:
    logDir: "-"
 
    tls_config:
-     certificate: /etc/HPCCSystems/certificates/{$instance}/server.crt
-     privatekey: /etc/HPCCSystems/certificates/{$instance}/private.key
+     certificate: /opt/HPCCSystems/secrets/certificates/tls/tls.crt
+     privatekey: /etc/HPCCSystems/secrets/certificates/tls/tls.key
      cipherList:
        verify:
           enable: false
           address_match: false
           accept_selfsigned: true
           ca_certificates:
-            - path: "ca.pem"
+            - path: "/opt/HPCCSystems/secrets/certificates/tls/ca.crt"
           trusted_peers:
             - anyone

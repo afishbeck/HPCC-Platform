@@ -84,6 +84,51 @@ storage:
     # existingClaim: ""
     # forcePermissions: false
 
+## The certificates section can be used to enable cert-manager to generate TLS certificates for each component in the hpcc.
+## You must first install cert-manager to use this feature.
+## https://cert-manager.io/docs/installation/kubernetes/#installing-with-helm
+##
+## The Certificate issuers are divided into "internal" (those which will be used for internal mutual TLS) and "external" those
+## which will be externally accesible and therefore need to be recognized by browsers and/or other entities.
+##
+## Each issuer type has a spec section of the same format as the spec section documented in the cer-manager "Issuer configuration" documentation.
+## https://cert-manager.io/docs/configuration/#supported-issuer-types
+##
+## The default configuration is meant to provide reasonable functionality without additional dependencies. The default "external" issuer
+## configuration should not be used in production (or even QA) environments. The default internal configuration is fine as long as the
+## secret ca key is managed properly and securely.
+##
+## The default external issuer is set to use self signed certificates.  The expectation is that this will be overriden by the configuration
+## of an external certificate authority or vault in QA and production environments.
+##
+## The default for the internal (mTLS) issuer is designed to act as our own certificate authority. This should work well for an hpcc
+## environement as all of our components will be able to identify and trust each other and can rely on the use of a common authority
+## within the environment. A kubernetes secret must be provided for the certificate authority key-pair.  The default name for the secret
+## is "internal-issuer-ca-key-pair".  The secret should provide data values for "tls.crt" and "tls.key".
+##
+## The internal issuer can also be configured to use an external certificate authority or vault.
+##
+certificates:
+  enabled: true
+  issuers:
+    internal:
+      name: hpcc-internal-issuer
+      ## kind can be changed to ClusterIssue to refer to a ClusterIssuer. https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.ClusterIssuer
+      ## Probably don't want to define the spec for a ClusterIssuer here since it is k8s cluster wide, so remove spec.
+      kind: Issuer
+      ## do not define spec (set spec: null), to reference an Issuer resource that already exists in the cluster
+      ## otherwise an Issuer resource will be created.
+      ## change spec if you'd like to change how certificates get issued... see ## https://cert-manager.io/docs/configuration/#supported-issuer-types
+      ## for information on what spec should contain.
+      spec:
+        ca:
+          secretName: hpcc-internal-issuer-key-pair
+    external:
+      name: hpcc-external-issuer
+      kind: Issuer
+      spec:
+        selfSigned: {}
+
 ## The secrets section contains a set of categories, each of which contain a list of secrets.  The categories deterime which
 ## components have access to the secrets.
 ## For each secret:
@@ -185,7 +230,7 @@ esp:
   ## Pre-configured esp applications include eclwatch, eclservices, and eclqueries
   application: eclwatch
   auth: none
-  tls: off
+  tls: true
   replicas: 1
   ## port can be used to change the local port used by the pod. If omitted, the default port (8880) is used
   port: 8888
@@ -200,7 +245,7 @@ esp:
 - name: eclservices
   application: eclservices
   auth: none
-  tls: off
+  tls: true
   replicas: 1
   servicePort: 8010
   public: false
@@ -211,7 +256,7 @@ esp:
 - name: eclqueries
   application: eclqueries
   auth: none
-  tls: off
+  tls: true
   replicas: 1
   public: true
   servicePort: 8002
@@ -222,7 +267,7 @@ esp:
 - name: esdl-sandbox
   application: esdl-sandbox
   auth: none
-  tls: off
+  tls: true
   replicas: 1
   public: true
   servicePort: 8899
@@ -233,7 +278,7 @@ esp:
 - name: sql2ecl
   application: sql2ecl
   auth: none
-  tls: off
+  tls: true
   replicas: 1
   public: true
   servicePort: 8510

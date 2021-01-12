@@ -63,11 +63,16 @@ spec:
 {{ include "hpcc.addDataVolumeMount" $commonCtx | indent 8 }}
 {{ include "hpcc.addDllVolumeMount" $ | indent 8 }}
 {{ include "hpcc.addSecretVolumeMounts" (dict "root" $ "categories" (list "system" "storage" ) ) | indent 8 }}
+        - name: cert-{{ .name }}
+          mountPath: /opt/HPCCSystems/secrets/certificates/tls
       volumes:
 {{ include "hpcc.addConfigMapVolume" . | indent 6 }}
 {{ include "hpcc.addDataVolume" $commonCtx | indent 6 }}
 {{ include "hpcc.addDllVolume" $ | indent 6 }}
 {{ include "hpcc.addSecretVolumes" (dict "root" $ "categories" (list "system" "storage" ) ) | indent 6 }}
+      - name: cert-{{ .name }}
+        secret:
+          secretName: {{ .name }}-tls
 ---
 kind: ConfigMap 
 {{ include "hpcc.espConfigMap" $commonCtx }}
@@ -86,5 +91,50 @@ spec:
     run: {{ .name | quote }}
   type: {{ .public | ternary "LoadBalancer" "ClusterIP" }}
 ---
+{{- if $.Values.certificates -}}
+{{- if $.Values.certificates.enabled -}}
+{{- $issuer := ternary $.Values.certificates.issuers.external $.Values.certificates.issuers.internal .public -}}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .name }}-cert
+  namespace: {{ $.Release.Namespace }}
+spec:
+  # Secret names are always required.
+  secretName: {{ .name }}-tls
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  subject:
+    organizations:
+    - HPCC Systems
+  commonName: {{ .name }}.{{ $.Release.Namespace }}.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  # At least one of a DNS Name, URI, or IP address is required.
+  dnsNames:
+  #service fqdn
+  - {{ .name }}.{{ $.Release.Namespace }}.svc.cluster.local
+  #service short (virtual host) name (remove?)
+  - {{ .name }}
+  uris:
+  - spiffe://hpcc.{{ $.Release.Namespace }}/esp/{{ $application }}/{{ .name }}
+  # Issuer references are always required.
+  issuerRef:
+    name: {{ $issuer.name }}
+    # We can reference ClusterIssuers by changing the kind here.
+    # The default value is Issuer (i.e. a locally namespaced Issuer)
+    kind: {{ $issuer.kind }}
+    # This is optional since cert-manager will default to this value however
+    # if you are using an external issuer, change this to that issuer group.
+    group: cert-manager.io
+---
+{{- end }}
+{{- end }}
 {{- end }}
 {{- end }}

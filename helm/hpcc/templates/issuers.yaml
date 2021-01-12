@@ -1,0 +1,16 @@
+{{- define "hpcc.issuers" -}}
+apiVersion: cert-manager.io/v1
+kind: {{ .me.kind }}
+metadata:
+  name: {{ .me.name }}
+  namespace: {{ .root.Release.Namespace | default "default" }}
+{{- if .me.spec }}
+spec:
+{{ toYaml .me.spec | indent 2 }}
+{{- end }}
+{{- end -}}
+
+{{- range $k, $v := .Values.certificates.issuers }}
+{{- include "hpcc.issuers" (dict "root" $ "me" $v ) }}
+---
+{{ end }}
