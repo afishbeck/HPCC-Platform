@@ -32,12 +32,16 @@ spec:
 {{ include "hpcc.addImageAttrs" (dict "root" $ "me" .) | indent 8 }}
         volumeMounts:
 {{ include "hpcc.addConfigMapVolumeMount" . | indent 8 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "name" .name "component" "dali" "external" false) | indent 8 }}
 {{ include "hpcc.addDaliVolumeMount" $ | indent 8 }}
 {{ include "hpcc.addSecretVolumeMounts" (dict "root" $ "categories" (list "system" ) ) | indent 8 }}
+
       volumes:
 {{ include "hpcc.addConfigMapVolume" . | indent 6 }}
 {{ include "hpcc.addDaliVolume" $ | indent 6 }}
+{{ include "hpcc.addCertificateVolume" (dict "name" .name "component" "dali" "external" false) | indent 6 }}
 {{ include "hpcc.addSecretVolumes" (dict "root" $ "categories" (list "system" ) ) | indent 6 }}
+
 ---
 kind: ConfigMap 
 apiVersion: v1 
@@ -65,6 +69,8 @@ spec:
     run: {{ .name | quote }}
   type: ClusterIP
 ---
+{{ include "hpcc.addCertificate" (dict "root" $ "name" .name "service" . "component" "dali" "external" false) }}
+
 {{- if (not $.Values.storage.daliStorage.existingClaim) }}
 apiVersion: v1
 kind: PersistentVolumeClaim
