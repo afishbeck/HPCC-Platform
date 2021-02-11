@@ -534,9 +534,9 @@ securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
 {{- end }}
-  runAsNonRoot: true
-  runAsUser: 10000
-  runAsGroup: 10001
+ # runAsNonRoot: true
+ # runAsUser: 10000
+ # runAsGroup: 10001
 {{ end -}}
 
 {{/*
@@ -632,24 +632,25 @@ so that we can recognize the signature of our own CA.
 {{- if .root.Values.certificates.enabled -}}
 {{- $externalCert := and (hasKey . "external") .external -}}
 {{- $issuer := ternary .root.Values.certificates.issuers.external .root.Values.certificates.issuers.internal $externalCert -}}
+{{- if $issuer -}}
 {{- $namespace := .root.Release.Namespace -}}
-{{- $name := .name -}}
-{{- if $issuer }}
+{{- $exposure := ternary "external" "internal" $externalCert -}}
+{{- $name := .name }}
 
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: {{ .component }}-{{ ternary "external" "internal" $externalCert }}-{{ $name }}-cert
+  name: {{ .component }}-{{ $exposure }}-{{ $name }}-cert
   namespace: {{ $namespace }}
 spec:
   # Secret names are always required.
-  secretName: {{ .component }}-{{ ternary "external" "internal" $externalCert }}-{{ $name }}-tls
+  secretName: {{ .component }}-{{ $exposure }}-{{ $name }}-tls
   duration: 2160h # 90d
   renewBefore: 360h # 15d
   subject:
     organizations:
     - HPCC Systems
-  commonName: {{ $name }}.{{ $namespace }}.cluster.local
+  commonName: {{ $name }}
   isCA: false
   privateKey:
     algorithm: RSA
@@ -658,26 +659,31 @@ spec:
   usages:
     - server auth
     - client auth
-  # At least one of a DNS Name, URI, or IP address is required.
   dnsNames:
+ # for internal access the first entry is a wildcard used when the pod is accessed directly (not via a service) for peer to peer communication
  {{- if not $externalCert }}
   - "{{ $name }}*.{{ $namespace }}.cluster.local"
   - "{{ $name }}*"
  {{- end }}
+ #if servicename parameter is passed we simply create a service entry of that name
  {{- if .servicename }}
+  - {{ .servicename }}
   - {{ .servicename }}.{{ $namespace }}.svc.cluster.local
  {{- end }}
+ #if service parameter is passed in we are using the component config as a service config entry
  {{- if .service -}}
    {{- $public := and (hasKey .service "public") .service.public -}}
    {{- if eq $public $externalCert }}
+  - {{ .service.name }}
   - {{ .service.name }}.{{ $namespace }}.svc.cluster.local
    {{- end }}
  {{- end }}
+ #if services parameter is passed in the component has an array of services to configure
  {{- if .services -}}
   {{- range $service := .services }}
    {{- $external := and (hasKey $service "external") $service.external -}}
    {{- if eq $external $externalCert }}
-  #service fqdn
+  - {{ $service.name }}
   - {{ $service.name }}.{{ $namespace }}.svc.cluster.local
    {{- end }}
   {{- end }}

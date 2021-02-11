@@ -24,6 +24,7 @@ data:
           enable: true
           address_match: false
           accept_selfsigned: false
+          trusted_peers: [ anyone ]
           ca_certificates:
             path: "/opt/HPCCSystems/secrets/certificates/internal/ca.crt"
  {{- end }}

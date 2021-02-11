@@ -1752,7 +1752,8 @@ public:
     {
         Owned<IClientWsWorkunits> client = createCmdClient(WsWorkunits, *this);
         Owned<IClientWUQueryRequest> req = client->createWUQueryRequest();
-        setCmdRequestTimeouts(req->rpc(), 0, optWaitConnectMs, optWaitReadSec);
+        setCmdRequestTimeouts(req->rpc(), 10000, optWaitConnectMs, optWaitReadSec);
+        req->rpc().setMtlsSecretName("internal");
 
         if (optName.isEmpty())
         {

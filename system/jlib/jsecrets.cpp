@@ -68,11 +68,14 @@ interface IVaultManager : extends IInterface
 
 static CriticalSection secretCacheCS;
 static Owned<IPropertyTree> secretCache;
+static CriticalSection mtlsInfoCacheCS;
+static Owned<IPropertyTree> mtlsInfoCache;
 static Owned<IVaultManager> vaultManager;
 
 MODULE_INIT(INIT_PRIORITY_SYSTEM)
 {
     secretCache.setown(createPTree());
+    mtlsInfoCache.setown(createPTree());
     return true;
 }
 
@@ -80,6 +83,7 @@ MODULE_EXIT()
 {
     vaultManager.clear();
     secretCache.clear();
+    mtlsInfoCache.clear();
 }
 
 static void splitUrlAddress(const char *address, size_t len, StringBuffer &host, StringBuffer *port)
@@ -739,4 +743,46 @@ extern jlib_decl bool getSecretUdpKey(MemoryAttr &updkey)
     BIO_free(in);
 #endif
     return ret;
+}
+
+extern IPropertyTree *queryMtlsSecretInfo(const char *name)
+{
+    if (isEmptyString(name))
+        return nullptr;
+   CriticalBlock block(mtlsInfoCacheCS);
+   IPropertyTree *info = mtlsInfoCache->queryPropTree(name);
+    if (info)
+        return info;
+
+    StringBuffer filepath;
+    StringBuffer secretpath;
+
+    addPathSepChar(secretpath.append(ensureSecretDirectory())).append("certificates").append(PATHSEPCHAR).append(name).append(PATHSEPCHAR);
+
+    filepath.set(secretpath).append("tls.crt");
+    if (!checkFileExists(filepath))
+        return nullptr;
+
+    info = mtlsInfoCache->setPropTree(name);
+    info->setProp("certificate", filepath.str());
+    filepath.set(secretpath).append("tls.key");
+    if (checkFileExists(filepath))
+        info->setProp("privatekey", filepath.str());
+    IPropertyTree *verify = ensurePTree(info, "verify");
+    if (verify)
+    {
+        filepath.set(secretpath).append("ca.crt");
+        if (checkFileExists(filepath))
+        {
+            IPropertyTree *ca = ensurePTree(verify, "ca_certificates");
+            if (ca)
+                ca->setProp("@path", filepath.str());
+        }
+        verify->setPropBool("@enable", true);
+        verify->setPropBool("@address_match", false);
+        verify->setPropBool("@accept_selfsigned", false);
+        verify->setProp("trusted_peers", "anyone");
+
+    }
+    return info;
 }
