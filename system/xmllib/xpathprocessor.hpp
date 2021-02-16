@@ -20,6 +20,7 @@
 
 #include "xmllib.hpp"
 #include "jliball.hpp"
+#include "eclhelper.hpp"
 
 interface XMLLIB_API ICompiledXpath : public IInterface
 {
@@ -74,6 +75,7 @@ interface XMLLIB_API IXpathContext : public IInterface
     virtual  IXpathContextIterator *evaluateAsNodeSet(ICompiledXpath * compiledXpath) = 0;
     virtual StringBuffer &toXml(const char *xpath, StringBuffer & xml) = 0;
     virtual void addXmlContent(const char *xml) = 0;
+    virtual IXmlWriter *createXmlWriter() = 0;
 };
 
 interface IXpathContextIterator : extends IIteratorOf<IXpathContext> { };

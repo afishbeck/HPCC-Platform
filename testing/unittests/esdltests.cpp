@@ -23,6 +23,10 @@
 #include "wsexcept.hpp"
 
 #include <stdio.h>
+#include "dllserver.hpp"
+#include "thorplugin.hpp"
+#include "eclrtl.hpp"
+#include "rtlformat.hpp"
 
 // =============================================================== URI parser
 
@@ -266,9 +270,31 @@ bool areEquivalentTestXMLStrings(const char *xml1, const char *xml2)
 
 static const char *target_config = "<method queryname='EchoPersonInfo'/>";
 
+
+static Owned<ILoadedDllEntry> mysqlPluginDll;
+static Owned<IEmbedContext> mysqlplugin;
+
+IEmbedContext &ensureMysqlEmbeded()
+{
+    if (!mysqlplugin)
+    {
+        mysqlPluginDll.setown(createDllEntry("mysqlembed", false, NULL, false));
+        if (!mysqlPluginDll)
+            throw makeStringException(0, "Failed to load mysqlembed plugin");
+        GetEmbedContextFunction pf = (GetEmbedContextFunction) mysqlPluginDll->getEntry("getEmbedContextDynamic");
+        if (!pf)
+            throw makeStringException(0, "Failed to load mysqlembed plugin");
+        mysqlplugin.setown(pf());
+    }
+    return *mysqlplugin;
+}
+
+
 class ESDLTests : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE( ESDLTests );
+        CPPUNIT_TEST(testMysql);
+/*
         CPPUNIT_TEST(testEsdlTransformScript);
         CPPUNIT_TEST(testEsdlTransformScriptNoPrefix);
         CPPUNIT_TEST(testEsdlTransformForEach);
@@ -292,7 +318,8 @@ class ESDLTests : public CppUnit::TestFixture
         CPPUNIT_TEST(testEsdlTransformRequestNamespaces);
         CPPUNIT_TEST(testScriptContext);
         CPPUNIT_TEST(testTargetElement);
-      //CPPUNIT_TEST(testScriptMap); //requires a particular roxie query
+  */
+     //CPPUNIT_TEST(testScriptMap); //requires a particular roxie query
       //CPPUNIT_TEST(testHTTPPostXml); //requires a particular roxie query
     CPPUNIT_TEST_SUITE_END();
 
@@ -1843,6 +1870,53 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
             E->Release();
             CPPUNIT_ASSERT(false);
         }
+    }
+    void testMysql()
+    {
+        constexpr const char *config1 = R"!!(<config>
+          <Transform>
+            <Param name='testcase' value="new features"/>
+          </Transform>
+        </config>)!!";
+
+        static constexpr const char * input = R"!!(<?xml version="1.0" encoding="UTF-8"?>
+         <root>
+            <Person>
+               <FullName>
+                  <First>Joe</First>
+                  <ID>GI101</ID>
+                  <ID>GI102</ID>
+               </FullName>
+            </Person>
+          </root>
+        )!!";
+
+        static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
+            <es:variable name='value' select="'1'"/>
+            <es:mysql server="localhost" user="tony" password="tonydb" database="classicmodels" section="logging" name="offices">
+              <es:sql>SELECT * from offices where officeCode = ?;</es:sql>
+              <es:parameter name="code" value="$value"/>
+            </es:mysql>
+            <es:mysql server="localhost" user="tony" password="tonydb" database="classicmodels" section="logging" name="products">
+              <es:sql>CALL GetAllProducts();</es:sql>
+            </es:mysql>
+            <es:element name="Offices">
+              <es:copy-of select="$offices"/>
+            </es:element>
+            <es:element name="Products">
+              <es:copy-of select="$products"/>
+            </es:element>
+        </es:CustomRequestTransform>
+        )!!";
+
+            Owned<IEspContext> ctx = createEspContext(nullptr);
+            Owned<IEsdlScriptContext> scriptContext = createTestScriptContext(ctx, input, config1);
+            runTransform(scriptContext, script, ESDLScriptCtxSection_ESDLRequest, "MyResult", "http post xml", 0);
+
+            StringBuffer output;
+            scriptContext->toXML(output);
+            fputs(output.str(), stdout);
+            fflush(stdout);
     }
 
     void testScriptMap()
