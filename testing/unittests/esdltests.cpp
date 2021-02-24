@@ -1873,25 +1873,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     }
     void testMysql()
     {
-        constexpr const char *config1 = R"!!(<config>
-          <Transform>
-            <Param name='testcase' value="new features"/>
-          </Transform>
-        </config>)!!";
-
-        static constexpr const char * input = R"!!(<?xml version="1.0" encoding="UTF-8"?>
-         <root>
-            <Person>
-               <FullName>
-                  <First>Joe</First>
-                  <ID>GI101</ID>
-                  <ID>GI102</ID>
-               </FullName>
-            </Person>
-          </root>
-        )!!";
-
-        static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
+        static constexpr const char * script1 = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
             <es:variable name='value' select="'1'"/>
             <es:mysql server="localhost" user="tony" password="tonydb" database="classicmodels" section="logging" name="offices">
               <es:sql>SELECT * from offices where officeCode = ?;</es:sql>
@@ -1909,9 +1891,182 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
         </es:CustomRequestTransform>
         )!!";
 
+        static constexpr const char * scripty = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
+            <es:variable name="server" select="'localhost'"/>
+            <es:variable name="user" select="'tony'"/>
+            <es:variable name="password" select="'tonydb'"/>
+            <es:variable name="database" select="'classicmodels'"/>
+            <es:variable name="section" select="'sql'"/>
+            <es:mysql server="$server" user="$user" password="$password" database="$database" section="$section" name="drop">
+              <es:sql>DROP TABLE IF EXISTS tbl1;</es:sql>
+            </es:mysql>
+            <es:mysql server="$server" user="$user" password="$password" database="$database" section="$section" name="create">
+              <es:sql>CREATE TABLE tbl1 ( name VARCHAR(20), bval BIT(15), value INT, boolval TINYINT, r8 DOUBLE, r4 FLOAT, d BLOB, ddd DECIMAL(10,2), u1 VARCHAR(10), u2 VARCHAR(10), dt DATETIME );</es:sql>
+            </es:mysql>
+            <es:mysql server="$server" user="$user" password="$password" database="$database" section="$section" name="insert_params">
+              <es:parameter name="name" value="'params'"/>
+              <es:parameter name="bval" value="number(65)" type="BIT(15)"/>
+              <es:parameter name="value" value="number(1)"/>
+              <es:parameter name="boolval" value="number(1)"/>
+              <es:parameter name="r8" value="number(1.2)"/>
+              <es:parameter name="r4" value="number(3.4)"/>
+              <es:parameter name="d" value="'aa55aa55'"/>
+              <es:parameter name="ddd" value="'1234567.89'"/>
+              <es:parameter name="u1" value="'Straße'"/>
+              <es:parameter name="u2" value="'Straße'"/>
+              <es:parameter name="dt" value="'2019-02-01 23:59:59'"/>
+              <es:sql>INSERT INTO tbl1 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);</es:sql>
+            </es:mysql>
+            <es:mysql server="$server" user="$user" password="$password" database="$database" section="$section" name="insert_params_as_strings">
+              <es:parameter name="name" value="'strings'"/>
+              <es:parameter name="bval" value="'65'" type="BIT(15)"/>
+              <es:parameter name="value" value="number(1)"/>
+              <es:parameter name="boolval" value="number(1)"/>
+              <es:parameter name="r8" value="number(1.2)"/>
+              <es:parameter name="r4" value="number(3.4)"/>
+              <es:parameter name="d" value="'aa55aa55'"/>
+              <es:parameter name="ddd" value="'1234567.89'"/>
+              <es:parameter name="u1" value="'Straße'"/>
+              <es:parameter name="u2" value="'Straße'"/>
+              <es:parameter name="dt" value="'2019-02-01 23:59:59'"/>
+              <es:sql>INSERT INTO tbl1 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);</es:sql>
+            </es:mysql>
+            <es:mysql select="data/Row" server="$server" user="$user" password="$password" database="$database" section="$section" name="insert_each">
+              <es:parameter name="name" value="name"/>
+              <es:parameter name="bval" value="bval" type="BIT(15)"/>
+              <es:parameter name="value" value="../value"/>
+              <es:parameter name="boolval" value="boolval"/>
+              <es:parameter name="r8" value="r8"/>
+              <es:parameter name="r4" value="r4"/>
+              <es:parameter name="d" value="d"/>
+              <es:parameter name="ddd" value="ddd"/>
+              <es:parameter name="u1" value="u1"/>
+              <es:parameter name="u2" value="u2"/>
+              <es:parameter name="dt" value="dt"/>
+              <es:sql>INSERT INTO tbl1 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);</es:sql>
+            </es:mysql>
+            <es:mysql server="$server" user="$user" password="$password" database="$database" section="$section" name="insert_inline">
+              <es:sql>INSERT INTO tbl1 values ('inline', 65, 1, 1, 1.2, 3.4, 'aa55aa55', 1234567.89, 'Straße', 'Straße', '2019-02-01 23:59:59');</es:sql>
+            </es:mysql>
+            <es:mysql server="$server" user="$user" password="$password" database="$database" section="$section" name="select_all">
+              <es:sql>SELECT * FROM tbl1</es:sql>
+            </es:mysql>
+        </es:CustomRequestTransform>
+        )!!";
+
+        constexpr const char *config1 = R"!!(<config>
+          <Transform>
+            <Param name='testcase' value="new features"/>
+          </Transform>
+        </config>)!!";
+
+        static constexpr const char * data = R"!!(<?xml version="1.0" encoding="UTF-8"?>
+         <root>
+            <insert>
+             <common_value>178</common_value>
+             <common_r8>1.2</common_r8>
+             <Row>
+               <name>selected1</name>
+               <bval>65</bval>
+               <boolval>1</boolval>
+               <r4>3.4</r4>
+               <d>aa55aa55</d>
+               <ddd>1234567.89</ddd>
+               <u1>Straße1</u1>
+               <u2>Straße2</u2>
+               <dt>2019-02-01 12:59:59</dt>
+             </Row>
+             <Row>
+               <name>selected2</name>
+               <bval>65</bval>
+               <boolval>1</boolval>
+               <r4>4.5</r4>
+               <d>bb66bb66</d>
+               <ddd>1234567.89</ddd>
+               <u1>Straße3</u1>
+               <u2>Straße4</u2>
+               <dt>2019-02-01 13:59:59</dt>
+             </Row>
+             <Row>
+               <name>selected3</name>
+               <bval>65</bval>
+               <boolval>1</boolval>
+               <r4>5.6</r4>
+               <d>cc77cc77</d>
+               <ddd>1234567.89</ddd>
+               <u1>Straße5</u1>
+               <u2>Straße6</u2>
+               <dt>2019-02-01 14:59:59</dt>
+             </Row>
+            </insert>
+            <read>
+             <name>selected1</name>
+             <name>selected3</name>
+            </read>
+          </root>
+        )!!";
+
+        static constexpr const char * input = R"!!(<?xml version="1.0" encoding="UTF-8"?>
+         <root>
+            <Person>
+               <FullName>
+                  <First>Joe</First>
+               </FullName>
+            </Person>
+          </root>
+        )!!";
+
+        static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="Person">
+            <es:variable name="secret" select="'mydb'"/>
+            <es:variable name="database" select="'classicmodels'"/>
+            <es:variable name="section" select="'sql'"/>
+            <es:mysql secret="$secret" database="$database" section="$section" name="drop">
+              <es:sql>DROP TABLE IF EXISTS tbl1;</es:sql>
+            </es:mysql>
+            <es:mysql secret="$secret" database="$database" section="$section" name="create">
+              <es:sql>CREATE TABLE tbl1 ( name VARCHAR(20), bval BIT(15), value INT, boolval TINYINT, r8 DOUBLE, r4 FLOAT, d BLOB, ddd DECIMAL(10,2), u1 VARCHAR(10), u2 VARCHAR(10), dt DATETIME );</es:sql>
+            </es:mysql>
+            <es:mysql select="getDataSection('whatever')/this/insert/Row" secret="$secret" database="$database" section="$section" name="insert_each_row" output-group-tag="'inserted'">
+              <es:parameter name="name" value="name"/>
+              <es:parameter name="bval" value="bval" type="BIT(15)"/>
+              <es:parameter name="value" value="../common_value"/>
+              <es:parameter name="boolval" value="boolval"/>
+              <es:parameter name="r8" value="../common_r8"/>
+              <es:parameter name="r4" value="r4"/>
+              <es:parameter name="d" value="d"/>
+              <es:parameter name="ddd" value="ddd"/>
+              <es:parameter name="u1" value="u1"/>
+              <es:parameter name="u2" value="u2"/>
+              <es:parameter name="dt" value="dt"/>
+              <es:sql>INSERT INTO tbl1 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);</es:sql>
+            </es:mysql>
+            <es:mysql select="getDataSection('whatever')/this/read/name" secret="$secret" database="$database" section="$section" name="select_each_name" output-group-tag="'selected'">
+              <es:parameter name="name" value="."/>
+              <es:sql>SELECT * FROM tbl1 where name = ?;</es:sql>
+            </es:mysql>
+            <es:mysql secret="$secret" database="$database" section="$section" name="select_all" output-group-tag="'onecall'">
+              <es:sql>SELECT * FROM tbl1;</es:sql>
+            </es:mysql>
+            <es:for-each select="$select_all/onecall/Row">
+              <es:element name="r">
+                <es:copy-of select="*"/>
+              </es:element>
+            </es:for-each>
+        </es:CustomRequestTransform>
+        )!!";
+
             Owned<IEspContext> ctx = createEspContext(nullptr);
             Owned<IEsdlScriptContext> scriptContext = createTestScriptContext(ctx, input, config1);
-            runTransform(scriptContext, script, ESDLScriptCtxSection_ESDLRequest, "MyResult", "http post xml", 0);
+            scriptContext->appendContent("whatever", "this", data);
+          try {
+              runTransform(scriptContext, script, ESDLScriptCtxSection_ESDLRequest, "MyResult", "http post xml", 0);
+          }
+          catch (IException *E)
+          {
+              StringBuffer m;
+              fprintf(stdout, "\nTest(%s) Exception %d - %s\n", "mysql", E->errorCode(), E->errorMessage(m).str());
+              E->Release();
+          }
 
             StringBuffer output;
             scriptContext->toXML(output);

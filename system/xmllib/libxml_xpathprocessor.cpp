@@ -1419,6 +1419,13 @@ extern ICompiledXpath* compileXpath(const char * xpath)
     return new CLibCompiledXpath(xpath);
 }
 
+extern ICompiledXpath* compileOptionalXpath(const char * xpath)
+{
+    if (isEmptyString(xpath))
+        return nullptr;
+    return compileXpath(xpath);
+}
+
 void addChildFromPtree(xmlNodePtr parent, IPropertyTree &tree, const char *name)
 {
     if (isEmptyString(name))
@@ -1717,10 +1724,10 @@ private:
     }
     virtual void appendContent(const char *section, const char *name, const char *xml) override
     {
+        xmlNodePtr sect = ensureSection(section);
+
         if (xml==nullptr)
             return;
-
-        xmlNodePtr sect = ensureSection(section);
         xmlNodePtr sectNode = getSectionNode(section, name);
 
         xmlDocPtr doc = xmlParseDoc((const xmlChar *)xml);
@@ -1738,7 +1745,7 @@ private:
             if (!isEmptyString(name))
                 xmlNodeSetName(content, (const xmlChar *) name);
             xmlAddChild(sect, content);
-            xmlFree(doc);
+            xmlFreeDoc(doc);
             return;
         }
         xmlAttrPtr prop = content->properties;

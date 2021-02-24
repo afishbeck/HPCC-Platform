@@ -534,6 +534,10 @@ public:
     {
         return stmt;
     }
+    uint64_t getAffectedRows()
+    {
+        return (stmt) ? mysql_stmt_affected_rows(stmt) : 0;
+    }
 private:
     MySQLStatement(const MySQLStatement &);
     MYSQL_STMT *stmt;
@@ -733,6 +737,10 @@ public:
     inline const MySQLResult *queryResultInfo() const
     {
         return res;
+    }
+    uint64_t getAffectedRows()
+    {
+        return (stmt) ? stmt->getAffectedRows() : 0;
     }
 protected:
     Linked<MySQLConnection> conn;
@@ -1522,9 +1530,15 @@ public:
                 if (inputStream && !inputStream->bindNext())
                 {
                     noteEOF();
-                    return NULL;
+                    return false;
                 }
                 stmtInfo->execute();
+            }
+            if (!stmtInfo->hasResult())
+            {
+                writer->outputUInt(stmtInfo->getAffectedRows(), 64, "@affectedRows");
+                noteEOF();
+                return false;
             }
             if (stmtInfo->next())
                 break;
@@ -1545,19 +1559,12 @@ public:
     {
         while (nextRow());
     }
-    virtual void stop()
-    {
-        stmtInfo->stop();
-    }
 
 protected:
     void noteEOF()
     {
         if (!eof)
-        {
             eof = true;
-            stop();
-        }
     }
     Linked<MySQLDatasetBinder> inputStream;
     Linked<MySQLPreparedStatement> stmtInfo;
@@ -1807,6 +1814,7 @@ public:
         IXmlWriter *writer = dynamic_cast<IXmlWriter*>(iifWriter);
         MySQLXmlWriter xmlWriter(inputStream, stmtInfo, writer);
         xmlWriter.write();
+        nextParam = 0; //if you start binding parameters again after writing the result you are working on the next call
     }
 
     virtual void importFunction(size32_t lenChars, const char *text)

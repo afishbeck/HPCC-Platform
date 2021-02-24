@@ -21,6 +21,11 @@
               </es:target>
             </es:target>
          </es:BackendResponse>
+         <es:EsdlResponse xmlns:ns1="urn:hpccsystems:ws:esdlexample:roxieechopersoninfo@ver=0.01">
+             <es:target xpath="ns1:Name">
+               <es:append-to-value target="ns1:Last" value="'-post-esdl-fix'" />
+             </es:target>
+         </es:EsdlResponse>
          <es:BackendResponse>
             <es:set-value target="BRESPSRV2" value="'s22'" />
          </es:BackendResponse>
@@ -140,6 +145,40 @@
          <es:PreLogging>
             <es:set-value target="PLMTH3" value="'m333'" />
          </es:PreLogging>
+         </Transforms>
+      ]]>
+      </Scripts>
+   </Method>
+   <Method name="MySqlEchoAddressInfo" querytype="script">
+      <Scripts><![CDATA[
+         <Transforms xmlns:es='urn:hpcc:esdl:script'>
+           <es:Service>
+            <es:variable name="secret" select="'mydb'"/>
+            <es:variable name="database" select="'classicmodels'"/>
+            <es:variable name="section" select="'sql'"/>
+            <es:mysql secret="$secret" database="$database" section="$section" name="create">
+              <es:sql>CREATE TABLE IF NOT EXISTS esdlecho ( type VARCHAR(5), Line1 VARCHAR(30), Line2 VARCHAR(30), City VARCHAR(30),  State VARCHAR(30), Zip INT );</es:sql>
+            </es:mysql>
+            <es:mysql select="Addresses/Address" secret="$secret" database="$database" section="$section" name="insert_request">
+              <es:parameter name="type" value="type"/>
+              <es:parameter name="Line1" value="Line1"/>
+              <es:parameter name="Line2" value="Line2"/>
+              <es:parameter name="City" value="City"/>
+              <es:parameter name="State" value="State"/>
+              <es:parameter name="Zip" value="Zip"/>
+              <es:sql>INSERT INTO esdlecho (type, Line1, Line2, City, State, Zip) values (?, ?, ?, ?, ?, ?);</es:sql>
+            </es:mysql>
+            <es:mysql secret="$secret" database="$database" section="$section" name="select_all">
+              <es:sql>SELECT * FROM esdlecho;</es:sql>
+            </es:mysql>
+            <es:ensure-target xpath="Addresses">
+             <es:for-each select="$select_all/Row">
+              <es:element name="Address">
+                <es:copy-of select="*"/>
+              </es:element>
+             </es:for-each>
+            </es:ensure-target xpath="Addresses">
+           </es:Service>
          </Transforms>
       ]]>
       </Scripts>
