@@ -270,31 +270,10 @@ bool areEquivalentTestXMLStrings(const char *xml1, const char *xml2)
 
 static const char *target_config = "<method queryname='EchoPersonInfo'/>";
 
-
-static Owned<ILoadedDllEntry> mysqlPluginDll;
-static Owned<IEmbedContext> mysqlplugin;
-
-IEmbedContext &ensureMysqlEmbeded()
-{
-    if (!mysqlplugin)
-    {
-        mysqlPluginDll.setown(createDllEntry("mysqlembed", false, NULL, false));
-        if (!mysqlPluginDll)
-            throw makeStringException(0, "Failed to load mysqlembed plugin");
-        GetEmbedContextFunction pf = (GetEmbedContextFunction) mysqlPluginDll->getEntry("getEmbedContextDynamic");
-        if (!pf)
-            throw makeStringException(0, "Failed to load mysqlembed plugin");
-        mysqlplugin.setown(pf());
-    }
-    return *mysqlplugin;
-}
-
-
 class ESDLTests : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE( ESDLTests );
-        CPPUNIT_TEST(testMysql);
-/*
+//        CPPUNIT_TEST(testMysql);
         CPPUNIT_TEST(testEsdlTransformScript);
         CPPUNIT_TEST(testEsdlTransformScriptNoPrefix);
         CPPUNIT_TEST(testEsdlTransformForEach);
@@ -311,14 +290,14 @@ class ESDLTests : public CppUnit::TestFixture
         CPPUNIT_TEST(testEsdlTransformFailLevel2B);
         CPPUNIT_TEST(testEsdlTransformFailLevel2C);
         CPPUNIT_TEST(testEsdlTransformAnyDescendentPath);
-        CPPUNIT_TEST(testEsdlTransformAbsoluteSoapPath);
+        CPPUNIT_TEST(testEsdlTransformDataSectionSoapPath);
         CPPUNIT_TEST(testEsdlTransformRelativePath);
         CPPUNIT_TEST(testEsdlTransformSelectPath);
         CPPUNIT_TEST(testEsdlTransformImplicitPrefix);
         CPPUNIT_TEST(testEsdlTransformRequestNamespaces);
         CPPUNIT_TEST(testScriptContext);
         CPPUNIT_TEST(testTargetElement);
-  */
+        CPPUNIT_TEST(testEsdlTransformSelectXpathVariable);
      //CPPUNIT_TEST(testScriptMap); //requires a particular roxie query
       //CPPUNIT_TEST(testHTTPPostXml); //requires a particular roxie query
     CPPUNIT_TEST_SUITE_END();
@@ -405,18 +384,52 @@ public:
       runTest("select-path", esdlScriptSelectPath, soapRequest, config, selectPathResult, 0);
     }
 
-    void testEsdlTransformAbsoluteSoapPath()
+ void testEsdlTransformSelectXpathVariable()
+    {
+        static constexpr const char * input = R"!!(<?xml version="1.0" encoding="UTF-8"?>
+         <root>
+            <EchoPersonInfo>
+               <EchoPersonInfoRequest>
+                  <First>Joe</First>
+               </EchoPersonInfoRequest>
+             </EchoPersonInfo>
+          </root>
+        )!!";
+
+        static constexpr const char * script = R"!!(<es:CustomRequestTransform xmlns:es="urn:hpcc:esdl:script" target="{$query}/{$request}">
+            <es:variable name="firstname" select="getDataSection('esdl_request')/root/{$query}/{$request}/First"/>
+            <es:set-value target="NewElement" select="{$firstname}"/>
+        </es:CustomRequestTransform>
+        )!!";
+
+        constexpr const char *config = R"!!(<config><Transform><Param name='testcase' value="select xpath variable"/></Transform></config>)!!";
+
+        constexpr const char* result = R"!!(<?xml version="1.0" encoding="UTF-8"?>
+         <root>
+            <EchoPersonInfo>
+               <EchoPersonInfoRequest>
+                  <First>Joe</First>
+                  <NewElement>Joe</NewElement>
+               </EchoPersonInfoRequest>
+             </EchoPersonInfo>
+          </root>
+        )!!";
+
+        runTest("select xpath variable", script, input, config, result, 0);
+    }
+
+    void testEsdlTransformDataSectionSoapPath()
     {
       constexpr const char* config = R"!!(
         <config strictParams='true'>
           <Transform>
-            <Param name='testcase' value="absolute-soap-path"/>
-            <Param name='selectPath' select="/esdl_script_context/esdl_request/soap:Envelope/soap:Body/extra/EchoPersonInfo/EchoPersonInfoRequest/Row/Name/First"/>
+            <Param name='testcase' value="data-section-soap-path"/>
+            <Param name='selectPath' select="getDataSection('esdl_request')/soap:Envelope/soap:Body/extra/EchoPersonInfo/EchoPersonInfoRequest/Row/Name/First"/>
           </Transform>
         </config>
       )!!";
 
-      runTest("absolute-soap-path", esdlScriptSelectPath, soapRequest, config, selectPathResult, 0);
+      runTest("data-section-soap-path", esdlScriptSelectPath, soapRequest, config, selectPathResult, 0);
     }
 
     void testEsdlTransformRelativePath()
@@ -1059,7 +1072,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     <Param name='testcase' value="for each friend"/>
     <Param name='section' select="'Friends'"/>
     <Param name='garbage' select="''"/>
-    <Param name='ForBuildListPath' select='/esdl_script_context/esdl_request/root/extra/Friends/Name'/>
+    <Param name='ForBuildListPath' select="getDataSection('esdl_request')/root/extra/Friends/Name"/>
     <Param name='ForIdPath' select='extra/Friends/Name/First'/>
   </Transform>
 </config>)!!";
@@ -1114,7 +1127,7 @@ constexpr const char * result = R"!!(<soap:Envelope xmlns:soap="http://schemas.x
     <Param name='section' select="'Relatives'"/>
     <Param name='garbage' select="''"/>
     <Param name='ForBuildListPath' select='extra/Relatives/Name'/>
-    <Param name='ForIdPath' select='/esdl_script_context/esdl_request/root/extra/Relatives/Name/First'/> <!--absolute path may change, highly frowned upon-->
+    <Param name='ForIdPath' select="getDataSection('esdl_request')/root/extra/Relatives/Name/First"/>
   </Transform>
 </config>)!!";
 

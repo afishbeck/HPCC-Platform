@@ -84,13 +84,18 @@ class CLibCompiledXpath : public CInterfaceOf<ICompiledXpath>
 private:
     xmlXPathCompExprPtr m_compiledXpathExpression = nullptr;
     StringBuffer m_xpath;
+    StringBuffer m_cachedXpath;
+    bool m_lazy = false;
     ReadWriteLock m_rwlock;
 
 public:
     CLibCompiledXpath(const char * xpath)
     {
         m_xpath.set(xpath);
-        m_compiledXpathExpression = xmlXPathCompile(BAD_CAST m_xpath.str());
+
+        m_lazy = strstr(m_xpath.str(), "{$") != nullptr;
+        if (!m_lazy)
+            m_compiledXpathExpression = xmlXPathCompile(BAD_CAST m_xpath.str());
     }
     ~CLibCompiledXpath()
     {
@@ -100,14 +105,27 @@ public:
     {
         return m_xpath.str();
     }
-    xmlXPathCompExprPtr getCompiledXPathExpression()
+    xmlXPathCompExprPtr getCompiledXPathExpression(IVariableSubstitutionHelper *helper)
     {
+        if (m_lazy)
+        {
+            StringBuffer currentXpath;
+            replaceVariables(currentXpath, m_xpath.str(), true, helper, "{$", "}");
+            if (!m_compiledXpathExpression || !streq(currentXpath, m_cachedXpath))
+            {
+                xmlXPathFreeCompExpr(m_compiledXpathExpression);
+                m_cachedXpath.swapWith(currentXpath);
+                m_compiledXpathExpression = xmlXPathCompile((const xmlChar *) m_cachedXpath.str());
+            }
+        }
         return m_compiledXpathExpression;
     }
 
     virtual void extractReferences(StringArray &functions, StringArray &variables) override
     {
 #ifndef _WIN32
+        if (m_compiledXpathExpression==nullptr)
+            return;
         char *buf = nullptr;
         size_t len = 0;
 
@@ -369,7 +387,7 @@ public:
         if (ownedDoc)
             xmlFreeDoc(m_xmlDoc);
     }
-
+    
     void registerExslt()
     {
         exsltDateXpathCtxtRegister(m_xpathContext, (xmlChar*)"date");
@@ -568,7 +586,7 @@ public:
         if (!ccXpath)
             throw MakeStringException(XPATHERR_InvalidState,"XpathProcessor:setLocation: Error: BAD compiled XPATH");
 
-        xmlXPathObjectPtr obj = evaluate(ccXpath->getCompiledXPathExpression(), compiledXpath->getXpath());
+        xmlXPathObjectPtr obj = evaluate(ccXpath->getCompiledXPathExpression(this), compiledXpath->getXpath());
         return setLocation(obj, required, compiledXpath->getXpath());
     }
 
@@ -894,7 +912,7 @@ public:
         if (!current || !select)
             return;
         CLibCompiledXpath * ccXpath = static_cast<CLibCompiledXpath *>(select);
-        xmlXPathObjectPtr obj = primaryContext->evaluate(ccXpath->getCompiledXPathExpression(), ccXpath->getXpath());
+        xmlXPathObjectPtr obj = primaryContext->evaluate(ccXpath->getCompiledXPathExpression(this), ccXpath->getXpath());
         if (!obj)
             throw MakeStringException(XPATHERR_InvalidState, "XpathContext:copyof xpath syntax error '%s'", ccXpath->getXpath());
         if (obj->type!=xmlXPathObjectType::XPATH_NODESET || !obj->nodesetval || obj->nodesetval->nodeNr==0)
@@ -962,7 +980,7 @@ public:
         if (m_xpathContext)
         {
             CLibCompiledXpath * ccXpath = static_cast<CLibCompiledXpath *>(compiled);
-            xmlXPathObjectPtr obj = evaluate(ccXpath->getCompiledXPathExpression(), ccXpath->getXpath());
+            xmlXPathObjectPtr obj = evaluate(ccXpath->getCompiledXPathExpression(this), ccXpath->getXpath());
             if (!obj)
                 throw MakeStringException(-1, "addEvaluateVariable xpath error %s", ccXpath->getXpath());
             return addObjectVariable(name, obj, scope);
@@ -1070,7 +1088,7 @@ public:
         CLibCompiledXpath * clCompiled = static_cast<CLibCompiledXpath *>(compiled);
         if (!clCompiled)
             throw MakeStringException(XPATHERR_MissingInput,"XpathProcessor:evaluateAsNodeSet: Error: Could not evaluate XPATH");
-        return evaluateAsNodeSet(evaluate(clCompiled->getCompiledXPathExpression(), compiled->getXpath()), compiled->getXpath());
+        return evaluateAsNodeSet(evaluate(clCompiled->getCompiledXPathExpression(this), compiled->getXpath()), compiled->getXpath());
     }
 
     IXpathContextIterator *evaluateAsNodeSet(xmlXPathObjectPtr evaluated, const char* xpath);
@@ -1114,7 +1132,7 @@ public:
         CLibCompiledXpath * ccXpath = static_cast<CLibCompiledXpath *>(compiledXpath);
         if (!ccXpath)
             throw MakeStringException(XPATHERR_MissingInput,"XpathProcessor:evaluateAsBoolean: Error: Missing compiled XPATH");
-        return evaluateAsBoolean(evaluate(ccXpath->getCompiledXPathExpression(), compiledXpath->getXpath()), compiledXpath->getXpath());
+        return evaluateAsBoolean(evaluate(ccXpath->getCompiledXPathExpression(this), compiledXpath->getXpath()), compiledXpath->getXpath());
     }
 
     virtual const char * evaluateAsString(ICompiledXpath * compiledXpath, StringBuffer & evaluated) override
@@ -1122,7 +1140,7 @@ public:
         CLibCompiledXpath * ccXpath = static_cast<CLibCompiledXpath *>(compiledXpath);
         if (!ccXpath)
             throw MakeStringException(XPATHERR_MissingInput,"XpathProcessor:evaluateAsString: Error: Missing compiled XPATH");
-        return evaluateAsString(evaluate(ccXpath->getCompiledXPathExpression(), compiledXpath->getXpath()), evaluated, compiledXpath->getXpath());
+        return evaluateAsString(evaluate(ccXpath->getCompiledXPathExpression(this), compiledXpath->getXpath()), evaluated, compiledXpath->getXpath());
     }
 
     virtual double evaluateAsNumber(ICompiledXpath * compiledXpath) override
@@ -1130,7 +1148,7 @@ public:
         CLibCompiledXpath * ccXpath = static_cast<CLibCompiledXpath *>(compiledXpath);
         if (!ccXpath)
             throw MakeStringException(XPATHERR_MissingInput,"XpathProcessor:evaluateAsNumber: Error: Missing compiled XPATH");
-        return evaluateAsNumber(evaluate(ccXpath->getCompiledXPathExpression(), compiledXpath->getXpath()), compiledXpath->getXpath());
+        return evaluateAsNumber(evaluate(ccXpath->getCompiledXPathExpression(this), compiledXpath->getXpath()), compiledXpath->getXpath());
     }
 
     virtual bool setXmlDoc(const char * xmldoc) override
