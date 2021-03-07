@@ -64,7 +64,13 @@ spec:
 {{- end }}
 {{- end }}
 {{ include "hpcc.addDaliVolume" $commonCtx | indent 6 }}
+{{- if has "data" $tmpDaliScope.sashaAccess }}
+{{ include "hpcc.addDataVolume" $commonCtx | indent 6}}
+{{ include "hpcc.addSecretVolumes" (dict "root" $ "categories" (list "storage" ) ) | indent 6 }}
 {{- end }}
+{{- if has "dll" $tmpDaliScope.sashaAccess }}
+{{ include "hpcc.addDllVolume" $commonCtx | indent 6 -}}
+ {{- end }}{{- end }}
 {{ include "hpcc.addSecretVolumes" (dict "root" $ "categories" (list "system" ) ) | indent 6 }}
 {{ include "hpcc.addCertificateVolume" (dict "name" .name "component" "dali" "external" false) | indent 6 }}
 ---
