@@ -13,6 +13,9 @@ data:
 {{ toYaml (omit .me "logging") | indent 6 }}
 {{- include "hpcc.generateLoggingConfig" . | indent 6 }}
 {{- if and .root.Values.certificates .root.Values.certificates.enabled }}
+ {{- if not (hasKey .me "tls" )}}
+      tls: true
+ {{- end }}
       tls_config:
  {{- if .me.public }}
         certificate: /opt/HPCCSystems/secrets/certificates/external/tls.crt
@@ -28,6 +31,8 @@ data:
           ca_certificates:
             path: "/opt/HPCCSystems/secrets/certificates/local/ca.crt"
  {{- end }}
+{{- else if not (hasKey .me "tls" )}}
+      tls: false
 {{- end }}
       queues:
 {{ include "hpcc.generateConfigMapQueues" .root | indent 6 }}
@@ -89,7 +94,7 @@ spec:
 {{ include "hpcc.addDataVolume" $commonCtx | indent 6 }}
 {{ include "hpcc.addDllVolume" $commonCtx | indent 6 }}
 {{ include "hpcc.addSecretVolumes" (dict "root" $ "categories" $secretsCategories ) | indent 6 }}
-{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" $application "name" .name "external" (and (hasKey . "public") .public)) | indent 6 }}
+{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" $application "name" .name "certificate" .certificate "external" (and (hasKey . "public") .public)) | indent 6 }}
 ---
 kind: ConfigMap 
 {{ include "hpcc.espConfigMap" $commonCtx }}

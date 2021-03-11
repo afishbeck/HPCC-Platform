@@ -20,8 +20,6 @@ spec:
 
 {{- if $.Values.certificates -}}
  {{- if $.Values.certificates.enabled -}}
-   {{- $issuerjson :=  toPrettyJson (lookup "v1" "ServiceAccount" "default" "" ) -}}
-    {{- $_ := fail (print $issuerjson ) -}}
    {{- if not (.Capabilities.APIVersions.Has "cert-manager.io/v1") }}
     {{- $_ := fail (printf "Enabling certificate generation requires cert-manager resources. Please intall cert-manager. You can disable mTLS security by setting certificates.enabled=false" ) -}}
    {{- end -}}

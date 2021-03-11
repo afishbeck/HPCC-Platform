@@ -342,8 +342,6 @@ esp:
   ## Pre-configured esp applications include eclwatch, eclservices, and eclqueries
   application: eclwatch
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   ## port can be used to change the local port used by the pod. If omitted, the default port (8880) is used
   port: 8888
@@ -357,8 +355,6 @@ esp:
 - name: eclservices
   application: eclservices
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   servicePort: 8010
   public: false
@@ -368,8 +364,6 @@ esp:
 - name: eclqueries
   application: eclqueries
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   public: true
   servicePort: 8002
@@ -379,8 +373,6 @@ esp:
 - name: esdl-sandbox
   application: esdl-sandbox
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   public: true
   servicePort: 8899
@@ -390,11 +382,10 @@ esp:
 - name: sql2ecl
   application: sql2ecl
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   public: true
   servicePort: 8510
+  #domain: hpccsql.com
   #resources:
   #  cpu: "250m"
   #  memory: "1G"
