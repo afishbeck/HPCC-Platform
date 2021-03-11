@@ -136,6 +136,7 @@ certificates:
       name: hpcc-external-issuer
       ## kind can be changed to ClusterIssue to refer to a ClusterIssuer. https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.ClusterIssuer
       kind: Issuer
+      domain: hpccsystems.com
       ## do not define spec (set spec: null), to reference an Issuer resource that already exists in the cluster
       ## change spec if you'd like to change how certificates get issued... see ## https://cert-manager.io/docs/configuration/#supported-issuer-types
       ## for information on what spec should contain.
@@ -332,8 +333,6 @@ esp:
   ## Pre-configured esp applications include eclwatch, eclservices, and eclqueries
   application: eclwatch
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   ## port can be used to change the local port used by the pod. If omitted, the default port (8880) is used
   port: 8888
@@ -347,8 +346,6 @@ esp:
 - name: eclservices
   application: eclservices
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   servicePort: 8010
   public: false
@@ -358,8 +355,6 @@ esp:
 - name: eclqueries
   application: eclqueries
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   public: true
   servicePort: 8002
@@ -369,8 +364,6 @@ esp:
 - name: esdl-sandbox
   application: esdl-sandbox
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   public: true
   servicePort: 8899
@@ -380,11 +373,10 @@ esp:
 - name: sql2ecl
   application: sql2ecl
   auth: none
-  ## set tls to true for draft only, default tls will be calculated
-  tls: true
   replicas: 1
   public: true
   servicePort: 8510
+  domain: hpccsql.com
   #resources:
   #  cpu: "250m"
   #  memory: "1G"

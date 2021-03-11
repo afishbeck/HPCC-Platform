@@ -172,8 +172,8 @@
     },
     "sasha": {
       "description": "sasha services",
-      "type": "object",
-      "$ref": "#/definitions/sashaservice"
+      "type": "array",
+      "items": { "$ref": "#/definitions/sashaservice" }
     }
   },
   "required": [
@@ -1006,7 +1006,7 @@
           "type": "boolean"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "issuer": {
       "type": "object",

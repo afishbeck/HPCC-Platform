@@ -854,6 +854,8 @@ so that we can recognize the signature of our own CA.
 {{- $issuer := ternary .root.Values.certificates.issuers.external .root.Values.certificates.issuers.local $externalCert -}}
 {{- if $issuer -}}
 {{- $namespace := .root.Release.Namespace -}}
+{{- $service := ternary .service (dict) (hasKey . "service") -}}
+{{- $domain := ( $service.domain | default $issuer.domain | default $namespace | default "default" ) -}}
 {{- $exposure := ternary "external" "local" $externalCert -}}
 {{- $name := .name }}
 
@@ -870,7 +872,7 @@ spec:
   subject:
     organizations:
     - HPCC Systems
-  commonName: {{ $name }}.{{ $namespace }}
+  commonName: {{ $name }}.{{ $domain }}
   isCA: false
   privateKey:
     algorithm: RSA
@@ -882,18 +884,18 @@ spec:
   dnsNames:
  # for internal access the first entry is a wildcard used when the pod is accessed directly (not via a service) for peer to peer communication
  {{- if not $externalCert }}
-  - "{{ $name }}*.{{ $namespace }}"
+  - "{{ $name }}*.{{ $domain }}"
   - "{{ $name }}*"
  {{- end }}
  #if servicename parameter is passed we simply create a service entry of that name
  {{- if .servicename }}
-  - {{ .servicename }}.{{ $namespace }}
+  - {{ .servicename }}.{{ $domain }}
  {{- end }}
  #if service parameter is passed in we are using the component config as a service config entry
  {{- if .service -}}
    {{- $public := and (hasKey .service "public") .service.public -}}
    {{- if eq $public $externalCert }}
-  - {{ .service.name }}.{{ $namespace }}
+  - {{ .service.name }}.{{ $domain }}
    {{- end }}
  {{- end }}
  #if services parameter is passed in the component has an array of services to configure
@@ -901,12 +903,12 @@ spec:
   {{- range $service := .services }}
    {{- $external := and (hasKey $service "external") $service.external -}}
    {{- if eq $external $externalCert }}
-  - {{ $service.name }}.{{ $namespace }}
+  - {{ $service.name }}.{{ $domain }}
    {{- end }}
   {{- end }}
  {{- end }}
   uris:
-  - spiffe://hpcc.{{ $namespace }}/{{ .component }}/{{ $name }}
+  - spiffe://hpcc.{{ $domain }}/{{ .component }}/{{ $name }}
   # Issuer references are always required.
   issuerRef:
     name: {{ $issuer.name }}
@@ -981,6 +983,7 @@ Add a certficate volume mount for a component
 {{- define "hpcc.addCertificateVolumeMount" -}}
 {{- $externalCert := and (hasKey . "external") .external -}}
 {{- $exposure := ternary "external" "local" $externalCert }}
+
 - name: certificate-{{ .component }}-{{ $exposure }}-{{ .name }}
   mountPath: /opt/HPCCSystems/secrets/certificates/{{ $exposure }}
 {{- end -}}
@@ -993,7 +996,11 @@ Add a secret volume for a certificate
 {{- $exposure := ternary "external" "local" $externalCert }}
 - name: certificate-{{ .component }}-{{ $exposure }}-{{ .name }}
   secret:
+ {{- if .certificate }}
+    secretName: {{ .certificate }}
+ {{- else }}
     secretName: {{ .component }}-{{ $exposure }}-{{ .name }}-tls
+ {{ end -}}
 {{ end -}}
 
 {{/*
