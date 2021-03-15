@@ -745,7 +745,7 @@ extern jlib_decl bool getSecretUdpKey(MemoryAttr &updkey)
     return ret;
 }
 
-extern IPropertyTree *queryMtlsSecretInfo(const char *name)
+extern jlib_decl IPropertyTree *queryMtlsSecretInfo(const char *name)
 {
     if (isEmptyString(name))
         return nullptr;
