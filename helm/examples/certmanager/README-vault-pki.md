@@ -22,6 +22,12 @@ kubectl get pods
 
 Vault pods should be running, but not ready
 
+```bash
+$ kubectl get pods
+NAME                                       READY   STATUS    RESTARTS   AGE
+vault-0                                    0/1     Running   0          6s
+```
+
 ## Initialize and unseal the vault
 
 Initialize Vault with one key share and one key threshold.  Saving off the output in json format so
@@ -34,7 +40,7 @@ kubectl exec vault-0 -- vault operator init -key-shares=1 -key-threshold=1 -form
 View the unseal key found in init-keys.json.
 
 ```bash
-$ cat init-keys.json | jq -r ".unseal_keys_b64[]"
+cat init-keys.json | jq -r ".unseal_keys_b64[]"
 ```
 
 Create an environment variable holding the unseal key:
@@ -65,28 +71,32 @@ cat init-keys.json | jq -r ".root_token"
 
 Create a variable named VAULT_ROOT_TOKEN to capture the root token.
 ```bash
-$ VAULT_ROOT_TOKEN=$(cat init-keys.json | jq -r ".root_token")
+VAULT_ROOT_TOKEN=$(cat init-keys.json | jq -r ".root_token")
 ```
 
 Login to Vault running on the vault-0 pod with the $VAULT_ROOT_TOKEN.
 ```bash
-$ kubectl exec vault-0 -- vault login $VAULT_ROOT_TOKEN
+kubectl exec vault-0 -- vault login $VAULT_ROOT_TOKEN
 ```
 
 Start an interactive shell session on the vault-0 pod.
 ```bash
-$ kubectl exec --stdin=true --tty=true vault-0 -- /bin/sh
+kubectl exec --stdin=true --tty=true vault-0 -- /bin/sh
 ```
-We are now working from the vault-0 pod.
+We are now working from the vault-0 pod.  You should see a prompt, something like:
+
+```bash
+/ $
+```
 
 Enable the PKI secrets engine at its default path.
 ```bash
-/$ vault secrets enable pki
+vault secrets enable pki
 ```
 
 Configure the max lease time-to-live (TTL) to 8760h.
 ```bash
-$ vault secrets tune -max-lease-ttl=8760h pki
+vault secrets tune -max-lease-ttl=8760h pki
 ```
 
 # Vault CA key pair
@@ -95,36 +105,40 @@ Vault can accept an existing key pair, or it can generate its own self-signed ro
 
 Generate a self-signed certificate valid for 8760h.
 ```bash
-$ vault write pki/root/generate/internal common_name=example.com ttl=8760h
+vault write pki/root/generate/internal common_name=example.com ttl=8760h
 ```
 
 Configure the PKI secrets engine certificate issuing and certificate revocation list (CRL) endpoints to use the Vault service in the default namespace.
 ```bash
-$ vault write pki/config/urls issuing_certificates="http://vault.default:8200/v1/pki/ca" crl_distribution_points="http://vault.default:8200/v1/pki/crl" 
+vault write pki/config/urls issuing_certificates="http://vault.default:8200/v1/pki/ca" crl_distribution_points="http://vault.default:8200/v1/pki/crl"
 ```
 
-For our internal MTLS certificates we will use our kubernetes namespace as our domain name. This will allow us to recongize where these components reside.
-For our external TLS certificates for this demo we will use myhpcc.com as our domain.
+For our local MTLS certificates we will use our kubernetes namespace as our domain name. This will allow us to recongize where these components reside.
+For our public TLS certificates for this demo we will use myhpcc.com as our domain.
 
 Configure a role named hpccnamespace that enables the creation of certificates hpccnamespace domain with any subdomains.
 
-$ vault write pki/roles/default allowed_domains=default allow_subdomains=true allowed_uri_sans="spiffe://*" max_ttl=72h
+```bash
+vault write pki/roles/hpcclocal key_type=any allowed_domains=default allow_subdomains=true allowed_uri_sans="spiffe://*" max_ttl=72h
+```
 
 Configure a role named myhpcc-dot-com that enables the creation of certificates myhpcc.com domain with any subdomains.
 
-$ vault write pki/roles/myhpcc-dot-com allowed_domains=myhpcc.com allow_subdomains=true allowed_uri_sans="spiffe://*" max_ttl=72h
+```bash
+vault write pki/roles/myhpcc-dot-com allowed_domains=myhpcc.com allow_subdomains=true allowed_uri_sans="spiffe://*" max_ttl=72h
+```
 
 Create a policy named pki that enables read access to the PKI secrets engine paths.
 
 ```bash
-$ vault policy write pki - <<EOF
+vault policy write pki - <<EOF
 path "pki*"                        { capabilities = ["read", "list"] }
 path "pki/roles/myhpcc-dot-com"   { capabilities = ["create", "update"] }
 path "pki/sign/myhpcc-dot-com"    { capabilities = ["create", "update"] }
 path "pki/issue/myhpcc-dot-com"   { capabilities = ["create"] }
-path "pki/roles/default"   { capabilities = ["create", "update"] }
-path "pki/sign/default"    { capabilities = ["create", "update"] }
-path "pki/issue/default"   { capabilities = ["create"] }
+path "pki/roles/hpcclocal"   { capabilities = ["create", "update"] }
+path "pki/sign/hpcclocal"    { capabilities = ["create", "update"] }
+path "pki/issue/hpcclocal"   { capabilities = ["create"] }
 EOF
 ```
 
@@ -134,13 +148,13 @@ Vault provides a Kubernetes authentication method that enables clients to authen
 Enable the Kubernetes authentication method.
 
 ```bash
-$ vault auth enable kubernetes
+vault auth enable kubernetes
 ```
 
 Configure the Kubernetes authentication method to use the service account token, the location of the Kubernetes host, and its certificate.
 
 ```bash
-$ vault write auth/kubernetes/config \
+vault write auth/kubernetes/config \
     token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
     kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443" \
     kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -149,7 +163,7 @@ $ vault write auth/kubernetes/config \
 Finally, create a Kubernetes authentication role named issuer that binds the pki policy with a Kubernetes service account named issuer.
 
 ```bash
-$ vault write auth/kubernetes/role/issuer \
+vault write auth/kubernetes/role/issuer \
     bound_service_account_names=issuer \
     bound_service_account_namespaces=cert-manager,default \
     policies=pki \
@@ -163,18 +177,20 @@ exit
 
 Deploy Cert Manager
 
-he
 Configure an issuer and generate a certificate
 The cert-manager enables you to define Issuers that interface with the Vault certificate generating endpoints. These Issuers are invoked when a Certificate is created.
 
 Create a namespace named cert-manager to host the cert-manager.
 
-$ kubectl create namespace cert-manager
+```bash
+kubectl create namespace cert-manager
+```
+
 ## Install cert-manager custom resource defintions:
 
 This adds new custom resource types to kubernetes for certificate issuers and certificates.
 
-```
+```bash
 kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.1.0/cert-manager.crds.yaml
 ```
 
@@ -186,7 +202,7 @@ Add Jetstack helm repo:
 helm repo add jetstack https://charts.jetstack.io
 ```
 
-Install vault server.
+Install cert-manager.
 
 ```bash
 helm install cert-manager jetstack/cert-manager --namespace cert-manager --version v1.1.0
@@ -195,7 +211,7 @@ helm install cert-manager jetstack/cert-manager --namespace cert-manager --versi
 Create a service account named issuer within the default namespace.
 
 ```bash
-$ kubectl create serviceaccount issuer
+kubectl create serviceaccount issuer
 ```
 
 The service account generated a secret that is required by the Issuer.
@@ -203,13 +219,13 @@ The service account generated a secret that is required by the Issuer.
 Get all the secrets in the default namespace.
 
 ```bash
-$ kubectl get secrets
+kubectl get secrets
 ```
 
 Create a variable named ISSUER_SECRET_REF to capture the secret name.
 
 ```bash
-$ ISSUER_SECRET_REF=$(kubectl get serviceaccount issuer -o json | jq -r ".secrets[].name")
+ISSUER_SECRET_REF=$(kubectl get serviceaccount issuer -o json | jq -r ".secrets[].name")
 ```
 
 ## Installing the HPCC with certificate generation enabled
@@ -217,7 +233,7 @@ $ ISSUER_SECRET_REF=$(kubectl get serviceaccount issuer -o json | jq -r ".secret
 Install the HPCC helm chart with the "--set certificates.enabled" option set to true.
 
 ```bash
-helm install myhpcc hpcc/ --set global.image.version=latest --set certificates.enabled=true --set certificates.issuers.local.spec.vault.auth.kubernetes.secretRef.name=$ISSUER_SECRET_REF  --set certificates.issuers.external.spec.vault.auth.kubernetes.secretRef.name=$ISSUER_SECRET_REF --values examples/certmanager/values-vault-pki.yaml
+helm install myhpcc hpcc/ --set global.image.version=latest --set certificates.enabled=true --set certificates.issuers.local.spec.vault.auth.kubernetes.secretRef.name=$ISSUER_SECRET_REF  --set certificates.issuers.public.spec.vault.auth.kubernetes.secretRef.name=$ISSUER_SECRET_REF --values examples/certmanager/values-vault-pki.yaml
 ```
 
 Use kubectl to check the status of the deployed pods.  Wait until all pods are running before continuing.
@@ -235,9 +251,9 @@ kubectl get issuers -o wide
 You should see something like this:
 
 ```bash
-NAME                   READY   STATUS                AGE
-hpcc-external-issuer   True                          3m57s
-hpcc-internal-issuer   True    Signing CA verified   3m57s
+NAME                 READY   STATUS           AGE
+hpcc-local-issuer    True    Vault verified   78s
+hpcc-public-issuer   True    Vault verified   78s
 ```
 
 Check and see if the cerficates have been successfully created.
@@ -257,17 +273,17 @@ eclagent-local-roxie-workunit-cert        True    eclagent-local-roxie-workunit-
 eclagent-local-thor-cert                  True    eclagent-local-thor-tls                  85s
 eclagent-local-thor-eclagent-cert         True    eclagent-local-thor-eclagent-tls         85s
 eclccserver-local-myeclccserver-cert      True    eclccserver-local-myeclccserver-tls      85s
-eclqueries-external-eclqueries-cert       True    eclqueries-external-eclqueries-tls       85s
+eclqueries-public-eclqueries-cert         True    eclqueries-public-eclqueries-tls         85s
 eclservices-local-eclservices-cert        True    eclservices-local-eclservices-tls        85s
-eclwatch-external-eclwatch-cert           True    eclwatch-external-eclwatch-tls           85s
-esdl-sandbox-external-esdl-sandbox-cert   True    esdl-sandbox-external-esdl-sandbox-tls   85s
+eclwatch-public-eclwatch-cert             True    eclwatch-public-eclwatch-tls             85s
+esdl-sandbox-public-esdl-sandbox-cert     True    esdl-sandbox-public-esdl-sandbox-tls     85s
 hthor-local-hthor-cert                    True    hthor-local-hthor-tls                    85s
-roxie-agent-external-roxie-agent-1-cert   True    roxie-agent-external-roxie-agent-1-tls   85s
-roxie-agent-external-roxie-agent-2-cert   True    roxie-agent-external-roxie-agent-2-tls   85s
+roxie-agent-public-roxie-agent-1-cert     True    roxie-agent-public-roxie-agent-1-tls     85s
+roxie-agent-public-roxie-agent-2-cert     True    roxie-agent-public-roxie-agent-2-tls     85s
 roxie-agent-local-roxie-agent-1-cert      True    roxie-agent-local-roxie-agent-1-tls      85s
 roxie-agent-local-roxie-agent-2-cert      True    roxie-agent-local-roxie-agent-2-tls      85s
 roxie-local-roxie-workunit-cert           True    roxie-local-roxie-workunit-tls           85s
-sql2ecl-external-sql2ecl-cert             True    sql2ecl-external-sql2ecl-tls             85s
+sql2ecl-public-sql2ecl-cert               True    sql2ecl-public-sql2ecl-tls               85s
 thoragent-local-thor-thoragent-cert       True    thoragent-local-thor-thoragent-tls       85s
 thormanager-local-thormanager-w-cert      True    thormanager-local-thormanager-w-tls      85s
 thorworker-local-thorworker-w-cert        True    thorworker-local-thorworker-w-tls        85s
@@ -297,24 +313,24 @@ eclagent-local-roxie-workunit-tls        kubernetes.io/tls                     3
 eclagent-local-thor-eclagent-tls         kubernetes.io/tls                     3      2m56s
 eclagent-local-thor-tls                  kubernetes.io/tls                     3      2m54s
 eclccserver-local-myeclccserver-tls      kubernetes.io/tls                     3      2m55s
-eclqueries-external-eclqueries-tls       kubernetes.io/tls                     3      2m52s
+eclqueries-public-eclqueries-tls         kubernetes.io/tls                     3      2m52s
 eclservices-local-eclservices-tls        kubernetes.io/tls                     3      2m54s
-eclwatch-external-eclwatch-tls           kubernetes.io/tls                     3      2m50s
-esdl-sandbox-external-esdl-sandbox-tls   kubernetes.io/tls                     3      2m49s
+eclwatch-public-eclwatch-tls             kubernetes.io/tls                     3      2m50s
+esdl-sandbox-public-esdl-sandbox-tls     kubernetes.io/tls                     3      2m49s
 hpcc-agent-token-h78cd                   kubernetes.io/service-account-token   3      2m58s
 hpcc-default-token-55lss                 kubernetes.io/service-account-token   3      2m58s
-hpcc-internal-issuer-key-pair            kubernetes.io/tls                     2      3m23s
+hpcc-local-issuer-key-pair               kubernetes.io/tls                     2      3m23s
 hpcc-thoragent-token-xkm7j               kubernetes.io/service-account-token   3      2m58s
 hthor-local-hthor-tls                    kubernetes.io/tls                     3      2m49s
 myhpcc-filebeat-token-vjplq              kubernetes.io/service-account-token   3      2m58s
-roxie-agent-external-roxie-agent-1-tls   kubernetes.io/tls                     3      2m51s
-roxie-agent-external-roxie-agent-2-tls   kubernetes.io/tls                     3      2m49s
+roxie-agent-public-roxie-agent-1-tls     kubernetes.io/tls                     3      2m51s
+roxie-agent-public-roxie-agent-2-tls     kubernetes.io/tls                     3      2m49s
 roxie-agent-local-roxie-agent-1-tls      kubernetes.io/tls                     3      2m51s
 roxie-agent-local-roxie-agent-2-tls      kubernetes.io/tls                     3      2m52s
 roxie-local-roxie-workunit-tls           kubernetes.io/tls                     3      2m52s
 sh.helm.release.v1.cert-manager.v1       helm.sh/release.v1                    1      3m52s
 sh.helm.release.v1.myhpcc.v1             helm.sh/release.v1                    1      2m58s
-sql2ecl-external-sql2ecl-tls             kubernetes.io/tls                     3      2m55s
+sql2ecl-public-sql2ecl-tls               kubernetes.io/tls                     3      2m55s
 thoragent-local-thor-thoragent-tls       kubernetes.io/tls                     3      2m52s
 thormanager-local-thormanager-w-tls      kubernetes.io/tls                     3      2m51s
 thorworker-local-thorworker-w-tls        kubernetes.io/tls                     3      2m51s
@@ -322,15 +338,15 @@ topo-local-roxie-toposerver-tls          kubernetes.io/tls                     3
 udpkey-udp-roxie-dtls                    kubernetes.io/tls                     3      2m55s
 ```
 
-The cluster ESPs are now using TLS both internally and externally.
+The cluster ESPs are now using TLS both locally and publicly.
 
-Run an ecl job that requires using internal TLS (client certificate):
+Run an ecl job that requires using mutual TLS (using local client certificate):
 
 ```
 ecl run --ssl hthor examples/certmanager/localhttpcall.ecl
 ```
 
-Note that for the HTTPCALL in our ecl example the url now starts with "local:" this tells HTTPCALL/SOAPCALL to use the local client certificate, and to verify the server using the local certificate authority certificate.
+Note that for the HTTPCALL in our ecl example the url now starts with "mtls:" this tells HTTPCALL/SOAPCALL to use mutual TLS, using the local client certificate, and to verify the server using the local certificate authority certificate.
 
 You should see a result similar to this:
 

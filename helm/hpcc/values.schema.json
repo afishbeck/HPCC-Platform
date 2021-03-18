@@ -67,7 +67,7 @@
             "local": {
               "$ref": "#/definitions/issuer"
             },
-            "external": {
+            "public": {
               "$ref": "#/definitions/issuer"
             }
           }

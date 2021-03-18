@@ -773,13 +773,6 @@ int CCD_API roxie_main(int argc, const char *argv[], const char * defaultYaml)
         soapTraceLevel = topology->getPropInt("@soapTraceLevel", runOnce ? 0 : 1);
         miscDebugTraceLevel = topology->getPropInt("@miscDebugTraceLevel", 0);
 
-//for draft tesing only, remove before PR
-        MemoryAttr udpkey;
-        getSecretUdpKey(udpkey);
-        StringBuffer updhex;
-        appendDataAsHex(updhex, (size32_t)udpkey.length(), udpkey.get());
-        DBGLOG("udp encryption key: '%s'", updhex.str());
-
         Linked<IPropertyTree> directoryTree = topology->queryPropTree("Directories");
         if (!directoryTree)
         {

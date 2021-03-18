@@ -27,6 +27,9 @@
 
 #include "build-config.h"
 
+#include <openssl/ec.h>
+#include <openssl/pem.h>
+
 //including cpp-httplib single header file REST client
 //  doesn't work with format-nonliteral as an error
 //
@@ -719,7 +722,7 @@ extern jlib_decl bool getSecretValue(StringBuffer & result, const char *category
 
 //For testing now, can refactor before merging
 //
-extern jlib_decl bool getSecretUdpKey(MemoryAttr &updkey)
+bool getSecretUdpKey(MemoryAttr &updkey)
 {
     bool ret = false;
     updkey.clear();
@@ -745,7 +748,7 @@ extern jlib_decl bool getSecretUdpKey(MemoryAttr &updkey)
     return ret;
 }
 
-extern jlib_decl IPropertyTree *queryMtlsSecretInfo(const char *name)
+IPropertyTree *queryMtlsSecretInfo(const char *name)
 {
     if (isEmptyString(name))
         return nullptr;

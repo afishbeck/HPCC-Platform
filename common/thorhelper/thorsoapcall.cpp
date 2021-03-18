@@ -960,10 +960,10 @@ public:
 
         if (isEmptyString(hosts))
             throw MakeStringException(0, "%sCALL specified no URLs",wscType == STsoap ? "SOAP" : "HTTP");
-        if (0==strncmp(hosts, "local:", 6))
+        if (0==strncmp(hosts, "mtls:", 5))
         {
             localClientCert = true;
-            hosts += 6;
+            hosts += 5;
         }
         if (0==strncmp(hosts, "secret:", 7))
         {

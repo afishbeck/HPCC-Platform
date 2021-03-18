@@ -13,8 +13,8 @@ esp:
    logDir: "-"
 
    tls_config:
-     certificate: /opt/HPCCSystems/secrets/certificates/external/tls.crt
-     privatekey: /opt/HPCCSystems/secrets/certificates/external/tls.key
+     certificate: /opt/HPCCSystems/secrets/certificates/public/tls.crt
+     privatekey: /opt/HPCCSystems/secrets/certificates/public/tls.key
      cipherList: "ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5"
      verify:
        enable: false
@@ -22,4 +22,4 @@ esp:
        accept_selfsigned: false
        trusted_peers: [ anyone ]
        ca_certificates:
-       - path: "/opt/HPCCSystems/secrets/certificates/external/ca.crt"
+       - path: "/opt/HPCCSystems/secrets/certificates/public/ca.crt"

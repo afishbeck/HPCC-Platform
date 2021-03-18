@@ -79,8 +79,8 @@ spec:
 {{ include "hpcc.addDataVolumeMount" $commonCtx | indent 8 }}
 {{ include "hpcc.addDllVolumeMount" $commonCtx | indent 8 }}
 {{ include "hpcc.addSecretVolumeMounts" (dict "root" $ "categories" (list "system" "ecl" "storage" ) ) | indent 8 }}
-{{ include "hpcc.addCertificateVolumeMount" (dict "name" $roxie.name "component" "localroxie" "external" false) | indent 8 }}
-{{ include "hpcc.addCertificateVolumeMount" (dict "name" $roxie.name "component" "localroxie" "external" true) | indent 8 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "name" $roxie.name "component" "localroxie" "external" false) | indent 8 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "name" $roxie.name "component" "localroxie" "external" true) | indent 8 }}
 {{ include "hpcc.addUDPCertificateVolumeMount" (dict "root" $ "name" $roxie.name "component" "localudpkey" ) | indent 8 }}
       volumes:
 {{ include "hpcc.addConfigMapVolume" . | indent 6 }}

@@ -6,8 +6,8 @@ certificates:
         ca: null
         selfSigned: null
         vault:
-          server: http://vault:8200
-          path: pki/sign/default
+          server: http://vault.default:8200
+          path: pki/sign/hpcclocal
           auth:
             kubernetes:
               mountPath: /v1/auth/kubernetes
@@ -15,14 +15,14 @@ certificates:
               secretRef:
                 name: tbd # requires service account secret, set from command line
                 key: token
-    external:
+    public:
       domain: myhpcc.com
       spec:
       # delete any alternative spec config, and then add vault
         ca: null
         selfSigned: null
         vault:
-          server: http://vault:8200
+          server: http://vault.default:8200
           path: pki/sign/myhpcc-dot-com
           auth:
             kubernetes:

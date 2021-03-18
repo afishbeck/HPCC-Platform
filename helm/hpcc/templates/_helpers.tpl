@@ -609,7 +609,7 @@ Generate list of available services
   {{- if hasKey $esp "tls" }}
   tls: {{ $esp.tls }}
   {{- else }}
-  tls: {{- and $.Values.certificates $.Values.certificates.enbabled }}
+  tls: {{ ($.Values.certificates | default dict).enabled }}
   {{- end }}
   public: {{ $esp.public }}
 {{ end -}}
@@ -893,21 +893,20 @@ Pass in dict with root, pod, target and type
 
 {{/*
 Use cert-manager to create a public certificate and private key for use with TLS
-There are separate certificate issuers for internal and external certificates
-by default external certificates are self-signed and internal certificates are signed
+There are separate certificate issuers for local and public certificates
+by default public certificates are self-signed and local certificates are signed
 by our own certificate authority.  A CA certificate is also provided to the pod
 so that we can recognize the signature of our own CA.
 */}}
 {{- define "hpcc.addCertificate" }}
-{{- if .root.Values.certificates -}}
-{{- if .root.Values.certificates.enabled -}}
+{{- if (.root.Values.certificates | default dict).enabled -}}
 {{- $externalCert := and (hasKey . "external") .external -}}
-{{- $issuer := ternary .root.Values.certificates.issuers.external .root.Values.certificates.issuers.local $externalCert -}}
+{{- $issuer := ternary .root.Values.certificates.issuers.public .root.Values.certificates.issuers.local $externalCert -}}
 {{- if $issuer -}}
 {{- $namespace := .root.Release.Namespace -}}
-{{- $service := ternary .service (dict) (hasKey . "service") -}}
+{{- $service := (.service | default dict) -}}
 {{- $domain := ( $service.domain | default $issuer.domain | default $namespace | default "default" ) -}}
-{{- $exposure := ternary "external" "local" $externalCert -}}
+{{- $exposure := ternary "public" "local" $externalCert -}}
 {{- $name := .name }}
 
 apiVersion: cert-manager.io/v1
@@ -933,16 +932,16 @@ spec:
     - server auth
     - client auth
   dnsNames:
- #if servicename parameter is passed we simply create a service entry of that name
+ {{- /* if servicename is passed we simply create a service entry of that name */ -}}
  {{- if .servicename }}
   - {{ .servicename }}.{{ $domain }}
- #if service parameter is passed in we are using the component config as a service config entry
+ {{- /* if service parameter is passed in we are using the component config as a service config entry */ -}}
  {{- else if .service -}}
    {{- $public := and (hasKey .service "public") .service.public -}}
    {{- if eq $public $externalCert }}
   - {{ .service.name }}.{{ $domain }}
    {{- end }}
- #if services parameter is passed in the component has an array of services to configure
+ {{- /* if services parameter is passed the component has an array of services to configure */ -}}
  {{- else if .services -}}
   {{- range $service := .services }}
    {{- $external := and (hasKey $service "external") $service.external -}}
@@ -950,7 +949,6 @@ spec:
   - {{ $service.name }}.{{ $domain }}
    {{- end }}
   {{- end }}
- # for internal access the first entry is a wildcard used when the pod is accessed directly (not via a service) for peer to peer communication
  {{- else if not $externalCert }}
   - "{{ $name }}.{{ $domain }}"
  {{- end }}
@@ -960,13 +958,9 @@ spec:
   issuerRef:
     name: {{ $issuer.name }}
     # We can reference ClusterIssuers by changing the kind here.
-    # The default value is Issuer (i.e. a locally namespaced Issuer)
     kind: {{ $issuer.kind }}
-    # This is optional since cert-manager will default to this value however
-    # if you are using an external issuer, change this to that issuer group.
     group: cert-manager.io
 ---
-{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -978,8 +972,7 @@ Current udp encryption design would only use the private key.
 Key is in pem format and the private key would need to be extracted.
 */}}
 {{- define "hpcc.addUDPCertificate" }}
-{{- if .root.Values.certificates -}}
-{{- if .root.Values.certificates.enabled -}}
+{{- if (.root.Values.certificates | default dict).enabled -}}
 {{- $issuer := .root.Values.certificates.issuers.local -}}
 {{- $namespace := .root.Release.Namespace -}}
 {{- $name := .name -}}
@@ -1015,11 +1008,8 @@ spec:
     # We can reference ClusterIssuers by changing the kind here.
     # The default value is Issuer (i.e. a locally namespaced Issuer)
     kind: {{ $issuer.kind }}
-    # This is optional since cert-manager will default to this value however
-    # if you are using an external issuer, change this to that issuer group.
     group: cert-manager.io
 ---
-{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -1029,10 +1019,21 @@ Add a certficate volume mount for a component
 */}}
 {{- define "hpcc.addCertificateVolumeMount" -}}
 {{- $externalCert := and (hasKey . "external") .external -}}
-{{- $exposure := ternary "external" "local" $externalCert }}
-
+{{- $exposure := ternary "public" "local" $externalCert }}
+{{- /*
+    A .certificate parameter means the user explictly configured a certificate to use
+    otherwise check if certificate generation is enabled
+*/ -}}
+{{- if .certificate -}}
 - name: certificate-{{ .component }}-{{ $exposure }}-{{ .name }}
   mountPath: /opt/HPCCSystems/secrets/certificates/{{ $exposure }}
+{{- else if (.root.Values.certificates | default dict).enabled -}}
+{{- $issuer := ternary .root.Values.certificates.issuers.public .root.Values.certificates.issuers.local $externalCert -}}
+{{- if $issuer -}}
+- name: certificate-{{ .component }}-{{ $exposure }}-{{ .name }}
+  mountPath: /opt/HPCCSystems/secrets/certificates/{{ $exposure }}
+{{- end }}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -1040,29 +1041,46 @@ Add a secret volume for a certificate
 */}}
 {{- define "hpcc.addCertificateVolume" -}}
 {{- $externalCert := and (hasKey . "external") .external -}}
-{{- $exposure := ternary "external" "local" $externalCert }}
+{{- $exposure := ternary "public" "local" $externalCert -}}
+{{- /*
+    A .certificate parameter means the user explictly configured a certificate to use
+    otherwise check if certificate generation is enabled
+*/ -}}
+{{- if .certificate -}}
 - name: certificate-{{ .component }}-{{ $exposure }}-{{ .name }}
   secret:
- {{- if .certificate }}
     secretName: {{ .certificate }}
- {{- else }}
+{{- else if (.root.Values.certificates | default dict).enabled -}}
+{{- $issuer := ternary .root.Values.certificates.issuers.public .root.Values.certificates.issuers.local $externalCert -}}
+{{- if $issuer -}}
+- name: certificate-{{ .component }}-{{ $exposure }}-{{ .name }}
+  secret:
     secretName: {{ .component }}-{{ $exposure }}-{{ .name }}-tls
- {{ end -}}
-{{ end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 
 {{/*
 Add the certficate volume mount for a roxie udp key
 */}}
 {{- define "hpcc.addUDPCertificateVolumeMount" }}
+{{- if (.root.Values.certificates | default dict).enabled -}}
+{{- if .root.Values.certificates.issuers.local -}}
 - name: certificate-{{ .component }}-udp-{{ .name }}
   mountPath: /opt/HPCCSystems/secrets/certificates/udp
+{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
 Add a secret volume for a roxie udp key
 */}}
 {{- define "hpcc.addUDPCertificateVolume" }}
+{{- if (.root.Values.certificates | default dict).enabled -}}
+{{- if .root.Values.certificates.issuers.local -}}
 - name: certificate-{{ .component }}-udp-{{ .name }}
   secret:
     secretName: {{ .component }}-udp-{{ .name }}-dtls
 {{ end -}}
+{{- end -}}
+{{- end -}}

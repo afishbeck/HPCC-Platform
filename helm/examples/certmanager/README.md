@@ -4,7 +4,7 @@ This example demonstrates HPCC TLS configuration using Jetstack cert-manager.
 
 ## Jetstack cert-manager support:
 
-The following wil use cert-manager to automatically provision and manage TLS certificates for the
+The following will use cert-manager to automatically provision and manage TLS certificates for the
 HPCC.
 
 The following steps can be used to set up cert-manager in a kubernetes cluster.
@@ -37,11 +37,11 @@ helm install cert-manager jetstack/cert-manager --version v1.1.0
 
 For now this example will assume you are in the helm directory of the HPCC-Systems source.
 
-## Create a root certificate for our internal cluster certificate authority
+## Create a root certificate for our local cluster certificate authority
 
-This example uses OpenSSL to generate the root certificate for our internal cluster certificate authority.
+This example uses OpenSSL to generate the root certificate for our local cluster certificate authority.
 
-We can create a root certificate and private key for our internal cluster certificate authority with
+We can create a root certificate and private key for our local cluster certificate authority with
 a single openssl call. This call uses the openssl config file found in the examples directory (ca-req.cfg).
 
 
@@ -59,10 +59,10 @@ https://www.golinuxcloud.com/create-certificate-authority-root-ca-linux
 ## Create a Kubernetes TLS secret from the generated root certificate and privatekey
 
 The root certificate needs to be added as a kubernetes secret in order to be accessible to cert-manager.
-The secret name matches the default name used in the internal issuer configuration in values.yaml.
+The secret name matches the default name used in the local issuer configuration in values.yaml.
 
 ```bash
-kubectl create secret tls hpcc-internal-issuer-key-pair --cert=ca.crt --key=ca.key
+kubectl create secret tls hpcc-local-issuer-key-pair --cert=ca.crt --key=ca.key
 ```
 
 ## Installing the HPCC with certificate generation enabled
@@ -89,8 +89,8 @@ You should see something like this:
 
 ```bash
 NAME                   READY   STATUS                AGE
-hpcc-external-issuer   True                          3m57s
-hpcc-internal-issuer   True    Signing CA verified   3m57s
+hpcc-public-issuer     True                          3m57s
+hpcc-local-issuer      True    Signing CA verified   3m57s
 ```
 
 Check and see if the cerficates have been successfully created.
@@ -110,17 +110,17 @@ eclagent-local-roxie-workunit-cert        True    eclagent-local-roxie-workunit-
 eclagent-local-thor-cert                  True    eclagent-local-thor-tls                  85s
 eclagent-local-thor-eclagent-cert         True    eclagent-local-thor-eclagent-tls         85s
 eclccserver-local-myeclccserver-cert      True    eclccserver-local-myeclccserver-tls      85s
-eclqueries-external-eclqueries-cert       True    eclqueries-external-eclqueries-tls       85s
+eclqueries-public-eclqueries-cert         True    eclqueries-public-eclqueries-tls         85s
 eclservices-local-eclservices-cert        True    eclservices-local-eclservices-tls        85s
-eclwatch-external-eclwatch-cert           True    eclwatch-external-eclwatch-tls           85s
-esdl-sandbox-external-esdl-sandbox-cert   True    esdl-sandbox-external-esdl-sandbox-tls   85s
+eclwatch-public-eclwatch-cert             True    eclwatch-public-eclwatch-tls             85s
+esdl-sandbox-public-esdl-sandbox-cert     True    esdl-sandbox-public-esdl-sandbox-tls     85s
 hthor-local-hthor-cert                    True    hthor-local-hthor-tls                    85s
-roxie-agent-external-roxie-agent-1-cert   True    roxie-agent-external-roxie-agent-1-tls   85s
-roxie-agent-external-roxie-agent-2-cert   True    roxie-agent-external-roxie-agent-2-tls   85s
+roxie-agent-public-roxie-agent-1-cert     True    roxie-agent-public-roxie-agent-1-tls     85s
+roxie-agent-public-roxie-agent-2-cert     True    roxie-agent-public-roxie-agent-2-tls     85s
 roxie-agent-local-roxie-agent-1-cert      True    roxie-agent-local-roxie-agent-1-tls      85s
 roxie-agent-local-roxie-agent-2-cert      True    roxie-agent-local-roxie-agent-2-tls      85s
 roxie-local-roxie-workunit-cert           True    roxie-local-roxie-workunit-tls           85s
-sql2ecl-external-sql2ecl-cert             True    sql2ecl-external-sql2ecl-tls             85s
+sql2ecl-public-sql2ecl-cert               True    sql2ecl-public-sql2ecl-tls               85s
 thoragent-local-thor-thoragent-cert       True    thoragent-local-thor-thoragent-tls       85s
 thormanager-local-thormanager-w-cert      True    thormanager-local-thormanager-w-tls      85s
 thorworker-local-thorworker-w-cert        True    thorworker-local-thorworker-w-tls        85s
@@ -150,24 +150,24 @@ eclagent-local-roxie-workunit-tls        kubernetes.io/tls                     3
 eclagent-local-thor-eclagent-tls         kubernetes.io/tls                     3      2m56s
 eclagent-local-thor-tls                  kubernetes.io/tls                     3      2m54s
 eclccserver-local-myeclccserver-tls      kubernetes.io/tls                     3      2m55s
-eclqueries-external-eclqueries-tls       kubernetes.io/tls                     3      2m52s
+eclqueries-public-eclqueries-tls         kubernetes.io/tls                     3      2m52s
 eclservices-local-eclservices-tls        kubernetes.io/tls                     3      2m54s
-eclwatch-external-eclwatch-tls           kubernetes.io/tls                     3      2m50s
-esdl-sandbox-external-esdl-sandbox-tls   kubernetes.io/tls                     3      2m49s
+eclwatch-public-eclwatch-tls             kubernetes.io/tls                     3      2m50s
+esdl-sandbox-public-esdl-sandbox-tls     kubernetes.io/tls                     3      2m49s
 hpcc-agent-token-h78cd                   kubernetes.io/service-account-token   3      2m58s
 hpcc-default-token-55lss                 kubernetes.io/service-account-token   3      2m58s
-hpcc-internal-issuer-key-pair            kubernetes.io/tls                     2      3m23s
+hpcc-local-issuer-key-pair               kubernetes.io/tls                     2      3m23s
 hpcc-thoragent-token-xkm7j               kubernetes.io/service-account-token   3      2m58s
 hthor-local-hthor-tls                    kubernetes.io/tls                     3      2m49s
 myhpcc-filebeat-token-vjplq              kubernetes.io/service-account-token   3      2m58s
-roxie-agent-external-roxie-agent-1-tls   kubernetes.io/tls                     3      2m51s
-roxie-agent-external-roxie-agent-2-tls   kubernetes.io/tls                     3      2m49s
+roxie-agent-public-roxie-agent-1-tls     kubernetes.io/tls                     3      2m51s
+roxie-agent-public-roxie-agent-2-tls     kubernetes.io/tls                     3      2m49s
 roxie-agent-local-roxie-agent-1-tls      kubernetes.io/tls                     3      2m51s
 roxie-agent-local-roxie-agent-2-tls      kubernetes.io/tls                     3      2m52s
 roxie-local-roxie-workunit-tls           kubernetes.io/tls                     3      2m52s
 sh.helm.release.v1.cert-manager.v1       helm.sh/release.v1                    1      3m52s
 sh.helm.release.v1.myhpcc.v1             helm.sh/release.v1                    1      2m58s
-sql2ecl-external-sql2ecl-tls             kubernetes.io/tls                     3      2m55s
+sql2ecl-public-sql2ecl-tls               kubernetes.io/tls                     3      2m55s
 thoragent-local-thor-thoragent-tls       kubernetes.io/tls                     3      2m52s
 thormanager-local-thormanager-w-tls      kubernetes.io/tls                     3      2m51s
 thorworker-local-thorworker-w-tls        kubernetes.io/tls                     3      2m51s
@@ -175,15 +175,15 @@ topo-local-roxie-toposerver-tls          kubernetes.io/tls                     3
 udpkey-udp-roxie-dtls                    kubernetes.io/tls                     3      2m55s
 ```
 
-The cluster ESPs are now using TLS both internally and externally.
+The cluster ESPs are now using TLS both locally and publicly.
 
-Run an ecl job that requires using internal TLS (client certificate):
+Run an ecl job that requires using mutual TLS (using local client certificate):
 
 ```
 ecl run --ssl hthor examples/certmanager/localhttpcall.ecl
 ```
 
-Note that for the HTTPCALL in our ecl example the url now starts with "local:" this tells HTTPCALL/SOAPCALL to use the local client certificate, and to verify the server using the local certificate authority certificate.
+Note that for the HTTPCALL in our ecl example the url now starts with "mtls:" this tells HTTPCALL/SOAPCALL to use mutual TLS, using the local client certificate, and to verify the server using the local certificate authority certificate.
 
 You should see a result similar to this:
 
@@ -195,6 +195,6 @@ You should see a result similar to this:
 </Result>
 ```
 
-The default external issuer uses self signed certificates. This makes it very easy to set up but browsers
+The default public issuer uses self signed certificates. This makes it very easy to set up but browsers
 will not recognize the certificates as trustworthy and the browser will warn users that the connection
 is not safe.

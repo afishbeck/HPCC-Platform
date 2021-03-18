@@ -18,8 +18,8 @@ data:
  {{- end }}
       tls_config:
  {{- if .me.public }}
-        certificate: /opt/HPCCSystems/secrets/certificates/external/tls.crt
-        privatekey: /opt/HPCCSystems/secrets/certificates/external/tls.key
+        certificate: /opt/HPCCSystems/secrets/certificates/public/tls.crt
+        privatekey: /opt/HPCCSystems/secrets/certificates/public/tls.key
  {{- else }}
         certificate: /opt/HPCCSystems/secrets/certificates/local/tls.crt
         privatekey: /opt/HPCCSystems/secrets/certificates/local/tls.key
@@ -88,7 +88,7 @@ spec:
 {{ include "hpcc.addDataVolumeMount" $commonCtx | indent 8 }}
 {{ include "hpcc.addDllVolumeMount" $commonCtx | indent 8 }}
 {{ include "hpcc.addSecretVolumeMounts" (dict "root" $ "categories" $secretsCategories ) | indent 8 }}
-{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" $application "name" .name "external" (and (hasKey . "public") .public)) | indent 8 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" $application "name" .name  "certificate" .certificate "external" (and (hasKey . "public") .public)) | indent 8 }}
       volumes:
 {{ include "hpcc.addConfigMapVolume" . | indent 6 }}
 {{ include "hpcc.addDataVolume" $commonCtx | indent 6 }}
