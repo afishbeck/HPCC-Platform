@@ -404,6 +404,8 @@ esp:
 roxie:
 - name: roxie
   disabled: false
+  udpTraceLevel: 10
+  encryptInTransit: true
   prefix: roxie
   services:
   - name: roxie
