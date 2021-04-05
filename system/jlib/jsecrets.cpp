@@ -748,12 +748,15 @@ void initSecretUdpKey()
     udpKeyInitialized = true;
 }
 
-const MemoryAttr &getSecretUdpKey(bool required)
+const MemoryAttr &getSecretUdpKey(bool required, const char *msg)
 {
     if (!udpKeyInitialized)
         throw makeStringException(-1, "UPD Key not initialized.");
     if (required && !udpKey.length())
         throw makeStringException(-1, "UPD Key not found, cert-manager integration/configuration required.");
+    StringBuffer hex;
+    appendDataAsHex(hex, udpKey.length(), udpKey.get());
+    DBGLOG("udpKey: %s, %lu, %s", msg, udpKey.length(), hex.str());
     return udpKey;
 }
 

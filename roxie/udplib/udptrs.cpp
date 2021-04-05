@@ -424,7 +424,7 @@ public:
                     encryptBuffer.append(sizeof(UdpPacketHeader), header);    // We don't encrypt the header
                     length -= sizeof(UdpPacketHeader);
                     const char *data = buffer->data + sizeof(UdpPacketHeader);
-                    const MemoryAttr &udpkey = getSecretUdpKey(true);
+                    const MemoryAttr &udpkey = getSecretUdpKey(true, "udptrs.cpp");
                     aesEncrypt(udpkey.get(), udpkey.length(), data, length, encryptBuffer);
                     header->length = encryptBuffer.length();
                     encryptBuffer.writeDirect(0, sizeof(UdpPacketHeader), header);   // Only really need length updating

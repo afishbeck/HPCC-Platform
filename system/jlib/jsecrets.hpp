@@ -34,7 +34,7 @@ extern jlib_decl bool getSecretKeyValue(StringBuffer & result, IPropertyTree *se
 extern jlib_decl bool getSecretValue(StringBuffer & result, const char *category, const char * name, const char * key, bool required);
 
 extern jlib_decl void initSecretUdpKey();
-extern jlib_decl const MemoryAttr &getSecretUdpKey(bool required);
+extern jlib_decl const MemoryAttr &getSecretUdpKey(bool required, const char *msg);
 
 extern jlib_decl IPropertyTree *queryMtlsSecretInfo(const char *name);
 

@@ -625,7 +625,7 @@ public:
             plainData += traceLength;
             unsigned plainLen = length - sizeof(RoxiePacketHeader) - traceLength;
             mb.append(sizeof(RoxiePacketHeader)+traceLength, data);  // Header and traceInfo are unencrypted
-            const MemoryAttr &udpkey = getSecretUdpKey(true);
+            const MemoryAttr &udpkey = getSecretUdpKey(true, "serialize");
             aesEncrypt(udpkey.get(), udpkey.length(), plainData, plainLen, mb);   // Encrypt everything else
             RoxiePacketHeader *newHeader = (RoxiePacketHeader *) mb.toByteArray();
             newHeader->packetlength = mb.length();
@@ -728,7 +728,7 @@ public:
             encryptedData += traceLength;
             unsigned encryptedLen = length - sizeof(RoxiePacketHeader) - traceLength;
             mb.append(sizeof(RoxiePacketHeader)+traceLength, data);         // Header and traceInfo are unencrypted
-            const MemoryAttr &udpkey = getSecretUdpKey(true);
+            const MemoryAttr &udpkey = getSecretUdpKey(true, "deserialize");
             aesDecrypt(udpkey.get(), udpkey.length(), encryptedData, encryptedLen, mb);  // Decrypt everything else
             RoxiePacketHeader *newHeader = (RoxiePacketHeader *) mb.toByteArray();
             newHeader->packetlength = mb.length();
@@ -777,7 +777,7 @@ extern IRoxieQueryPacket *deserializeCallbackPacket(MemoryBuffer &m)
         MemoryBuffer decrypted;
         decrypted.append(sizeof(RoxiePacketHeader), header);
         decrypted.ensureCapacity(encryptedLen);  // May be up to 16 bytes smaller...
-        const MemoryAttr &udpkey = getSecretUdpKey(true);
+        const MemoryAttr &udpkey = getSecretUdpKey(true, "deserializeCallbackPacket");
         aesDecrypt(udpkey.get(), udpkey.length(), encryptedData, encryptedLen, decrypted);
         unsigned length = decrypted.length();
         RoxiePacketHeader *newHeader = (RoxiePacketHeader *) decrypted.detachOwn();
