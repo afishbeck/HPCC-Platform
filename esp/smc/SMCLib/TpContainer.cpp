@@ -779,7 +779,7 @@ extern TPWRAPPER_API bool validateDataPlaneName(const char * remoteDali, const c
 // NB: bare-metal has a different implementation in TpWrapper.cpp
 bool getSashaService(StringBuffer &serviceAddress, const char *serviceName, bool failIfNotFound)
 {
-    return getService(serviceAddress, serviceName, failIfNotFound);
+    return false; //getService(serviceAddress, serviceName, failIfNotFound);
 }
 
 bool getSashaServiceEP(SocketEndpoint &serviceEndpoint, const char *service, bool failIfNotFound)
@@ -791,12 +791,8 @@ bool getSashaServiceEP(SocketEndpoint &serviceEndpoint, const char *service, boo
     return true;
 }
 
-StringBuffer & getRoxieDefaultPlane(StringBuffer & plane, const char * roxieName)
+static StringBuffer & getRoxieDefaultPlane(IPropertyTree * queue, StringBuffer & plane, const char * roxieName)
 {
-    Owned<IPropertyTree> queue = getContainerClusterConfig(roxieName);
-    if (!queue)
-        throw makeStringExceptionV(ECLWATCH_INVALID_CLUSTER_NAME, "Unknown queue name %s", roxieName);
-
     if (queue->getProp("@dataPlane", plane))
         return plane;
 
@@ -805,4 +801,36 @@ StringBuffer & getRoxieDefaultPlane(StringBuffer & plane, const char * roxieName
     if (!dataPlanes->first())
         throwUnexpectedX("No default data plane defined");
     return plane.append(dataPlanes->query().queryProp("@name"));
+}
+
+StringBuffer & getRoxieDefaultPlane(StringBuffer & plane, const char * roxieName)
+{
+    Owned<IPropertyTree> queue = getContainerClusterConfig(roxieName);
+    if (!queue)
+        throw makeStringExceptionV(ECLWATCH_INVALID_CLUSTER_NAME, "Unknown queue name %s", roxieName);
+
+    return getRoxieDefaultPlane(queue, plane, roxieName);
+}
+
+//By default roxie will copy files from planes other than it's default, if a plane is added to directAccessPlanes
+//  roxie will continue to read the file directly without making a copy
+StringArray & getRoxieDirectAccessPlanes(StringArray & planes, StringBuffer &defaultPlane, const char * roxieName, bool includeDefaultPlane)
+{
+    Owned<IPropertyTree> queue = getContainerClusterConfig(roxieName);
+    if (!queue)
+        throw makeStringExceptionV(ECLWATCH_INVALID_CLUSTER_NAME, "Unknown queue name %s", roxieName);
+
+    getRoxieDefaultPlane(queue, defaultPlane, roxieName);
+    if (defaultPlane.length() && includeDefaultPlane)
+        planes.appendUniq(defaultPlane);
+
+    Owned<IPropertyTreeIterator> iter = queue->getElements("directAccessPlanes");
+    ForEach(*iter)
+    {
+        const char *plane = iter->query().queryProp("");
+        if (!isEmptyString(plane))
+            planes.appendUniq(plane);
+    }
+
+    return planes;
 }

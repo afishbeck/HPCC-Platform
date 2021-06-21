@@ -363,6 +363,23 @@ eclagent:
   #  cpu: "1"
   #  memory: "1G"
 
+- name: hthor2
+  ## replicas indicates how many eclagent pods should be started
+  replicas: 1
+  ## maxActive controls how many workunits may be active at once (per replica)
+  maxActive: 4
+  ## prefix may be used to set a filename prefix applied to any relative filenames used by jobs submitted to this queue
+  prefix: hthor
+  ## Set to false if you want to launch each workunit in its own container, true to run as child processes in eclagent pod
+  useChildProcesses: false
+  ## type may be 'hthor' (the default) or 'roxie', to specify that the roxie engine rather than the hthor engine should be used for eclagent workunit processing
+  type: hthor
+  ## The following resources apply to child hThor pods when useChildProcesses=false, otherwise they apply to hThor pod.
+  #resources:
+  #  cpu: "1"
+  #  memory: "1G"
+  dataPlane: data2
+
 - name: roxie-workunit
   replicas: 1
   prefix: roxie_workunit
@@ -459,6 +476,8 @@ esp:
 
 roxie:
 - name: roxie
+  dataPlane: data2
+  directAccessPlanes: [ data ]
   disabled: false
   prefix: roxie
   services:
