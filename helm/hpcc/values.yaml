@@ -490,6 +490,7 @@ roxie:
   #maxStartupTime: 600     # Maximum time to wait for startup to complete before failing
   topoServer:
     replicas: 1
+  #directAccessPlanes: []  #add direct access planes to planes that roxie will read from without copying it to it's default data plane
 
 thor:
 - name: thor
