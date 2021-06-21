@@ -2175,3 +2175,11 @@ StringBuffer & getRoxieDefaultPlane(StringBuffer & plane, const char * roxieName
         clusterInfo->getRoxieProcess(process);
     return plane;
 }
+
+StringArray & getRoxieDirectAccessPlanes(StringArray & planes, StringBuffer &defaultPlane, const char * roxieName, bool includeDefaultPlane)
+{
+    getRoxieDefaultPlane(defaultPlane, roxieName);
+    if (defaultPlane.length() && includeDefaultPlane)
+        planes.append(defaultPlane);
+    return planes;
+}

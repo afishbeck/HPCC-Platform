@@ -176,7 +176,7 @@ spec:
     targetPort: 7070
   selector:
     server: {{ .name | quote }}
-  type: ClusterIP
+  type: LoadBalancer
 ---
 {{ include "hpcc.addCertificate" (dict "root" $ "name" .name "service" .service "component" "dali" "external" false) }}
 

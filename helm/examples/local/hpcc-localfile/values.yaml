@@ -26,6 +26,16 @@ planes:
   size: 3Gi
   category: data # NB: all "data" planes will be auto mounted by engine components and others that require access to data
   rwmany: true
+- name: data2
+  subPath: hpcc-data2
+  size: 3Gi
+  category: data # NB: all "data" planes will be auto mounted by engine components and others that require access to data
+  rwmany: true
+- name: data3
+  subPath: hpcc-data3
+  size: 3Gi
+  category: data # NB: all "data" planes will be auto mounted by engine components and others that require access to data
+  rwmany: true
 - name: mydropzone
   subPath: dropzone
   size: 1Gi

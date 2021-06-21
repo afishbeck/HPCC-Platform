@@ -458,6 +458,15 @@ void CWsWorkunitsEx::init(IPropertyTree *cfg, const char *process, const char *s
 
     const char *name = cfg->queryProp("Software/EspProcess/@name");
     getConfigurationDirectory(directories, "query", "esp", name ? name : "esp", queryDirectory);
+    if (queryDirectory.isEmpty() && isContainerized())
+    {
+        const char *dllserver_root = getenv("HPCC_DLLSERVER_PATH");
+        assertex(dllserver_root != nullptr);
+        queryDirectory.append(dllserver_root);
+        addNonEmptyPathSepChar(queryDirectory);
+        queryDirectory.append(name ? name : "esp");
+    }
+
     recursiveCreateDirectory(queryDirectory.str());
 
     dataCache.setown(new DataCache(DATA_SIZE));
