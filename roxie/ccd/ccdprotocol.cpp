@@ -1770,7 +1770,24 @@ readAnother:
         }
         catch (IException * E)
         {
-            if (traceLevel > 0)
+            unsigned maxHttpConnectionRequests = global->maxHttpConnectionRequests ? global->maxHttpConnectionRequests : 1;
+            bool expectedError = false;
+            if (remainingHttpConnectionRequests < maxHttpConnectionRequests) //persistent connection - waiting after initial request has already been processed
+            {
+                switch (E->errorCode())
+                {
+                    //closing of persistent socket is not an error
+                    case JSOCKERR_not_opened:
+                    case JSOCKERR_broken_pipe:
+                    case JSOCKERR_timeout_expired:
+                    case JSOCKERR_graceful_close:
+                        expectedError = true;
+                        break;
+                    default:
+                        break;
+                }
+            }
+            if (traceLevel > 0 && !expectedError)
             {
                 StringBuffer b;
                 IERRLOG("Error reading query from socket: %s", E->errorMessage(b).str());
