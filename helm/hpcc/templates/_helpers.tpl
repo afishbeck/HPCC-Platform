@@ -711,6 +711,14 @@ Generate instance queue names
 {{ end -}}
 {{- end -}}
 
+
+
+ {{- $externalCert := (ne (include "hpcc.isVisibilityPublic" (dict "root" .root "visibility" .me.service.visibility)) "") -}}
+ {{- $issuerName := ternary "public" "local" $externalCert -}}
+ {{- if not (hasKey .me "tls" )}}
+      tls: {{ include "hpcc.isIssuerEnabled" (dict "root" .root "issuer" $issuerName) }}
+ {{- end }}
+
 {{/*
 Generate list of available services
 */}}
@@ -724,7 +732,13 @@ Generate list of available services
   type: roxie
   port: {{ $service.servicePort }}
   target: {{ $roxie.name }}
-  public: {{ (ne ( include "hpcc.isVisibilityPublic" (dict "root" $ "visibility" $service.visibility)) "") | ternary "true" "false" }}
+  public: {{ $service.public }}
+  tls: {{ $service.tls | default false }}
+      {{- if hasKey $service "issuer" }}
+  issuer: {{ $service.issuer }}
+      {{- end }}
+  selfSigned: {{ $service.selfSigned | default false }}
+  caCert:  {{ $service.caCert | default false }}
    {{- end -}}
   {{- end }}
 {{ end -}}
@@ -734,12 +748,31 @@ Generate list of available services
   class: esp
   type: {{ $esp.application }}
   port: {{ $esp.service.servicePort }}
+  {{- $externalService := (ne ( include "hpcc.isVisibilityPublic" (dict "root" $ "visibility" $esp.service.visibility)) "") }}
+  public: {{ $externalService | ternary "true" "false" }}
   {{- if hasKey $esp "tls" }}
   tls: {{ $esp.tls }}
+  {{- else if and ($externalService) (hasKey $esp "certificate") }}
+  tls: true
   {{- else }}
-  tls: {{ ($.Values.certificates | default dict).enabled }}
+    {{- $issuerName := ternary "public" "local" $externalService }}
+    {{- $certificates := ($.Values.certificates | default dict) -}}
+    {{- if $certificates.enabled -}}
+      {{- $issuers := ($certificates.issuers | default dict) -}}
+      {{- $issuer := get $issuers $issuerName -}}
+      {{- if $issuer -}}
+      {{- $issuerSpec := ($issuer.spec | default dict) }}
+  tls: {{ (hasKey $issuer "enabled" | ternary $issuer.enabled true) }}
+  issuer: {{ $issuerName }}
+  selfSigned: {{ (hasKey $issuerSpec "selfSigned") }}
+  caCert: {{ or (hasKey $issuerSpec "ca") (hasKey $issuerSpec "vault") }}
+      {{- else }}
+  tls: false
+      {{- end -}}
+    {{- else }}
+  tls: false
+    {{- end -}}
   {{- end }}
-  public: {{ (ne ( include "hpcc.isVisibilityPublic" (dict "root" $ "visibility" $esp.service.visibility))  "") | ternary "true" "false" }}
 {{ end -}}
 {{- range $dali := $.Values.dali -}}
 {{- $sashaServices := $dali.services | default dict -}}
