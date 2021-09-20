@@ -21,11 +21,16 @@
 #include "jlib.hpp"
 #include "jsocket.hpp"
 #include "jptree.hpp"
+#include "jsmartsock.hpp"
 #include "roxiecontrol.hpp"
 
 //bool sendRoxieControlLock(ISocket *sock, bool allOrNothing, unsigned wait)
 
+IPropertyTree *sendRoxieControlQuery(ISmartSocketFactory *conn, const char *msg, unsigned wait, unsigned connect_wait);
+IPropertyTree *sendRoxieControlQuery(const SocketEndpoint &ep, const char *msg, unsigned wait, unsigned connect_wait);
 IPropertyTree *sendRoxieControlQuery(ISocket *sock, const char *msg, unsigned wait);
+
+IPropertyTree *sendRoxieControlAllNodes(ISmartSocketFactory *conn, const char *msg, bool allOrNothing, unsigned wait, unsigned connect_wait);
 IPropertyTree *sendRoxieControlAllNodes(ISocket *sock, const char *msg, bool allOrNothing, unsigned wait);
 IPropertyTree *sendRoxieControlAllNodes(const SocketEndpoint &ep, const char *msg, bool allOrNothing, unsigned wait);
 
