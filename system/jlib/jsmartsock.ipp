@@ -61,11 +61,15 @@ class SmartSocketEndpointArray : public SafePointerArrayOf<SmartSocketEndpoint> 
 class jlib_decl CSmartSocketFactory: public Thread,
     implements ISmartSocketFactory
 {
+    StringAttr issuer;
     SmartSocketEndpointArray sockArray;
     Mutex lock;
 
     unsigned nextEndpointIndex;
     bool retry;
+    bool tlsService = false;  //hint for clients that connect on their own, as a backwards compatable alternative to CSecureSmartSocketFactory
+    Owned<IPropertyTree> tlsConfig;
+
     unsigned retryInterval;
     unsigned dnsInterval;
 
@@ -76,6 +80,7 @@ public:
     IMPLEMENT_IINTERFACE;
 
     CSmartSocketFactory(const char *_socklist, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned)-1);
+    CSmartSocketFactory(IPropertyTree &service, const char *defPort, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned)-1);
     ~CSmartSocketFactory();
     int run();
 
@@ -97,6 +102,8 @@ public:
     virtual void resolveHostnames();
 
     virtual StringBuffer & getUrlStr(StringBuffer &str, bool useHostName);
+    virtual bool isTlsService() const override {return tlsService;}
+    virtual const IPropertyTree *queryTlsConfig() const {return tlsConfig;};
 };
 
 

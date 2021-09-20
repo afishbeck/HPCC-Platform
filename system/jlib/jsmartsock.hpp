@@ -58,6 +58,8 @@ interface jlib_decl ISmartSocketFactory : extends IInterface
     virtual void resolveHostnames() = 0;
 
     virtual StringBuffer & getUrlStr(StringBuffer &str, bool useHostName) = 0;
+    virtual bool isTlsService() const = 0;
+    virtual const IPropertyTree *queryTlsConfig() const = 0;
 };
 
 
@@ -65,7 +67,8 @@ interface jlib_thrown_decl ISmartSocketException : extends IException
 {
 };
 
-
+//tlsHint allows clients that connect on their own to use TLS.  For automated TLS support use SecureSmartSocketFactory.  Helps with backward compatability, may eventually be deprecated
+jlib_decl ISmartSocketFactory *createSmartSocketFactory(IPropertyTree &service, const char *defPort, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned) -1);
 jlib_decl ISmartSocketFactory *createSmartSocketFactory(const char *_socklist, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned) -1);
 
 jlib_decl ISmartSocketException *createSmartSocketException(int errorCode, const char *msg);
