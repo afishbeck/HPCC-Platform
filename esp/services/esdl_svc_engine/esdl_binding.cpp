@@ -378,7 +378,7 @@ void EsdlServiceImpl::configureUrlMethod(const char *method, IPropertyTree &entr
 
     try
     {
-        Owned<ISmartSocketFactory> sf = createSmartSocketFactory(iplist, true);
+        Owned<ISmartSocketFactory> sf = createSmartSocketFactory(streq(protocol, "HTTPS"), true, iplist, true);
 
         connMap.remove(method);
         connMap.setValue(method, sf.get());

@@ -636,7 +636,7 @@ bool Cws_machineEx::onGetMetrics(IEspContext &context, IEspMetricsRequest &req,
         unsigned int columnsToShow = showColumns.ordinality();
 
         ep.set(netAddress.str(), port);
-        Owned<IRoxieCommunicationClient> roxieClient = createRoxieCommunicationClient(ep, 5000);
+        Owned<IRoxieCommunicationClientx> roxieClient = createRoxieCommunicationClientx(ep, 5000);
         Owned<IPropertyTree> result = roxieClient->retrieveRoxieMetrics(ipList);
 
          CIArrayOf<CMetricsParam> fieldMapArray;

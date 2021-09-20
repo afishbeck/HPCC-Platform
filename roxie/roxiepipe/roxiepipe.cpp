@@ -677,7 +677,7 @@ int main(int argc, char *argv[])
             {
 #ifdef _USE_OPENSSL
                 if (useSSL)
-                    smartSocketFactory = createSecureSmartSocketFactory(hosts.str(), retryMode);
+                    smartSocketFactory = createSecureSmartSocketFactory(true, hosts.str(), retryMode);
                 else
 #endif
                     smartSocketFactory = createSmartSocketFactory(hosts.str(), retryMode);

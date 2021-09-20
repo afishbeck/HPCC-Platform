@@ -27,7 +27,7 @@
 #define EMPTY_RESULT_FAILURE        1200
 
 //////////////////////////////////////////
-class CRoxieCommunicationClient: implements IRoxieCommunicationClient, public CInterface
+class CRoxieCommunicationClient: implements IRoxieCommunicationClientx, public CInterface
 {
 private:
     void processRoxieQueryList(IPropertyTree *info)
@@ -540,7 +540,7 @@ public:
 
 
 
-IRoxieCommunicationClient* createRoxieCommunicationClient(const SocketEndpoint &ep, unsigned roxieTimeout)
+IRoxieCommunicationClientx* createRoxieCommunicationClientx(const SocketEndpoint &ep, unsigned roxieTimeout)
 {
     return new CRoxieCommunicationClient(ep, roxieTimeout);
 }
