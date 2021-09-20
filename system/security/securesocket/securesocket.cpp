@@ -1956,7 +1956,7 @@ class CSecureSmartSocketFactory : public CSmartSocketFactory
 public:
     Owned<ISecureSocketContext> secureContext;
 
-    CSecureSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval) : CSmartSocketFactory(_socklist, _retry, _retryInterval, _dnsInterval)
+    CSecureSmartSocketFactory(bool publicService, const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval) : CSmartSocketFactory(true, publicService, _socklist, _retry, _retryInterval, _dnsInterval)
     {
         secureContext.setown(createSecureSocketContext(ClientSocket));
     }
@@ -1984,9 +1984,10 @@ public:
     }
 };
 
-ISmartSocketFactory *createSecureSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
+ISmartSocketFactory *createSecureSmartSocketFactory(bool publicService, const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
 {
-    return new CSecureSmartSocketFactory(_socklist, _retry, _retryInterval, _dnsInterval);
+    DBGLOG("createing smart socket: TLS, %s", _socklist);
+    return new CSecureSmartSocketFactory(publicService, _socklist, _retry, _retryInterval, _dnsInterval);
 }
 
 class CSingletonSecureSocketConnection: public CSingletonSocketConnection

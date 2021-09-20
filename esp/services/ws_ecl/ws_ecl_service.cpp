@@ -196,6 +196,17 @@ static void appendServerAddress(StringBuffer &s, IPropertyTree &env, IPropertyTr
     s.append(netAddress).append(':').append(port ? port : "9876");
 }
 
+class WsEclSocketFactory : public CSmartSocketFactory
+{
+public:
+    bool includeTargetInURL;
+    StringAttr alias;
+
+    WsEclSocketFactory(bool _tls, const char *_socklist, bool _retry, bool includeTarget, const char *_alias, unsigned _dnsInterval) : CSmartSocketFactory(_tls, _socklist, _retry, 60, _dnsInterval), includeTargetInURL(includeTarget), alias(_alias)
+    {
+    }
+};
+
 void initContainerRoxieTargets(MapStringToMyClass<ISmartSocketFactory> &connMap)
 {
     Owned<IPropertyTreeIterator> services = getGlobalConfigSP()->getElements("services[@type='roxie']");
@@ -211,7 +222,7 @@ void initContainerRoxieTargets(MapStringToMyClass<ISmartSocketFactory> &connMap)
 
         StringBuffer s;
         s.append(name).append(':').append(port ? port : "9876");
-        Owned<ISmartSocketFactory> sf = new RoxieSocketFactory(s.str(), false, true, nullptr, (unsigned) -1);
+        Owned<ISmartSocketFactory> sf = new WsEclSocketFactory(service.getPropBool("@tls", false), s.str(), false, true, nullptr, (unsigned) -1);
         connMap.setValue(target, sf.get());
     }
 }
@@ -275,7 +286,7 @@ void initBareMetalRoxieTargets(MapStringToMyClass<ISmartSocketFactory> &connMap,
         if (list.length())
         {
             StringAttr alias(clusterInfo->getAlias());
-            Owned<ISmartSocketFactory> sf = new RoxieSocketFactory(list.str(), !loadBalanced, includeTargetInURL, loadBalanced ? alias.str() : NULL, dnsInterval);
+            Owned<ISmartSocketFactory> sf = (ISmartSocketFactory *) new WsEclSocketFactory(false, list.str(), !loadBalanced, includeTargetInURL, loadBalanced ? alias.str() : NULL, dnsInterval);
             connMap.setValue(target.str(), sf.get());
             if (alias.length() && !connMap.getValue(alias.str())) //only need one vip per alias for routing purposes
                 connMap.setValue(alias.str(), sf.get());
@@ -2051,9 +2062,9 @@ void CWsEclBinding::sendRoxieRequest(const char *target, StringBuffer &req, Stri
         ep = conn->nextEndpoint();
 
         Owned<IHttpClientContext> httpctx = getHttpClientContext();
-        StringBuffer url("http://");
+        WsEclSocketFactory *roxieConn = static_cast<WsEclSocketFactory*>(conn);
+        StringBuffer url(roxieConn->isTlsService() ? "https://" : "http://");
         ep.getIpText(url).append(':').append(ep.port ? ep.port : 9876).append('/');
-        RoxieSocketFactory *roxieConn = static_cast<RoxieSocketFactory*>(conn);
         if (roxieConn->includeTargetInURL)
             url.append(roxieConn->alias.isEmpty() ? target : roxieConn->alias.str());
         if (!trim)

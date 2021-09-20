@@ -509,7 +509,7 @@ bool reloadCluster(MapStringToMyClass<ISmartSocketFactory> &roxieConnMap, const 
 #ifndef _CONTAINERIZED
         Owned<IPropertyTree> result = sendRoxieControlAllNodes(addrs.item(0), "<control:reload/>", false, wait);
 #else
-        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn->nextEndpoint(), "<control:reload/>", false, wait);
+        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn, "<control:reload/>", false, wait);
 #endif
         const char *status = result->queryProp("Endpoint[1]/Status");
         if (!status || !strieq(status, "ok"))
@@ -829,7 +829,7 @@ bool CWsWorkunitsEx::isQuerySuspended(const char* query, const char* target, uns
 #ifndef _CONTAINERIZED
         Owned<IPropertyTree> result = sendRoxieControlAllNodes(addrs.item(0), control.str(), false, wait);
 #else
-        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn->nextEndpoint(), control, false, wait);
+        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn, control, false, wait);
 #endif
         if (!result)
             return false;
@@ -1274,14 +1274,17 @@ IPropertyTree *getQueriesOnCluster(const char *target, const char *queryset, Str
             control.append("</control:queries>");
         }
 #ifndef _CONTAINERIZED
-        Owned<ISocket> sock = ISocket::connect_timeout(eps.item(0), ROXIECONNECTIONTIMEOUT);
-#else
-        Owned<ISocket> sock = ISocket::connect_timeout(conn->nextEndpoint(), ROXIECONNECTIONTIMEOUT);
-#endif
+        const SocketEndpoint &ep = eps.item(0);
         if (checkAllNodes)
-            return sendRoxieControlAllNodes(sock, control, false, ROXIECONTROLQUERIESTIMEOUT);
+            return sendRoxieControlAllNodes(eps.item(0), control, false, ROXIECONTROLQUERIESTIMEOUT);
         else
-            return sendRoxieControlQuery(sock, control, ROXIECONTROLQUERIESTIMEOUT);
+            return sendRoxieControlQuery(eps.item(0), control, ROXIECONTROLQUERIESTIMEOUT, ROXIECONNECTIONTIMEOUT);
+#else
+        if (checkAllNodes)
+            return sendRoxieControlAllNodes(conn, control, false, ROXIECONTROLQUERIESTIMEOUT);
+        else
+            return sendRoxieControlQuery(conn, control, ROXIECONTROLQUERIESTIMEOUT, ROXIECONNECTIONTIMEOUT);
+#endif
     }
     catch(IException* e)
     {
@@ -1455,10 +1458,10 @@ unsigned CWsWorkunitsEx::getGraphIdsByQueryId(const char *target, const char *qu
     VStringBuffer xpath("<control:querystats><Query id='%s'/></control:querystats>", queryId);
 #ifndef _CONTAINERIZED
     Owned<ISocket> sock = ISocket::connect_timeout(eps.item(0), ROXIECONNECTIONTIMEOUT);
-#else
-    Owned<ISocket> sock = ISocket::connect_timeout(conn->nextEndpoint(), ROXIECONNECTIONTIMEOUT);
-#endif
     Owned<IPropertyTree> querystats = sendRoxieControlQuery(sock, xpath.str(), ROXIECONTROLQUERYTIMEOUT);
+#else
+    Owned<IPropertyTree> querystats = sendRoxieControlQuery(conn, xpath.str(), ROXIECONTROLQUERYTIMEOUT, ROXIECONNECTIONTIMEOUT);
+#endif
     if (!querystats)
         return 0;
 
@@ -3403,7 +3406,7 @@ void CWsWorkunitsEx::getGraphsByQueryId(const char *target, const char *queryId,
 
     PROGLOG("getGraphsByQueryId: target %s, query %s", target, queryId);
     VStringBuffer control("<control:querystats><Query id='%s'/></control:querystats>", queryId);
-    Owned<IPropertyTree> querystats = sendRoxieControlAllNodes(conn->nextEndpoint(), control.str(), false, ROXIELOCKCONNECTIONTIMEOUT);
+    Owned<IPropertyTree> querystats = sendRoxieControlAllNodes(conn, control.str(), false, ROXIELOCKCONNECTIONTIMEOUT);
 #endif
     if (!querystats)
         return;
@@ -3524,14 +3527,14 @@ IPropertyTree* CWsWorkunitsEx::sendControlQuery(IEspContext& context, const char
         throw MakeStringException(ECLWATCH_INVALID_CLUSTER_NAME, "CWsWorkunitsEx::sendControlQuery: Server not found for %s", target);
 
     Owned<ISocket> sock = ISocket::connect_timeout(eps.item(0), timeout);
+    return sendRoxieControlQuery(sock, query, timeout);
 #else
     ISmartSocketFactory *conn = roxieConnMap.getValue(target);
     if (!conn)
         throw makeStringExceptionV(ECLWATCH_CANNOT_GET_ENV_INFO, "roxie target cluster not mapped: %s", target);
 
-    Owned<ISocket> sock = ISocket::connect_timeout(conn->nextEndpoint(), timeout);
+    return sendRoxieControlQuery(conn, query, timeout);
 #endif
-    return sendRoxieControlQuery(sock, query, timeout);
 }
 
 bool CWsWorkunitsEx::onWUUpdateQueryEntry(IEspContext& context, IEspWUUpdateQueryEntryRequest& req, IEspWUUpdateQueryEntryResponse& resp)
@@ -3599,7 +3602,7 @@ bool CWsWorkunitsEx::onWUGetNumFileToCopy(IEspContext& context, IEspWUGetNumFile
                 PROGLOG("WUGetNumFileToCopy: Process Server not found for %s", clusterName.get());
                 return nullptr;
             }
-            Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn->nextEndpoint(), "<control:numfilestoprocess/>", false, ROXIELOCKCONNECTIONTIMEOUT);
+            Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn, "<control:numfilestoprocess/>", false, ROXIELOCKCONNECTIONTIMEOUT);
 #endif
             if (!result)
             {
@@ -3744,7 +3747,7 @@ bool CWsWorkunitsEx::onWUQueryGetSummaryStats(IEspContext& context, IEspWUQueryG
 #ifndef _CONTAINERIZED
         Owned<IPropertyTree> queryAggregates = sendRoxieControlAllNodes(eps.item(0), control.str(), false, ROXIELOCKCONNECTIONTIMEOUT);
 #else
-        Owned<IPropertyTree> queryAggregates = sendRoxieControlAllNodes(conn->nextEndpoint(), control, false, ROXIELOCKCONNECTIONTIMEOUT);
+        Owned<IPropertyTree> queryAggregates = sendRoxieControlAllNodes(conn, control, false, ROXIELOCKCONNECTIONTIMEOUT);
 #endif
         if (!queryAggregates)
         {

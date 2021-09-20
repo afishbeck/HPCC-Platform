@@ -94,7 +94,7 @@ SECURESOCKET_API ICertificate *createCertificate();
 SECURESOCKET_API int signCertificate(const char* csr, const char* ca_certificate, const char* ca_privkey, const char* ca_passphrase, int days, StringBuffer& certificate);
 };
 
-SECURESOCKET_API ISmartSocketFactory *createSecureSmartSocketFactory(const char *_socklist, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned) -1);
+SECURESOCKET_API ISmartSocketFactory *createSecureSmartSocketFactory(bool publicService, const char *_socklist, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned) -1);
 
 SECURESOCKET_API IConversation *createSingletonSecureSocketConnection(unsigned short port,SocketEndpoint *_ep=nullptr);
 
