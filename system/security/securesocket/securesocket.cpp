@@ -1986,6 +1986,7 @@ public:
 
 ISmartSocketFactory *createSecureSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
 {
+    DBGLOG("createing smart socket: TLS, %s", _socklist);
     return new CSecureSmartSocketFactory(_socklist, _retry, _retryInterval, _dnsInterval);
 }
 

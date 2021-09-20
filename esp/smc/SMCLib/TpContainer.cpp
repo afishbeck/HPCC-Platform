@@ -29,6 +29,7 @@
 #include "dautils.hpp"
 #include "dameta.hpp"
 #include "hpccconfig.hpp"
+#include "securesocket.hpp"
 
 static CConfigUpdateHook configUpdateHook;
 
@@ -698,7 +699,7 @@ extern TPWRAPPER_API void initContainerRoxieTargets(MapStringToMyClass<ISmartSoc
 
         StringBuffer s;
         s.append(name).append(':').append(port ? port : "9876");
-        Owned<ISmartSocketFactory> sf = new CSmartSocketFactory(s.str(), false, 60, (unsigned) -1);
+        Owned<ISmartSocketFactory> sf = service.getPropBool("@tls", false) ? createSecureSmartSocketFactory(s) : createSmartSocketFactory(s);
         connMap.setValue(target, sf.get());
     }
 }

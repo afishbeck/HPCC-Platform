@@ -21,6 +21,25 @@
 ##############################################################################
 
 */}}
+
+{{- define "hpcc.addTLSServiceEntries" -}}
+  {{- $root := .root }}
+  {{- $roxie := .me }}
+  {{- range $service := .me.services }}
+    {{- $externalService := (ne ( include "hpcc.isVisibilityPublic" (dict "root" $root "visibility" $service.visibility)) "") }}
+    {{- $_ := set $service "public" ($externalService | ternary true false) -}}
+    {{- if not (hasKey $service "tls") }}
+      {{- $_ := set $service "tony" true -}}
+      {{- if and ($externalService) (hasKey $roxie "certificate") }}
+        {{- $_ := set $service "tls" true -}}
+      {{- else }}
+        {{- $issuerName := ternary "public" "local" $externalService }}
+        {{- $_ := set $service "tls" (eq (include "hpcc.isIssuerEnabled" (dict "root" $root "issuer" $issuerName)) "true") -}}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+
 {{/*
 roxie configmap
 Pass in dict with root and me
@@ -33,6 +52,7 @@ data:
   {{ .me.name }}.yaml:
     version: 1.0
     roxie:
+{{- include "hpcc.addTLSServiceEntries" (dict "root" .root "me" .me) }}
 {{ toYaml ( omit .me "logging" "topoServer" "encryptInTransit" "env") | indent 6 }}
       numChannels: {{ .numChannels }}
       topologyServers: "{{ .toponame }}:{{ .topoport }}"
@@ -286,14 +306,14 @@ spec:
 {{ include "hpcc.addVolumeMounts" $commonCtx | indent 8 }}
 {{ include "hpcc.addSecretVolumeMounts" $commonCtx | indent 8 }}
 {{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-server" "name" $servername "external" false) | indent 8 }}
-{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-server" "name" $servername "external" true) | indent 8 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-server" "name" $servername "certificate" $roxie.certificate "external" true) | indent 8 }}
 {{ include "hpcc.addUDPCertificateVolumeMount" (dict "root" $ "component" "udpkey" "name" $udpkeyname ) | indent 8 }}
       volumes:
 {{ include "hpcc.addConfigMapVolume" $roxie | indent 6 }}
 {{ include "hpcc.addVolumes" $commonCtx | indent 6 }}
 {{ include "hpcc.addSecretVolumes" $commonCtx | indent 6 }}
 {{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-server" "name" $servername "external" false) | indent 6 }}
-{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-server" "name" $servername "external" true) | indent 6 }}
+{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-server" "name" $servername "certificate" $roxie.certificate "external" true) | indent 6 }}
 {{ include "hpcc.addUDPCertificateVolume" (dict "root" $ "component" "udpkey" "name" $udpkeyname) | indent 6 }}
 
 ---
@@ -396,7 +416,7 @@ spec:
 {{ include "hpcc.addSecretVolumeMounts" $commonCtx | indent 8 }}
 {{- if not $roxie.serverReplicas }}
 {{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-agent" "name" $name "external" false) | indent 8 }}
-{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-agent" "name" $name "external" true) | indent 8 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-agent" "name" $name "certificate" $roxie.certificate "external" true) | indent 8 }}
 {{ include "hpcc.addUDPCertificateVolumeMount" (dict "root" $ "component" "udpkey" "name" $udpkeyname ) | indent 8 }}
 {{- end }}
 
@@ -406,7 +426,7 @@ spec:
 {{ include "hpcc.addSecretVolumes" $commonCtx | indent 6 }}
 {{- if not $roxie.serverReplicas }}
 {{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-agent" "name" $name "external" false) | indent 6 }}
-{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-agent" "name" $name "external" true) | indent 6 }}
+{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-agent" "name" $name "certificate" $roxie.certificate "external" true) | indent 6 }}
 {{ include "hpcc.addUDPCertificateVolume" (dict "root" $ "component" "udpkey" "name" $udpkeyname) | indent 6 }}
 {{- end }}
 

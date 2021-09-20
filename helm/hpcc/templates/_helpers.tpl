@@ -710,6 +710,14 @@ Generate instance queue names
 {{ end -}}
 {{- end -}}
 
+
+
+ {{- $externalCert := (ne (include "hpcc.isVisibilityPublic" (dict "root" .root "visibility" .me.service.visibility)) "") -}}
+ {{- $issuerName := ternary "public" "local" $externalCert -}}
+ {{- if not (hasKey .me "tls" )}}
+      tls: {{ include "hpcc.isIssuerEnabled" (dict "root" .root "issuer" $issuerName) }}
+ {{- end }}
+
 {{/*
 Generate list of available services
 */}}
@@ -723,7 +731,8 @@ Generate list of available services
   type: roxie
   port: {{ $service.servicePort }}
   target: {{ $roxie.name }}
-  public: {{ (ne ( include "hpcc.isVisibilityPublic" (dict "root" $ "visibility" $service.visibility)) "") | ternary "true" "false" }}
+  public: {{ $service.public }}
+  tls: {{ $service.tls }}
    {{- end -}}
   {{- end }}
 {{ end -}}
@@ -733,12 +742,16 @@ Generate list of available services
   class: esp
   type: {{ $esp.application }}
   port: {{ $esp.service.servicePort }}
+  {{- $externalService := (ne ( include "hpcc.isVisibilityPublic" (dict "root" $ "visibility" $esp.service.visibility)) "") }}
+  public: {{ $externalService | ternary "true" "false" }}
   {{- if hasKey $esp "tls" }}
   tls: {{ $esp.tls }}
+  {{- else if and ($externalService) (hasKey $esp "certificate") }}
+  tls: true
   {{- else }}
-  tls: {{ ($.Values.certificates | default dict).enabled }}
+  {{- $issuerName := ternary "public" "local" $externalService }}
+  tls: {{ include "hpcc.isIssuerEnabled" (dict "root" $ "issuer" $issuerName) }}
   {{- end }}
-  public: {{ (ne ( include "hpcc.isVisibilityPublic" (dict "root" $ "visibility" $esp.service.visibility))  "") | ternary "true" "false" }}
 {{ end -}}
 {{- range $dali := $.Values.dali -}}
 {{- $sashaServices := $dali.services | default dict -}}
@@ -1515,7 +1528,7 @@ Pass in value
  {{- $number := (substr 0 (int (sub (len .) 1)) .) -}}
  {{- printf "%d" (int $number) -}}
 {{- else -}}
- {{- printf "%d" (int (mulf (float64 .) 1000.0)) -}}
+ {{- printf "%d" (int (1000000)) -}}
 {{- end -}}
 {{- end -}}
 

@@ -450,5 +450,6 @@ StringBuffer & CSmartSocketFactory::getUrlStr(StringBuffer &url, bool useHostNam
 }
 
 ISmartSocketFactory *createSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval) {
+    DBGLOG("createing smart socket: TCP, %s", _socklist);
     return new CSmartSocketFactory(_socklist, _retry, _retryInterval, _dnsInterval);
 }

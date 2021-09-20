@@ -10,6 +10,7 @@
 #include "xsdparser.hpp"
 #include "httpclient.hpp"
 #include "jsonhelpers.hpp"
+#include "securesocket.hpp"
 
 #define SDS_LOCK_TIMEOUT (5*60*1000) // 5mins, 30s a bit short
 
@@ -196,6 +197,34 @@ static void appendServerAddress(StringBuffer &s, IPropertyTree &env, IPropertyTr
     s.append(netAddress).append(':').append(port ? port : "9876");
 }
 
+class WsEclSocketFactory : public CInterfaceOf<ISmartSocketFactory>
+{
+public:
+    bool includeTargetInURL;
+    StringAttr alias;
+    Owned<ISmartSocketFactory> factory;
+
+    WsEclSocketFactory(bool tls, const char *_socklist, bool _retry, bool includeTarget, const char *_alias, unsigned _dnsInterval) : includeTargetInURL(includeTarget), alias(_alias)
+    {
+        if (tls)
+            factory.setown(createSecureSmartSocketFactory(_socklist, _retry, 60, _dnsInterval));
+        else
+            factory.setown(createSmartSocketFactory(_socklist, _retry, 60, _dnsInterval));
+    }
+
+//delegate to encapsulated factory
+    virtual int run() override {return factory->run();}
+    virtual ISmartSocket *connect( ) override {return factory->connect();}
+    virtual ISmartSocket *connect_timeout(unsigned timeoutms) override {return factory->connect_timeout(timeoutms);}
+    virtual ISmartSocket *connectNextAvailableSocket() override {return factory->connectNextAvailableSocket();}
+    virtual SocketEndpoint& nextEndpoint() override {return factory->nextEndpoint();}
+    virtual bool getStatus(SocketEndpoint &ep) override {return factory->getStatus(ep);}
+    virtual void setStatus(SocketEndpoint &ep, bool status) override {return factory->setStatus(ep, status);}
+    virtual void stop() override {factory->stop();}
+    virtual void resolveHostnames() override {factory->resolveHostnames();}
+    virtual StringBuffer & getUrlStr(StringBuffer &str, bool useHostName) override {return factory->getUrlStr(str, useHostName);}
+};
+
 void initContainerRoxieTargets(MapStringToMyClass<ISmartSocketFactory> &connMap)
 {
     Owned<IPropertyTreeIterator> services = getGlobalConfigSP()->getElements("services[@type='roxie']");
@@ -210,8 +239,8 @@ void initContainerRoxieTargets(MapStringToMyClass<ISmartSocketFactory> &connMap)
             continue;
 
         StringBuffer s;
-        s.append(name).append(':').append(port ? port : "9876");
-        Owned<ISmartSocketFactory> sf = new RoxieSocketFactory(s.str(), false, true, nullptr, (unsigned) -1);
+        s.append("host.docker.internal").append(':').append(port ? port : "9876");
+        Owned<ISmartSocketFactory> sf = new WsEclSocketFactory(service.getPropBool("@tls", false), s.str(), false, true, nullptr, (unsigned) -1);
         connMap.setValue(target, sf.get());
     }
 }
@@ -275,7 +304,7 @@ void initBareMetalRoxieTargets(MapStringToMyClass<ISmartSocketFactory> &connMap,
         if (list.length())
         {
             StringAttr alias(clusterInfo->getAlias());
-            Owned<ISmartSocketFactory> sf = new RoxieSocketFactory(list.str(), !loadBalanced, includeTargetInURL, loadBalanced ? alias.str() : NULL, dnsInterval);
+            Owned<ISmartSocketFactory> sf = (ISmartSocketFactory *) new WsEclSocketFactory(false, list.str(), !loadBalanced, includeTargetInURL, loadBalanced ? alias.str() : NULL, dnsInterval);
             connMap.setValue(target.str(), sf.get());
             if (alias.length() && !connMap.getValue(alias.str())) //only need one vip per alias for routing purposes
                 connMap.setValue(alias.str(), sf.get());
@@ -2053,7 +2082,7 @@ void CWsEclBinding::sendRoxieRequest(const char *target, StringBuffer &req, Stri
         Owned<IHttpClientContext> httpctx = getHttpClientContext();
         StringBuffer url("http://");
         ep.getIpText(url).append(':').append(ep.port ? ep.port : 9876).append('/');
-        RoxieSocketFactory *roxieConn = static_cast<RoxieSocketFactory*>(conn);
+        WsEclSocketFactory *roxieConn = static_cast<WsEclSocketFactory*>(conn);
         if (roxieConn->includeTargetInURL)
             url.append(roxieConn->alias.isEmpty() ? target : roxieConn->alias.str());
         if (!trim)
