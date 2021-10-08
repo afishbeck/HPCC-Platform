@@ -66,6 +66,8 @@ class jlib_decl CSmartSocketFactory: public Thread,
 
     unsigned nextEndpointIndex;
     bool retry;
+    bool tlsService = false;  //hint for clients that connect on their own, as a backwards compatable alternative to CSecureSmartSocketFactory
+    bool publicService = true;  //if false, then we should use our local cluster client certificates for tls
     unsigned retryInterval;
     unsigned dnsInterval;
 
@@ -75,7 +77,7 @@ class jlib_decl CSmartSocketFactory: public Thread,
 public:
     IMPLEMENT_IINTERFACE;
 
-    CSmartSocketFactory(const char *_socklist, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned)-1);
+    CSmartSocketFactory(bool tls, bool publicSrv, const char *_socklist, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned)-1);
     ~CSmartSocketFactory();
     int run();
 
@@ -97,6 +99,8 @@ public:
     virtual void resolveHostnames();
 
     virtual StringBuffer & getUrlStr(StringBuffer &str, bool useHostName);
+    virtual bool isTlsService() const override {return tlsService;}
+    virtual bool isPublicService() const override {return publicService;}
 };
 
 

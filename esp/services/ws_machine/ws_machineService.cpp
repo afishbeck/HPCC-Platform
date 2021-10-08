@@ -1058,7 +1058,7 @@ void Cws_machineEx::getRoxieStateInfo(CRoxieStateInfoThreadParam* param)
     if (!servers.length())
         throw MakeStringException(ECLWATCH_CANNOT_GET_ENV_INFO, "Roxie Process server not found.");
 
-    Owned<IRoxieCommunicationClient> roxieClient = createRoxieCommunicationClient(servers.item(0), ROXIECONTROLSTATETIMEOUT);
+    Owned<IRoxieCommunicationClientx> roxieClient = createRoxieCommunicationClientx(servers.item(0), ROXIECONTROLSTATETIMEOUT);
     Owned<IPropertyTree> controlResp = roxieClient->sendRoxieControlAllNodes("<control:state/>", true);
     if (!controlResp)
         throw MakeStringException(ECLWATCH_INTERNAL_ERROR, "Failed to get control response from roxie %s.", clusterName);

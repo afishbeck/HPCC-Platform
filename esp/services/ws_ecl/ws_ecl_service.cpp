@@ -199,11 +199,10 @@ static void appendServerAddress(StringBuffer &s, IPropertyTree &env, IPropertyTr
 class WsEclSocketFactory : public CSmartSocketFactory
 {
 public:
-    bool tls = false;
     bool includeTargetInURL;
     StringAttr alias;
 
-    WsEclSocketFactory(bool _tls, const char *_socklist, bool _retry, bool includeTarget, const char *_alias, unsigned _dnsInterval) : CSmartSocketFactory(_socklist, _retry, 60, _dnsInterval), tls(_tls), includeTargetInURL(includeTarget), alias(_alias)
+    WsEclSocketFactory(bool _tls, const char *_socklist, bool _retry, bool includeTarget, const char *_alias, unsigned _dnsInterval) : CSmartSocketFactory(_tls, _socklist, _retry, 60, _dnsInterval), includeTargetInURL(includeTarget), alias(_alias)
     {
     }
 };
@@ -2064,7 +2063,7 @@ void CWsEclBinding::sendRoxieRequest(const char *target, StringBuffer &req, Stri
 
         Owned<IHttpClientContext> httpctx = getHttpClientContext();
         WsEclSocketFactory *roxieConn = static_cast<WsEclSocketFactory*>(conn);
-        StringBuffer url(roxieConn->tls ? "https://" : "http://");
+        StringBuffer url(roxieConn->isTlsService() ? "https://" : "http://");
         ep.getIpText(url).append(':').append(ep.port ? ep.port : 9876).append('/');
         if (roxieConn->includeTargetInURL)
             url.append(roxieConn->alias.isEmpty() ? target : roxieConn->alias.str());

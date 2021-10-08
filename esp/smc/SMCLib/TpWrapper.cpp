@@ -22,6 +22,7 @@
 
 #include "TpWrapper.hpp"
 #include <stdio.h>
+#include "securesocket.hpp"
 #include "workunit.hpp"
 #include "exception_util.hpp"
 #include "portlist.h"
@@ -2078,7 +2079,7 @@ extern TPWRAPPER_API void initContainerRoxieTargets(MapStringToMyClass<ISmartSoc
 
         StringBuffer s;
         s.append(name).append(':').append(port ? port : "9876");
-        Owned<ISmartSocketFactory> sf = new CSmartSocketFactory(s.str(), false, 60, (unsigned) -1);
+        Owned<ISmartSocketFactory> sf = service.getPropBool("@tls", false) ? createSecureSmartSocketFactory(s, false, 60, (unsigned)-1) : createSmartSocketFactory(s, false, 60, (unsigned)-1);
         connMap.setValue(target, sf.get());
     }
 }

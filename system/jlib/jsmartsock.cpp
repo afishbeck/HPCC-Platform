@@ -208,7 +208,7 @@ void CSmartSocket::close()
 }
 
 
-CSmartSocketFactory::CSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
+CSmartSocketFactory::CSmartSocketFactory(bool tls, bool publicSrv, const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval) : tlsService(tls), publicService(publicSrv)
 {
     PROGLOG("CSmartSocketFactory::CSmartSocketFactory(%s)",_socklist?_socklist:"NULL");
     SmartSocketListParser slp(_socklist);
@@ -449,7 +449,13 @@ StringBuffer & CSmartSocketFactory::getUrlStr(StringBuffer &url, bool useHostNam
     return url;
 }
 
-ISmartSocketFactory *createSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval) {
-    DBGLOG("createing smart socket: TCP, %s", _socklist);
-    return new CSmartSocketFactory(_socklist, _retry, _retryInterval, _dnsInterval);
+ISmartSocketFactory *createSmartSocketFactory(bool tlsHint, bool publicService, const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
+{
+    DBGLOG("createing smart socket: %s, %s", tlsHint ? "manual TLS" : "TCP", _socklist);
+    return new CSmartSocketFactory(tlsHint, publicService, _socklist, _retry, _retryInterval, _dnsInterval);
+}
+
+ISmartSocketFactory *createSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
+{
+    return createSmartSocketFactory(false, true, _socklist, _retry, _retryInterval, _dnsInterval);
 }

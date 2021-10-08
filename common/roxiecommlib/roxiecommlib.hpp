@@ -34,7 +34,7 @@
 
 interface IUserDescriptor;
 
-interface IRoxieCommunicationClient : extends IInterface
+interface IRoxieCommunicationClientx : extends IInterface
 {
     virtual IPropertyTree *sendRoxieControlRequest(const char *xml, bool lockAll) = 0;
     virtual const char *sendRoxieOnDemandRequest(const char *xml, SCMStringBuffer &repsonse, bool lockAll) = 0;
@@ -66,6 +66,6 @@ interface IRoxieCommunicationClient : extends IInterface
     virtual IPropertyTree *sendRoxieControlQuery(ISocket *sock, const char *msg, unsigned wait) = 0;
 };
 
-extern "C" ROXIECOMMLIB_API IRoxieCommunicationClient *createRoxieCommunicationClient(const SocketEndpoint &roxieEP, unsigned roxieTimeout);
+extern "C" ROXIECOMMLIB_API IRoxieCommunicationClientx *createRoxieCommunicationClientx(const SocketEndpoint &roxieEP, unsigned roxieTimeout);
 
 #endif

@@ -693,13 +693,15 @@ extern TPWRAPPER_API void initContainerRoxieTargets(MapStringToMyClass<ISmartSoc
         const char* name = service.queryProp("@name");
         const char* target = service.queryProp("@target");
         const char* port = service.queryProp("@port");
+        bool tls = service.getPropBool("@tls", false);
+        bool publicService = service.getPropBool("@public", true);
 
         if (isEmptyString(target) || isEmptyString(name)) //bad config?
             continue;
 
         StringBuffer s;
         s.append(name).append(':').append(port ? port : "9876");
-        Owned<ISmartSocketFactory> sf = service.getPropBool("@tls", false) ? createSecureSmartSocketFactory(s) : createSmartSocketFactory(s);
+        Owned<ISmartSocketFactory> sf = tls ? createSecureSmartSocketFactory(publicService, s) : createSmartSocketFactory(s);
         connMap.setValue(target, sf.get());
     }
 }
