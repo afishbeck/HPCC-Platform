@@ -509,7 +509,7 @@ bool reloadCluster(MapStringToMyClass<ISmartSocketFactory> &roxieConnMap, const 
 #ifndef _CONTAINERIZED
         Owned<IPropertyTree> result = sendRoxieControlAllNodes(addrs.item(0), "<control:reload/>", false, wait);
 #else
-        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn, "<control:reload/>", false, wait);
+        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn, "<control:reload/>", false, wait, 1000);
 #endif
         const char *status = result->queryProp("Endpoint[1]/Status");
         if (!status || !strieq(status, "ok"))
