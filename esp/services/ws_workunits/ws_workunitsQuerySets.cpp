@@ -829,7 +829,7 @@ bool CWsWorkunitsEx::isQuerySuspended(const char* query, const char* target, uns
 #ifndef _CONTAINERIZED
         Owned<IPropertyTree> result = sendRoxieControlAllNodes(addrs.item(0), control.str(), false, wait);
 #else
-        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn, control, false, wait);
+        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn, control, false, wait, ROXIECONNECTIONTIMEOUT);
 #endif
         if (!result)
             return false;
