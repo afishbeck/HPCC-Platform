@@ -509,7 +509,7 @@ bool reloadCluster(MapStringToMyClass<ISmartSocketFactory> &roxieConnMap, const 
 #ifndef _CONTAINERIZED
         Owned<IPropertyTree> result = sendRoxieControlAllNodes(addrs.item(0), "<control:reload/>", false, wait);
 #else
-        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn, "<control:reload/>", false, wait, 1000);
+        Owned<IPropertyTree> result = sendRoxieControlAllNodes(conn, "<control:reload/>", false, wait, ROXIECONNECTIONTIMEOUT);
 #endif
         const char *status = result->queryProp("Endpoint[1]/Status");
         if (!status || !strieq(status, "ok"))
@@ -3406,7 +3406,7 @@ void CWsWorkunitsEx::getGraphsByQueryId(const char *target, const char *queryId,
 
     PROGLOG("getGraphsByQueryId: target %s, query %s", target, queryId);
     VStringBuffer control("<control:querystats><Query id='%s'/></control:querystats>", queryId);
-    Owned<IPropertyTree> querystats = sendRoxieControlAllNodes(conn, control.str(), false, ROXIELOCKCONNECTIONTIMEOUT);
+    Owned<IPropertyTree> querystats = sendRoxieControlAllNodes(conn, control.str(), false, ROXIELOCKCONNECTIONTIMEOUT, ROXIECONNECTIONTIMEOUT);
 #endif
     if (!querystats)
         return;
@@ -3747,7 +3747,7 @@ bool CWsWorkunitsEx::onWUQueryGetSummaryStats(IEspContext& context, IEspWUQueryG
 #ifndef _CONTAINERIZED
         Owned<IPropertyTree> queryAggregates = sendRoxieControlAllNodes(eps.item(0), control.str(), false, ROXIELOCKCONNECTIONTIMEOUT);
 #else
-        Owned<IPropertyTree> queryAggregates = sendRoxieControlAllNodes(conn, control, false, ROXIELOCKCONNECTIONTIMEOUT);
+        Owned<IPropertyTree> queryAggregates = sendRoxieControlAllNodes(conn, control, false, ROXIELOCKCONNECTIONTIMEOUT, ROXIECONNECTIONTIMEOUT);
 #endif
         if (!queryAggregates)
         {
