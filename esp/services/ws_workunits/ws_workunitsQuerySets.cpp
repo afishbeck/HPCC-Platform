@@ -1281,7 +1281,7 @@ IPropertyTree *getQueriesOnCluster(const char *target, const char *queryset, Str
             return sendRoxieControlQuery(eps.item(0), control, ROXIECONTROLQUERIESTIMEOUT, ROXIECONNECTIONTIMEOUT);
 #else
         if (checkAllNodes)
-            return sendRoxieControlAllNodes(conn, control, false, ROXIECONTROLQUERIESTIMEOUT);
+            return sendRoxieControlAllNodes(conn, control, false, ROXIECONTROLQUERIESTIMEOUT, ROXIECONNECTIONTIMEOUT);
         else
             return sendRoxieControlQuery(conn, control, ROXIECONTROLQUERIESTIMEOUT, ROXIECONNECTIONTIMEOUT);
 #endif
@@ -3533,7 +3533,7 @@ IPropertyTree* CWsWorkunitsEx::sendControlQuery(IEspContext& context, const char
     if (!conn)
         throw makeStringExceptionV(ECLWATCH_CANNOT_GET_ENV_INFO, "roxie target cluster not mapped: %s", target);
 
-    return sendRoxieControlQuery(conn, query, timeout);
+    return sendRoxieControlQuery(conn, query, timeout, ROXIECONNECTIONTIMEOUT);
 #endif
 }
 
