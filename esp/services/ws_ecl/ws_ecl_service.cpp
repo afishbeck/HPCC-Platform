@@ -202,7 +202,11 @@ public:
     bool includeTargetInURL;
     StringAttr alias;
 
-    WsEclSocketFactory(bool _tls, bool _publicService, const char *_socklist, bool _retry, bool includeTarget, const char *_alias, unsigned _dnsInterval) : CSmartSocketFactory(_tls, _publicService, _socklist, _retry, 60, _dnsInterval), includeTargetInURL(includeTarget), alias(_alias)
+    WsEclSocketFactory(IPropertyTree &service, const char *defPort, bool _retry, bool includeTarget, const char *_alias, unsigned _dnsInterval) : CSmartSocketFactory(service, defPort, _retry, 60, _dnsInterval), includeTargetInURL(includeTarget), alias(_alias)
+    {
+    }
+
+    WsEclSocketFactory(const char *_socklist, bool _retry, bool includeTarget, const char *_alias, unsigned _dnsInterval) : CSmartSocketFactory(_socklist, _retry, 60, _dnsInterval), includeTargetInURL(includeTarget), alias(_alias)
     {
     }
 };
@@ -213,19 +217,12 @@ void initContainerRoxieTargets(MapStringToMyClass<ISmartSocketFactory> &connMap)
     ForEach(*services)
     {
         IPropertyTree &service = services->query();
-        const char *name = service.queryProp("@name");
-        const char *target = service.queryProp("@target");
-        const char *port = service.queryProp("@port");
 
-        if (isEmptyString(target) || isEmptyString(name)) //bad config?
+        const char *target = service.queryProp("@target");
+        if (isEmptyString(target) || isEmptyString(service.queryProp("@name"))) //bad config?
             continue;
 
-        bool useTLS = service.getPropBool("@tls");
-        bool publicService = service.getPropBool("@public");
-
-        StringBuffer s;
-        s.append(name).append(':').append(port ? port : "9876");
-        Owned<ISmartSocketFactory> sf = new WsEclSocketFactory(useTLS, publicService, s.str(), false, true, nullptr, (unsigned) -1);
+        Owned<ISmartSocketFactory> sf = new WsEclSocketFactory(service, "9876", false, true, nullptr, (unsigned) -1);
         connMap.setValue(target, sf.get());
     }
 }
@@ -289,7 +286,7 @@ void initBareMetalRoxieTargets(MapStringToMyClass<ISmartSocketFactory> &connMap,
         if (list.length())
         {
             StringAttr alias(clusterInfo->getAlias());
-            Owned<ISmartSocketFactory> sf = (ISmartSocketFactory *) new WsEclSocketFactory(false, false, list.str(), !loadBalanced, includeTargetInURL, loadBalanced ? alias.str() : NULL, dnsInterval);
+            Owned<ISmartSocketFactory> sf = (ISmartSocketFactory *) new WsEclSocketFactory(list.str(), !loadBalanced, includeTargetInURL, loadBalanced ? alias.str() : NULL, dnsInterval);
             connMap.setValue(target.str(), sf.get());
             if (alias.length() && !connMap.getValue(alias.str())) //only need one vip per alias for routing purposes
                 connMap.setValue(alias.str(), sf.get());

@@ -207,6 +207,38 @@ void CSmartSocket::close()
     }
 }
 
+/
+CSmartSocketFactory::CSmartSocketFactory(IPropertyTree &service, const char *defPort, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
+{
+    tlsService  = service.getPropBool("@tls");
+    publicService = service.getPropBool("@public");
+    selfSigned = service.getPropBool("@selfSigned");
+    useCACert = service.getPropBool("@caCert");
+
+    const char *name = service.queryProp("@name");
+    const char *port = service.queryProp("@port");
+    StringBuffer s;
+    s.append(name).append(':').append(port ? port : defPort);
+
+    PROGLOG("CSmartSocketFactory::CSmartSocketFactory(service(%s), %s)", name, s.str());
+
+
+    SmartSocketListParser slp(s);
+    if (slp.getSockets(sockArray) == 0)
+        throw createSmartSocketException(0, "no endpoints defined");
+
+    shuffleEndpoints();
+
+    nextEndpointIndex = 0;
+    dnsInterval=_dnsInterval;
+
+    retry = _retry;
+    if (retry)
+    {
+        retryInterval = _retryInterval;
+        this->start();
+    }
+}
 
 CSmartSocketFactory::CSmartSocketFactory(bool tls, bool publicSrv, const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval) : tlsService(tls), publicService(publicSrv)
 {
@@ -227,7 +259,6 @@ CSmartSocketFactory::CSmartSocketFactory(bool tls, bool publicSrv, const char *_
         this->start();
     }
 }
-
 
 CSmartSocketFactory::~CSmartSocketFactory()
 {

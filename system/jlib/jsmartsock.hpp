@@ -60,6 +60,8 @@ interface jlib_decl ISmartSocketFactory : extends IInterface
     virtual StringBuffer & getUrlStr(StringBuffer &str, bool useHostName) = 0;
     virtual bool isTlsService() const = 0;
     virtual bool isPublicService() const = 0;
+    virtual bool useCACert() const = 0;
+    virtual bool allowSelfSigned() const = 0;
 };
 
 
