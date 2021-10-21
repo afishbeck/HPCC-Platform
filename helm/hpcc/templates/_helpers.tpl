@@ -733,6 +733,8 @@ Generate list of available services
   target: {{ $roxie.name }}
   public: {{ $service.public }}
   tls: {{ $service.tls }}
+  selfSigned: {{ $service.selfSigned | default false }}
+  caCert:  {{ $service.caCert | default false }}
    {{- end -}}
   {{- end }}
 {{ end -}}
@@ -749,8 +751,22 @@ Generate list of available services
   {{- else if and ($externalService) (hasKey $esp "certificate") }}
   tls: true
   {{- else }}
-  {{- $issuerName := ternary "public" "local" $externalService }}
-  tls: {{ include "hpcc.isIssuerEnabled" (dict "root" $ "issuer" $issuerName) }}
+    {{- $issuerName := ternary "public" "local" $externalService }}
+    {{- $certificates := ($.Values.certificates | default dict) -}}
+    {{- if $certificates.enabled -}}
+      {{- $issuers := ($certificates.issuers | default dict) -}}
+      {{- $issuer := get $issuers $issuerName -}}
+      {{- if $issuer -}}
+      {{- $issuerSpec := ($issuer.spec | default dict) }}
+  tls: {{ (hasKey $issuer "enabled" | ternary $issuer.enabled true) }}
+  selfSigned: {{ (hasKey $issuerSpec "selfSigned") }}
+  caCert: {{ or (hasKey $issuerSpec "ca") (hasKey $issuerSpec "vault") }}
+      {{- else }}
+  tls: false
+      {{- end -}}
+    {{- else }}
+  tls: false
+    {{- end -}}
   {{- end }}
 {{ end -}}
 {{- range $dali := $.Values.dali -}}

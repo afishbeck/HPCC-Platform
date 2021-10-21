@@ -21,7 +21,6 @@
 ##############################################################################
 
 */}}
-
 {{- define "hpcc.addTLSServiceEntries" -}}
   {{- $root := .root }}
   {{- $roxie := .me }}
@@ -34,7 +33,21 @@
         {{- $_ := set $service "tls" true -}}
       {{- else }}
         {{- $issuerName := ternary "public" "local" $externalService }}
-        {{- $_ := set $service "tls" (eq (include "hpcc.isIssuerEnabled" (dict "root" $root "issuer" $issuerName)) "true") -}}
+        {{- $certificates := ($root.Values.certificates | default dict) -}}
+        {{- if $certificates.enabled -}}
+          {{- $issuers := ($certificates.issuers | default dict) -}}
+          {{- $issuer := get $issuers $issuerName -}}
+          {{- if $issuer -}}
+            {{- $issuerSpec := ($issuer.spec | default dict) -}}
+            {{- $_ := set $service "tls" (hasKey $issuer "enabled" | ternary $issuer.enabled true) -}}
+            {{- $_ := set $service "selfSigned" (hasKey $issuerSpec "selfSigned") -}}
+            {{- $_ := set $service "caCert" (or (hasKey $issuerSpec "ca") (hasKey $issuerSpec "vault")) -}}
+          {{- else -}}
+            {{- $_ := set $service "tls" false -}}
+          {{- end -}}
+        {{- else -}}
+            {{- $_ := set $service "tls" false -}}
+        {{- end -}}
       {{- end }}
     {{- end }}
   {{- end }}
