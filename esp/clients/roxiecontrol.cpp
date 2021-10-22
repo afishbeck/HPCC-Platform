@@ -85,11 +85,12 @@ IPropertyTree *sendRoxieControlQuery(const SocketEndpoint &ep, const char *msg, 
     return sendRoxieControlQuery(sock, msg, wait);
 }
 
-IPropertyTree *sendSecureRoxieControlQuery(const SocketEndpoint &ep, const char *msg, unsigned wait, unsigned connect_wait, bool publicService)
+IPropertyTree *sendSecureRoxieControlQuery(ISmartSocketFactory *conn, const char *msg, unsigned wait, unsigned connect_wait)
 {
+    const SocketEndpoint &ep = conn->nextEndpoint();
     Owned<ISocket> sock = ISocket::connect_timeout(ep, connect_wait);
     //if the roxie service is local, provide our client certificates
-    Owned<ISecureSocketContext> ownedSC = (publicService) ? createSecureSocketContext(ClientSocket) : createSecureSocketContextSecret("local", ClientSocket);
+    Owned<ISecureSocketContext> ownedSC = createSecureSocketContextSSF(conn);
     if (!ownedSC)
         throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure context for roxie control message");
 
@@ -115,7 +116,7 @@ IPropertyTree *sendRoxieControlQuery(ISmartSocketFactory *conn, const char *msg,
 {
     Owned<IPropertyTree> result;
     if (conn->isTlsService())
-        return sendSecureRoxieControlQuery(conn->nextEndpoint(), msg, wait, connect_wait, true);
+        return sendSecureRoxieControlQuery(conn, msg, wait, connect_wait);
     return sendRoxieControlQuery(conn->nextEndpoint(), msg, wait, connect_wait);
 }
 
@@ -154,11 +155,12 @@ IPropertyTree *sendRoxieControlAllNodes(const SocketEndpoint &ep, const char *ms
     return sendRoxieControlAllNodes(sock, msg, allOrNothing, wait);
 }
 
-IPropertyTree *sendSecureRoxieControlAllNodes(const SocketEndpoint &ep, const char *msg, bool allOrNothing, unsigned wait, unsigned connect_wait, bool publicService)
+IPropertyTree *sendSecureRoxieControlAllNodes(ISmartSocketFactory *conn, const char *msg, bool allOrNothing, unsigned wait, unsigned connect_wait, bool publicService)
 {
+    const SocketEndpoint &ep = conn->nextEndpoint();
     Owned<ISocket> sock = ISocket::connect_timeout(ep, connect_wait);
     //if the roxie service is local, provide our client certificates
-    Owned<ISecureSocketContext> ownedSC = (publicService) ? createSecureSocketContext(ClientSocket) : createSecureSocketContextSecret("local", ClientSocket);
+    Owned<ISecureSocketContext> ownedSC = createSecureSocketContextSSF(conn);
     if (!ownedSC)
         throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure context for roxie control message");
 
@@ -184,6 +186,6 @@ IPropertyTree *sendRoxieControlAllNodes(ISmartSocketFactory *conn, const char *m
 {
     Owned<IPropertyTree> result;
     if (conn->isTlsService())
-        return sendSecureRoxieControlAllNodes(conn->nextEndpoint(), msg, allOrNothing, wait, connect_wait, true);
+        return sendSecureRoxieControlAllNodes(conn, msg, allOrNothing, wait, connect_wait, true);
     return sendRoxieControlAllNodes(conn->nextEndpoint(), msg, allOrNothing, wait);
 }

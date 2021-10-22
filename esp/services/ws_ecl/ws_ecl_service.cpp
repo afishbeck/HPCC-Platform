@@ -213,10 +213,6 @@ public:
 
 void initContainerRoxieTargets(MapStringToMyClass<ISmartSocketFactory> &connMap)
 {
-    int x = 0;
-    while (x)
-        x=x+1;
-
     Owned<IPropertyTreeIterator> services = getGlobalConfigSP()->getElements("services[@type='roxie']");
     ForEach(*services)
     {
