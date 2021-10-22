@@ -2077,6 +2077,12 @@ ISmartSocketFactory *createSecureSmartSocketFactory(const char *_socklist, bool 
     return new CSecureSmartSocketFactory(_socklist, _retry, _retryInterval, _dnsInterval);
 }
 
+ISmartSocketFactory *createSecureSmartSocketFactory(IPropertyTree &service, const char *defPort, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
+{
+    DBGLOG("createing service smart socket: TLS");
+    return new CSecureSmartSocketFactory(service, defPort, _retry, _retryInterval, _dnsInterval);
+}
+
 class CSingletonSecureSocketConnection: public CSingletonSocketConnection
 {
 public:
