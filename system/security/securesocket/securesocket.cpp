@@ -1215,6 +1215,67 @@ public:
         SSL_CTX_set_mode(m_ctx, SSL_CTX_get_mode(m_ctx) | SSL_MODE_AUTO_RETRY);
     }
 
+    //SmartSocketFactory initiated TLS communication used by roxie clients and perhaps other clients
+    //SecureContexts for SmartSocketFactory are always clients
+    CSecureSocketContext(ISmartSocketFactory* ssf)
+    {
+        assertex(ssf);
+
+        if(!ssf->isTlsService())
+            throw MakeStringException(-1, "Can't create TLS ctx for non TLS service");
+        m_meth = SSLv23_client_method();
+        m_ctx = SSL_CTX_new(m_meth);
+        if(!m_ctx)
+            throw MakeStringException(-1, "Failed to create TLS ctx");
+
+        const char *cipherList = "ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5";
+        SSL_CTX_set_cipher_list(m_ctx, cipherList);
+
+        //For now when using SmartSocketFactory, only set a client certificate or specific CACert for containerized local issuer 
+//#ifdef _CONTAINERIZED
+        const char *issuer = ssf->getIssuer();
+        if (issuer && streq(issuer, "local"))
+        {
+            VStringBuffer certFile("/opt/HPCCSystems/secrets/certificates/%s/tls.crt", issuer);
+            if (SSL_CTX_use_certificate_chain_file(m_ctx, certFile) <= 0)
+            {
+                char errbuf[512];
+                ERR_error_string_n(ERR_get_error(), errbuf, 512);
+                throw MakeStringException(-1, "error loading certificate chain file %s - %s", certFile.str(), errbuf);
+            }
+            VStringBuffer keyFile("/opt/HPCCSystems/secrets/certificates/%s/tls.key", issuer);
+            if(SSL_CTX_use_PrivateKey_file(m_ctx, keyFile, SSL_FILETYPE_PEM) <= 0)
+            {
+                char errbuf[512];
+                ERR_error_string_n(ERR_get_error(), errbuf, 512);
+                throw MakeStringException(-1, "error loading private key file %s - %s", keyFile.str(), errbuf);
+            }
+            if(!SSL_CTX_check_private_key(m_ctx))
+                throw MakeStringException(-1, "Private key does not match the certificate public key");
+        }
+//#endif    
+        SSL_CTX_set_mode(m_ctx, SSL_CTX_get_mode(m_ctx) | SSL_MODE_AUTO_RETRY);
+
+        m_verify = true;
+        accept_selfsigned = ssf->allowSelfSigned();
+
+        if(m_verify)
+        {
+            if (ssf->useCACert())
+            {
+                VStringBuffer caCertFile("/opt/HPCCSystems/secrets/certificates/%s/ca.crt", issuer);
+                if(SSL_CTX_load_verify_locations(m_ctx, caCertFile, nullptr) != 1)
+                    throw MakeStringException(-1, "Error loading CA certificate from %s", caCertFile.str());
+            }
+
+            SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE, verify_callback);
+
+            //since we're calling out we just need to know that we reach who we called, no need to have a list of allowed mtls peer names
+            m_peers.setown(new CStringSet());
+            m_peers->add("anyone");
+        }
+    }
+
     CSecureSocketContext(IPropertyTree* config, SecureSocketType sockettype)
     {
         assertex(config);
@@ -1844,6 +1905,14 @@ SECURESOCKET_API ISecureSocketContext* createSecureSocketContextEx2(IPropertyTre
     return new securesocket::CSecureSocketContext(config, sockettype);
 }       
 
+SECURESOCKET_API ISecureSocketContext* createSecureSocketContextSSF(ISmartSocketFactory* ssf)
+{
+    if (ssf == nullptr)
+        return createSecureSocketContext(ClientSocket);
+
+    return new securesocket::CSecureSocketContext(ssf);
+}       
+
 SECURESOCKET_API ISecureSocketContext* createSecureSocketContextSecret(const char *mtlsSecretName, SecureSocketType sockettype)
 {
     IPropertyTree *info = queryTlsSecretInfo(mtlsSecretName);
@@ -1969,7 +2038,12 @@ class CSecureSmartSocketFactory : public CSmartSocketFactory
 public:
     Owned<ISecureSocketContext> secureContext;
 
-    CSecureSmartSocketFactory(bool publicService, const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval) : CSmartSocketFactory(true, publicService, _socklist, _retry, _retryInterval, _dnsInterval)
+    CSecureSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval) : CSmartSocketFactory(_socklist, _retry, _retryInterval, _dnsInterval)
+    {
+        secureContext.setown(createSecureSocketContext(ClientSocket));
+    }
+
+    CSecureSmartSocketFactory(IPropertyTree &service, const char *defPort, bool _retry, unsigned _retryInterval, unsigned _dnsInterval) : CSmartSocketFactory(service, defPort, _retry, _retryInterval, _dnsInterval)
     {
         secureContext.setown(createSecureSocketContext(ClientSocket));
     }
@@ -1997,10 +2071,10 @@ public:
     }
 };
 
-ISmartSocketFactory *createSecureSmartSocketFactory(bool publicService, const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
+ISmartSocketFactory *createSecureSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
 {
     DBGLOG("createing smart socket: TLS, %s", _socklist);
-    return new CSecureSmartSocketFactory(publicService, _socklist, _retry, _retryInterval, _dnsInterval);
+    return new CSecureSmartSocketFactory(_socklist, _retry, _retryInterval, _dnsInterval);
 }
 
 class CSingletonSecureSocketConnection: public CSingletonSocketConnection

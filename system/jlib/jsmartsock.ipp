@@ -61,6 +61,7 @@ class SmartSocketEndpointArray : public SafePointerArrayOf<SmartSocketEndpoint> 
 class jlib_decl CSmartSocketFactory: public Thread,
     implements ISmartSocketFactory
 {
+    StringAttr issuer;
     SmartSocketEndpointArray sockArray;
     Mutex lock;
 
@@ -103,6 +104,7 @@ public:
     virtual void resolveHostnames();
 
     virtual StringBuffer & getUrlStr(StringBuffer &str, bool useHostName);
+    virtual const char *getIssuer() const override {return issuer;}
     virtual bool isTlsService() const override {return tlsService;}
     virtual bool isPublicService() const override {return publicService;}
     virtual bool useCACert() const override {return caCert;}

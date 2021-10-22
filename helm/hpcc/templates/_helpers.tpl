@@ -733,6 +733,9 @@ Generate list of available services
   target: {{ $roxie.name }}
   public: {{ $service.public }}
   tls: {{ $service.tls }}
+      {{- if hasKey $service "issuer" }}
+  issuer: {{ $service.issuer }}
+      {{- end }}
   selfSigned: {{ $service.selfSigned | default false }}
   caCert:  {{ $service.caCert | default false }}
    {{- end -}}
@@ -759,6 +762,7 @@ Generate list of available services
       {{- if $issuer -}}
       {{- $issuerSpec := ($issuer.spec | default dict) }}
   tls: {{ (hasKey $issuer "enabled" | ternary $issuer.enabled true) }}
+  issuer: {{ $issuerName }}
   selfSigned: {{ (hasKey $issuerSpec "selfSigned") }}
   caCert: {{ or (hasKey $issuerSpec "ca") (hasKey $issuerSpec "vault") }}
       {{- else }}

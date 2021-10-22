@@ -40,6 +40,7 @@
           {{- if $issuer -}}
             {{- $issuerSpec := ($issuer.spec | default dict) -}}
             {{- $_ := set $service "tls" (hasKey $issuer "enabled" | ternary $issuer.enabled true) -}}
+            {{- $_ := set $service "issuer" $issuerName -}}
             {{- $_ := set $service "selfSigned" (hasKey $issuerSpec "selfSigned") -}}
             {{- $_ := set $service "caCert" (or (hasKey $issuerSpec "ca") (hasKey $issuerSpec "vault")) -}}
           {{- else -}}

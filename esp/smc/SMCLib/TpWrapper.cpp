@@ -2082,7 +2082,7 @@ extern TPWRAPPER_API void initContainerRoxieTargets(MapStringToMyClass<ISmartSoc
 
         StringBuffer s;
         s.append(name).append(':').append(port ? port : "9876");
-        Owned<ISmartSocketFactory> sf = useTLS ? createSecureSmartSocketFactory(publicService, s, false, 60, (unsigned)-1) : createSmartSocketFactory(s, false, 60, (unsigned)-1);
+        Owned<ISmartSocketFactory> sf = useTLS ? createSecureSmartSocketFactory(s, false, 60, (unsigned)-1) : createSmartSocketFactory(s, false, 60, (unsigned)-1);
         connMap.setValue(target, sf.get());
     }
 }
