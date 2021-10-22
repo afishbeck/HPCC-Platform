@@ -2066,23 +2066,21 @@ extern TPWRAPPER_API IConstWUClusterInfo* getWUClusterInfoByName(const char* clu
 
 extern TPWRAPPER_API void initContainerRoxieTargets(MapStringToMyClass<ISmartSocketFactory>& connMap)
 {
+    int x = 0;
+    while (x)
+        x=x+1;
+
     Owned<IPropertyTreeIterator> services = getGlobalConfigSP()->getElements("services[@type='roxie']");
     ForEach(*services)
     {
         IPropertyTree& service = services->query();
-        const char* name = service.queryProp("@name");
         const char* target = service.queryProp("@target");
-        const char* port = service.queryProp("@port");
 
-        if (isEmptyString(target) || isEmptyString(name)) //bad config?
+        if (isEmptyString(target) || isEmptyString(service.queryProp("@name"))) //bad config?
             continue;
 
-        bool useTLS = service.getPropBool("@tls");
-        bool publicService = service.getPropBool("@public", true);
-
-        StringBuffer s;
-        s.append(name).append(':').append(port ? port : "9876");
-        Owned<ISmartSocketFactory> sf = useTLS ? createSecureSmartSocketFactory(s, false, 60, (unsigned)-1) : createSmartSocketFactory(s, false, 60, (unsigned)-1);
+        bool tls = service.getPropBool("@tls", false);
+        Owned<ISmartSocketFactory> sf = tls ? createSecureSmartSocketFactory(service, "9876") : createSmartSocketFactory(service, "9876");
         connMap.setValue(target, sf.get());
     }
 }
