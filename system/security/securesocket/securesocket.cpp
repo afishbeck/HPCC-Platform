@@ -1107,6 +1107,47 @@ int verify_callback(int ok, X509_STORE_CTX *store)
     return ok;
 }
 
+int verify_callback_allow_selfSigned(int ok, X509_STORE_CTX *store)
+{
+    if(!ok)
+    {
+        X509 *cert = X509_STORE_CTX_get_current_cert(store);
+        int err = X509_STORE_CTX_get_error(store);
+
+        char issuer[256], subject[256];
+        X509_NAME_oneline(X509_get_issuer_name(cert), issuer, 256);
+        X509_NAME_oneline(X509_get_subject_name(cert), subject, 256);
+
+        if(streq(issuer, subject))
+        {
+            DBGLOG("Accepting selfsigned certificate, subject=%s", subject);
+            ok = true;
+        }
+        else
+            DBGLOG("Error with certificate: issuer=%s,subject=%s,err %d - %s", issuer, subject,err,X509_verify_cert_error_string(err));
+    }
+    return ok;
+}
+
+int verify_callback_reject_selfSigned(int ok, X509_STORE_CTX *store)
+{
+    if(!ok)
+    {
+        X509 *cert = X509_STORE_CTX_get_current_cert(store);
+        int err = X509_STORE_CTX_get_error(store);
+
+        char issuer[256], subject[256];
+        X509_NAME_oneline(X509_get_issuer_name(cert), issuer, 256);
+        X509_NAME_oneline(X509_get_subject_name(cert), subject, 256);
+
+        if(streq(issuer, subject))
+            DBGLOG("Rejecting selfsigned certificate, subject=%s", subject);
+        else
+            DBGLOG("Error with certificate: issuer=%s,subject=%s,err %d - %s", issuer, subject,err,X509_verify_cert_error_string(err));
+    }
+    return ok;
+}
+
 const char* strtok__(const char* s, const char* d, StringBuffer& tok)
 {
     if(!s || !*s || !d || !*d)
@@ -1232,7 +1273,7 @@ public:
         SSL_CTX_set_cipher_list(m_ctx, cipherList);
 
         //For now when using SmartSocketFactory, only set a client certificate or specific CACert for containerized local issuer 
-//#ifdef _CONTAINERIZED
+#ifdef _CONTAINERIZED
         const char *issuer = ssf->getIssuer();
         if (issuer && streq(issuer, "local"))
         {
@@ -1253,22 +1294,22 @@ public:
             if(!SSL_CTX_check_private_key(m_ctx))
                 throw MakeStringException(-1, "Private key does not match the certificate public key");
         }
-//#endif    
+#endif
         SSL_CTX_set_mode(m_ctx, SSL_CTX_get_mode(m_ctx) | SSL_MODE_AUTO_RETRY);
 
         m_verify = true;
-        accept_selfsigned = ssf->allowSelfSigned();
-
         if(m_verify)
         {
+#ifdef _CONTAINERIZED
             if (ssf->useCACert())
             {
                 VStringBuffer caCertFile("/opt/HPCCSystems/secrets/certificates/%s/ca.crt", issuer);
                 if(SSL_CTX_load_verify_locations(m_ctx, caCertFile, nullptr) != 1)
                     throw MakeStringException(-1, "Error loading CA certificate from %s", caCertFile.str());
             }
+#endif
 
-            SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE, verify_callback);
+            SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE, (ssf->allowSelfSigned()) ? verify_callback_allow_selfSigned : verify_callback_reject_selfSigned);
 
             //since we're calling out we just need to know that we reach who we called, no need to have a list of allowed mtls peer names
             m_peers.setown(new CStringSet());
