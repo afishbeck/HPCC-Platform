@@ -1168,15 +1168,15 @@ const char* strtok__(const char* s, const char* d, StringBuffer& tok)
 class CSecureSocketContext : implements ISecureSocketContext, public CInterface
 {
 private:
-    SSL_CTX*    m_ctx;
+    SSL_CTX*    m_ctx = nullptr;
 #if (OPENSSL_VERSION_NUMBER > 0x00909000L) 
-    const SSL_METHOD* m_meth;
+    const SSL_METHOD* m_meth = nullptr;
 #else
     SSL_METHOD* m_meth;
 #endif 
 
-    bool m_verify;
-    bool m_address_match;
+    bool m_verify = false;
+    bool m_address_match = false;
     Owned<CStringSet> m_peers;
     StringAttr password;
 
