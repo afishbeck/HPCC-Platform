@@ -94,7 +94,7 @@ IPropertyTree *sendSecureRoxieControlQuery(ISmartSocketFactory *conn, const char
     if (!ownedSC)
         throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure context for roxie control message");
 
-    Owned<ISecureSocket> ssock = ownedSC->createSecureSocket(sock);
+    Owned<ISecureSocket> ssock = ownedSC->createSecureSocket(sock.getClear());
     if (!ssock)
         throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure socket for roxie control message");
 
@@ -164,7 +164,7 @@ IPropertyTree *sendSecureRoxieControlAllNodes(ISmartSocketFactory *conn, const c
     if (!ownedSC)
         throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure context for roxie control message");
 
-    Owned<ISecureSocket> ssock = ownedSC->createSecureSocket(sock);
+    Owned<ISecureSocket> ssock = ownedSC->createSecureSocket(sock.getClear());
     if (!ssock)
         throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure socket for roxie control message");
 
