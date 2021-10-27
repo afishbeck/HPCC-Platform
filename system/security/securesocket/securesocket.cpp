@@ -63,8 +63,6 @@
 
 static JSocketStatistics *SSTATS;
 
-bool accept_selfsigned = false;
-
 #define CHK_NULL(x) if((x)==NULL) exit(1)
 #define CHK_ERR(err, s) if((err)==-1){perror(s);exit(1);}
 #define CHK_SSL(err) if((err) ==-1){ERR_print_errors_fp(stderr); exit(2);}
@@ -1085,7 +1083,7 @@ bool CSecureSocket::send_block(const void *blk, size32_t sz)
 
 // ----------------------------
 
-int verify_callback(int ok, X509_STORE_CTX *store)
+int verify_callback(int ok, X509_STORE_CTX *store, bool accept_selfsigned)
 {
     if(!ok)
     {
@@ -1109,43 +1107,12 @@ int verify_callback(int ok, X509_STORE_CTX *store)
 
 int verify_callback_allow_selfSigned(int ok, X509_STORE_CTX *store)
 {
-    if(!ok)
-    {
-        X509 *cert = X509_STORE_CTX_get_current_cert(store);
-        int err = X509_STORE_CTX_get_error(store);
-
-        char issuer[256], subject[256];
-        X509_NAME_oneline(X509_get_issuer_name(cert), issuer, 256);
-        X509_NAME_oneline(X509_get_subject_name(cert), subject, 256);
-
-        if(streq(issuer, subject))
-        {
-            DBGLOG("Accepting selfsigned certificate, subject=%s", subject);
-            ok = true;
-        }
-        else
-            DBGLOG("Error with certificate: issuer=%s,subject=%s,err %d - %s", issuer, subject,err,X509_verify_cert_error_string(err));
-    }
-    return ok;
+    return verify_callback(ok, store, true);
 }
 
 int verify_callback_reject_selfSigned(int ok, X509_STORE_CTX *store)
 {
-    if(!ok)
-    {
-        X509 *cert = X509_STORE_CTX_get_current_cert(store);
-        int err = X509_STORE_CTX_get_error(store);
-
-        char issuer[256], subject[256];
-        X509_NAME_oneline(X509_get_issuer_name(cert), issuer, 256);
-        X509_NAME_oneline(X509_get_subject_name(cert), subject, 256);
-
-        if(streq(issuer, subject))
-            DBGLOG("Rejecting selfsigned certificate, subject=%s", subject);
-        else
-            DBGLOG("Error with certificate: issuer=%s,subject=%s,err %d - %s", issuer, subject,err,X509_verify_cert_error_string(err));
-    }
-    return ok;
+    return verify_callback(ok, store, false);
 }
 
 const char* strtok__(const char* s, const char* d, StringBuffer& tok)
@@ -1383,7 +1350,6 @@ public:
 
         m_verify = config->getPropBool("verify/@enable");
         m_address_match = config->getPropBool("verify/@address_match");
-        accept_selfsigned = config->getPropBool("verify/@accept_selfsigned");
 
         if(m_verify)
         {
@@ -1396,7 +1362,8 @@ public:
                 }
             }
 
-            SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE, verify_callback);
+            bool acceptSelfSigned = config->getPropBool("verify/@accept_selfsigned");
+            SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE, (acceptSelfSigned) ? verify_callback_allow_selfSigned : verify_callback_reject_selfSigned);
 
             m_peers.setown(new CStringSet());
             const char* peersstr = config->queryProp("verify/trusted_peers");

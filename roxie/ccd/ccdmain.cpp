@@ -216,6 +216,8 @@ unsigned leafCacheMB = 50;
 unsigned blobCacheMB = 0;
 
 unsigned roxiePort = 0;
+Owned<IPropertyTree> roxiePortTls;
+
 #ifndef _CONTAINERIZED
 Owned<IPerfMonHook> perfMonHook;
 #endif
@@ -1354,6 +1356,8 @@ int CCD_API roxie_main(int argc, const char *argv[], const char * defaultYaml)
                     if (!roxiePort)
                     {
                         roxiePort = port;
+                        if (roxieFarm.getPropBool("@tls"))
+                            roxiePortTls.setown(createTlsClientSecretInfo(roxieFarm.queryProp("@issuer"), roxieFarm.getPropBool("@pulic")==false, roxieFarm.getPropBool("@selfSigned")));
                         debugEndpoint.set(roxiePort, ip);
                     }
                     bool suspended = roxieFarm.getPropBool("@suspended", false);
