@@ -117,32 +117,6 @@ class CascadeManager : public CInterface
             globalSignals++;
         }
     }
-IPropertyTree *sendSecureRoxieControlQuery(ISmartSocketFactory *conn, const char *msg, unsigned wait, unsigned connect_wait)
-{
-    const SocketEndpoint &ep = conn->nextEndpoint();
-    Owned<ISocket> sock = ISocket::connect_timeout(ep, connect_wait);
-    //if the roxie service is local, provide our client certificates
-    Owned<ISecureSocketContext> ownedSC = createSecureSocketContextSSF(conn);
-    if (!ownedSC)
-        throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure context for roxie control message");
-
-    Owned<ISecureSocket> ssock = ownedSC->createSecureSocket(sock.getClear());
-    if (!ssock)
-        throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure socket for roxie control message");
-
-    int status = ssock->secure_connect();
-    if (status < 0)
-    {
-        StringBuffer err;
-        err.append("Failure to establish secure connection to ");
-        ep.getUrlStr(err);
-        err.append(": returned ").append(status);
-        throw makeStringException(SECURE_CONNECTION_FAILURE, err.str());
-    }
-    sock.setown(ssock.getClear());
-
-    return sendRoxieControlQuery(sock, msg, wait);
-}
 
     void connectChild(unsigned idx)
     {
@@ -172,7 +146,7 @@ IPropertyTree *sendSecureRoxieControlQuery(ISmartSocketFactory *conn, const char
                     if (status < 0)
                     {
                         StringBuffer err;
-                        err.append("Failure to establish secure connection to ");
+                        err.append("Roxie CascadeManager failed to establish secure connection to ");
                         ep.getUrlStr(err);
                         err.append(": returned ").append(status);
                         throw makeStringException(ROXIE_TLS_ERROR, err.str());
