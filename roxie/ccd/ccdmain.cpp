@@ -1368,7 +1368,7 @@ int CCD_API roxie_main(int argc, const char *argv[], const char * defaultYaml)
                     if (port)
                     {
                         const char *protocol = roxieFarm.queryProp("@protocol");
-                        bool serviceTLS  = roxieFarm.queryProp("@tls") || (protocol && streq(protocol, "ssl"));
+                        bool serviceTLS  = roxieFarm.getPropBool("@tls") || (protocol && streq(protocol, "ssl"));
                         StringBuffer certFileName;
                         StringBuffer keyFileName;
                         StringBuffer passPhraseStr;

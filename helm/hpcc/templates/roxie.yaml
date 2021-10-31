@@ -28,26 +28,25 @@
     {{- $externalService := (ne ( include "hpcc.isVisibilityPublic" (dict "root" $root "visibility" $service.visibility)) "") }}
     {{- $_ := set $service "public" ($externalService | ternary true false) -}}
     {{- if not (hasKey $service "tls") }}
-      {{- $_ := set $service "tony" true -}}
       {{- if and ($externalService) (hasKey $roxie "certificate") }}
         {{- $_ := set $service "tls" true -}}
       {{- else }}
         {{- $issuerName := ternary "public" "local" $externalService }}
         {{- $certificates := ($root.Values.certificates | default dict) -}}
-        {{- if $certificates.enabled -}}
+        {{- if not $certificates.enabled -}}
+          {{- $_ := set $service "tls" false -}}
+        {{- else -}}
           {{- $issuers := ($certificates.issuers | default dict) -}}
           {{- $issuer := get $issuers $issuerName -}}
-          {{- if $issuer -}}
+          {{- if not $issuer -}}
+            {{- $_ := set $service "tls" false -}}
+          {{- else -}}
             {{- $issuerSpec := ($issuer.spec | default dict) -}}
             {{- $_ := set $service "tls" (hasKey $issuer "enabled" | ternary $issuer.enabled true) -}}
             {{- $_ := set $service "issuer" $issuerName -}}
             {{- $_ := set $service "selfSigned" (hasKey $issuerSpec "selfSigned") -}}
             {{- $_ := set $service "caCert" (or (hasKey $issuerSpec "ca") (hasKey $issuerSpec "vault")) -}}
-          {{- else -}}
-            {{- $_ := set $service "tls" false -}}
           {{- end -}}
-        {{- else -}}
-            {{- $_ := set $service "tls" false -}}
         {{- end -}}
       {{- end }}
     {{- end }}
@@ -66,7 +65,6 @@ data:
   {{ .me.name }}.yaml:
     version: 1.0
     roxie:
-{{- include "hpcc.addTLSServiceEntries" (dict "root" .root "me" .me) }}
 {{ toYaml ( omit .me "logging" "topoServer" "encryptInTransit" "env") | indent 6 }}
       numChannels: {{ .numChannels }}
       topologyServers: "{{ .toponame }}:{{ .topoport }}"
@@ -99,6 +97,13 @@ data:
 {{ toYaml ( omit .toposerver "logging" "env") | indent 6 }}
 {{- include "hpcc.generateLoggingConfig" (dict "root" .root "me" .toposerver) | indent 6 }}
 {{- end -}}
+
+{{/* TLS info is copied as a block and also used in the helm chart a few places, expand once here to common up code */}}
+{{ range $roxie := $.Values.roxie -}}
+  {{- if not $roxie.disabled -}}
+    {{- include "hpcc.addTLSServiceEntries" (dict "root" $ "me" $roxie) }}
+  {{- end }}
+{{- end }}
 
 {{ range $roxie := $.Values.roxie -}}
 {{- if not $roxie.disabled -}}

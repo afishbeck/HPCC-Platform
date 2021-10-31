@@ -733,7 +733,7 @@ Generate list of available services
   port: {{ $service.servicePort }}
   target: {{ $roxie.name }}
   public: {{ $service.public }}
-  tls: {{ $service.tls }}
+  tls: {{ $service.tls | default false }}
       {{- if hasKey $service "issuer" }}
   issuer: {{ $service.issuer }}
       {{- end }}
