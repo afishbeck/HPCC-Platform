@@ -79,46 +79,6 @@ IPropertyTree *sendRoxieControlQuery(ISocket *sock, const char *msg, unsigned wa
     return ret.getClear();
 }
 
-IPropertyTree *sendRoxieControlQuery(const SocketEndpoint &ep, const char *msg, unsigned wait, unsigned connect_wait)
-{
-    Owned<ISocket> sock = ISocket::connect_timeout(ep, connect_wait);
-    return sendRoxieControlQuery(sock, msg, wait);
-}
-
-IPropertyTree *sendSecureRoxieControlQuery(ISmartSocketFactory *conn, const char *msg, unsigned wait, unsigned connect_wait)
-{
-    const SocketEndpoint &ep = conn->nextEndpoint();
-    Owned<ISocket> sock = ISocket::connect_timeout(ep, connect_wait);
-    Owned<ISecureSocketContext> ownedSC = createSecureSocketContextSSF(conn);
-    if (!ownedSC)
-        throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure context for roxie control message");
-
-    Owned<ISecureSocket> ssock = ownedSC->createSecureSocket(sock.getClear());
-    if (!ssock)
-        throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure socket for roxie control message");
-
-    int status = ssock->secure_connect();
-    if (status < 0)
-    {
-        StringBuffer err;
-        err.append("Failure to establish secure connection to ");
-        ep.getUrlStr(err);
-        err.append(": returned ").append(status);
-        throw makeStringException(SECURE_CONNECTION_FAILURE, err.str());
-    }
-    sock.setown(ssock.getClear());
-
-    return sendRoxieControlQuery(sock, msg, wait);
-}
-
-IPropertyTree *sendRoxieControlQuery(ISmartSocketFactory *conn, const char *msg, unsigned wait, unsigned connect_wait)
-{
-    Owned<IPropertyTree> result;
-    if (conn->isTlsService())
-        return sendSecureRoxieControlQuery(conn, msg, wait, connect_wait);
-    return sendRoxieControlQuery(conn->nextEndpoint(), msg, wait, connect_wait);
-}
-
 bool sendRoxieControlLock(ISocket *sock, bool allOrNothing, unsigned wait)
 {
     Owned<IPropertyTree> resp = sendRoxieControlQuery(sock, "<control:lock/>", wait);
@@ -154,36 +114,46 @@ IPropertyTree *sendRoxieControlAllNodes(const SocketEndpoint &ep, const char *ms
     return sendRoxieControlAllNodes(sock, msg, allOrNothing, wait);
 }
 
-IPropertyTree *sendSecureRoxieControlAllNodes(ISmartSocketFactory *conn, const char *msg, bool allOrNothing, unsigned wait, unsigned connect_wait, bool publicService)
+static ISocket *createRoxieControlSocket(ISmartSocketFactory *conn, unsigned wait, unsigned connect_wait)
 {
     const SocketEndpoint &ep = conn->nextEndpoint();
     Owned<ISocket> sock = ISocket::connect_timeout(ep, connect_wait);
-    Owned<ISecureSocketContext> ownedSC = createSecureSocketContextSSF(conn);
-    if (!ownedSC)
-        throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure context for roxie control message");
-
-    Owned<ISecureSocket> ssock = ownedSC->createSecureSocket(sock.getClear());
-    if (!ssock)
-        throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure socket for roxie control message");
-
-    int status = ssock->secure_connect();
-    if (status < 0)
+    if (conn->isTlsService())
     {
-        StringBuffer err;
-        err.append("Failure to establish secure connection to ");
-        ep.getUrlStr(err);
-        err.append(": returned ").append(status);
-        throw makeStringException(SECURE_CONNECTION_FAILURE, err.str());
-    }
-    sock.setown(ssock.getClear());
+#ifndef _USE_OPENSSL
+        throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure context for roxie control message OPENSSL not supported");
+#else
+        Owned<ISecureSocketContext> ownedSC = createSecureSocketContextSSF(conn);
+        if (!ownedSC)
+            throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure context for roxie control message");
 
-    return sendRoxieControlAllNodes(sock, msg, allOrNothing, wait);
+        Owned<ISecureSocket> ssock = ownedSC->createSecureSocket(sock.getClear());
+        if (!ssock)
+            throw makeStringException(SECURE_CONNECTION_FAILURE, "failed creating secure socket for roxie control message");
+
+        int status = ssock->secure_connect();
+        if (status < 0)
+        {
+            StringBuffer err;
+            err.append("Failure to establish secure connection to ");
+            ep.getUrlStr(err);
+            err.append(": returned ").append(status);
+            throw makeStringException(SECURE_CONNECTION_FAILURE, err.str());
+        }
+        return ssock.getClear();
+#endif
+    }
+    return sock.getClear();
+}
+
+IPropertyTree *sendRoxieControlQuery(ISmartSocketFactory *conn, const char *msg, unsigned wait, unsigned connect_wait)
+{
+    Owned<ISocket> sock = createRoxieControlSocket(conn, wait, connect_wait);
+    return sendRoxieControlQuery(sock, msg, wait);
 }
 
 IPropertyTree *sendRoxieControlAllNodes(ISmartSocketFactory *conn, const char *msg, bool allOrNothing, unsigned wait, unsigned connect_wait)
 {
-    Owned<IPropertyTree> result;
-    if (conn->isTlsService())
-        return sendSecureRoxieControlAllNodes(conn, msg, allOrNothing, wait, connect_wait, true);
-    return sendRoxieControlAllNodes(conn->nextEndpoint(), msg, allOrNothing, wait);
+    Owned<ISocket> sock = createRoxieControlSocket(conn, wait, connect_wait);
+    return sendRoxieControlAllNodes(sock, msg, allOrNothing, wait);
 }

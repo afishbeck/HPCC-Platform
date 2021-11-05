@@ -33,11 +33,6 @@
 
 #define DALI_FILE_LOOKUP_TIMEOUT (1000*15*1)  // 15 seconds
 
-const unsigned ROXIECONNECTIONTIMEOUT = 1000;   //1 second
-const unsigned ROXIECONTROLQUERYTIMEOUT = 3000; //3 second
-const unsigned ROXIECONTROLQUERIESTIMEOUT = 30000; //30 second
-const unsigned ROXIELOCKCONNECTIONTIMEOUT = 60000; //60 second
-
 //The CQuerySetQueryActionTypes[] has to match with the ESPenum QuerySetQueryActionTypes in the ecm file.
 static unsigned NumOfQuerySetQueryActionTypes = 7;
 static const char *QuerySetQueryActionTypes[] = { "Suspend", "Unsuspend", "ToggleSuspend", "Activate",
@@ -1274,11 +1269,11 @@ IPropertyTree *getQueriesOnCluster(const char *target, const char *queryset, Str
             control.append("</control:queries>");
         }
 #ifndef _CONTAINERIZED
-        const SocketEndpoint &ep = eps.item(0);
+        Owned<ISocket> sock = ISocket::connect_timeout(eps.item(0), ROXIECONNECTIONTIMEOUT);
         if (checkAllNodes)
-            return sendRoxieControlAllNodes(eps.item(0), control, false, ROXIECONTROLQUERIESTIMEOUT);
+            return sendRoxieControlAllNodes(sock, control, false, ROXIECONTROLQUERIESTIMEOUT);
         else
-            return sendRoxieControlQuery(eps.item(0), control, ROXIECONTROLQUERIESTIMEOUT, ROXIECONNECTIONTIMEOUT);
+            return sendRoxieControlQuery(sock, control, ROXIECONTROLQUERIESTIMEOUT);
 #else
         if (checkAllNodes)
             return sendRoxieControlAllNodes(conn, control, false, ROXIECONTROLQUERIESTIMEOUT, ROXIECONNECTIONTIMEOUT);

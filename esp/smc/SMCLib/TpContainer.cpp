@@ -696,7 +696,7 @@ extern TPWRAPPER_API void initContainerRoxieTargets(MapStringToMyClass<ISmartSoc
             continue;
 
         bool tls = service.getPropBool("@tls", false);
-        Owned<ISmartSocketFactory> sf = tls ? createSecureSmartSocketFactory(service, "9876") : createSmartSocketFactory(service, "9876");
+        Owned<ISmartSocketFactory> sf = tls ? createSecureSmartSocketFactory(service) : createSmartSocketFactory(service);
         connMap.setValue(target, sf.get());
     }
 }

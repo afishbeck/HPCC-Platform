@@ -79,7 +79,7 @@ public:
     IMPLEMENT_IINTERFACE;
 
     CSmartSocketFactory(const char *_socklist, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned)-1);
-    CSmartSocketFactory(IPropertyTree &service, const char *defPort, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned)-1);
+    CSmartSocketFactory(IPropertyTree &service, bool _retry = false, unsigned _retryInterval = 60, unsigned _dnsInterval = (unsigned)-1);
     ~CSmartSocketFactory();
     int run();
 
@@ -101,8 +101,8 @@ public:
     virtual void resolveHostnames();
 
     virtual StringBuffer & getUrlStr(StringBuffer &str, bool useHostName);
-    virtual bool isTlsService() const override {return tlsService;}
-    virtual const IPropertyTree *queryTlsConfig() const {return tlsConfig;};
+    virtual bool isTlsService() const override { return tlsService; }
+    virtual const IPropertyTree *queryTlsConfig() const { return tlsConfig; };
 };
 
 

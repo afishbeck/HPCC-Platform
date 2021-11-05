@@ -789,23 +789,20 @@ IPropertyTree *createTlsClientSecretInfo(const char *issuer, bool mutual, bool a
     }
 
     IPropertyTree *verify = ensurePTree(info, "verify");
-    if (verify)
+    if (addCACert)
     {
-        if (addCACert)
+        filepath.set(secretpath).append("ca.crt");
+        if (checkFileExists(filepath))
         {
-            filepath.set(secretpath).append("ca.crt");
-            if (checkFileExists(filepath))
-            {
-                IPropertyTree *ca = ensurePTree(verify, "ca_certificates");
-                if (ca)
-                    ca->setProp("@path", filepath.str());
-            }
+            IPropertyTree *ca = ensurePTree(verify, "ca_certificates");
+            ca->setProp("@path", filepath.str());
         }
-        verify->setPropBool("@enable", true);
-        verify->setPropBool("@address_match", false);
-        verify->setPropBool("@accept_selfsigned", acceptSelfSigned);
-        verify->setProp("trusted_peers", "anyone");
     }
+    verify->setPropBool("@enable", true);
+    verify->setPropBool("@address_match", false);
+    verify->setPropBool("@accept_selfsigned", acceptSelfSigned);
+    verify->setProp("trusted_peers", "anyone");
+
     return info.getClear();
 }
 

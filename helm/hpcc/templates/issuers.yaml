@@ -23,7 +23,7 @@
 */}}
 {{- define "hpcc.issuers" -}}
 {{- $issuerEnabled := (hasKey .me "enabled" | ternary .me.enabled true) -}}
-{{- if $issuerEnabled -}}
+{{- if $issuerEnabled }}
 apiVersion: cert-manager.io/v1
 kind: {{ .me.kind | default "Issuer" }}
 metadata:

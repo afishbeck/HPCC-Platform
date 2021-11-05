@@ -208,17 +208,19 @@ void CSmartSocket::close()
     }
 }
 
-CSmartSocketFactory::CSmartSocketFactory(IPropertyTree &service, const char *defPort, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
+CSmartSocketFactory::CSmartSocketFactory(IPropertyTree &service, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
 {
+    const char *name = service.queryProp("@name");
+    const char *port = service.queryProp("@port");
+    if (isEmptyString(name) || isEmptyString(port))
+        throw createSmartSocketException(0, "CSmartSocket factory both name and port required for service configuration");
+
     tlsService  = service.getPropBool("@tls");
     if (tlsService)
         tlsConfig.setown(createTlsClientSecretInfo(service.queryProp("@issuer"), service.getPropBool("@pulic")==false, service.getPropBool("@selfSigned"), service.getPropBool("@caCert")));
 
-
-    const char *name = service.queryProp("@name");
-    const char *port = service.queryProp("@port");
     StringBuffer s;
-    s.append(name).append(':').append(port ? port : defPort);
+    s.append(name).append(':').append(port);
 
     PROGLOG("CSmartSocketFactory::CSmartSocketFactory(service(%s), %s)", name, s.str());
 
@@ -480,15 +482,12 @@ StringBuffer & CSmartSocketFactory::getUrlStr(StringBuffer &url, bool useHostNam
     return url;
 }
 
-ISmartSocketFactory *createSmartSocketFactory(IPropertyTree &service, const char *defPort, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
+ISmartSocketFactory *createSmartSocketFactory(IPropertyTree &service, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
 {
-    const char *name = service.queryProp("@name");
-    DBGLOG("creating smart socket service client: %s, %s", service.getPropBool("@tls") ? "manual TLS" : "TCP", name ? name : "unnamed");
-    return new CSmartSocketFactory(service, defPort, _retry, _retryInterval, _dnsInterval);
+    return new CSmartSocketFactory(service, _retry, _retryInterval, _dnsInterval);
 }
 
 ISmartSocketFactory *createSmartSocketFactory(const char *_socklist, bool _retry, unsigned _retryInterval, unsigned _dnsInterval)
 {
-    DBGLOG("creating smart socket: %s", _socklist);
     return new CSmartSocketFactory(_socklist, _retry, _retryInterval, _dnsInterval);
 }

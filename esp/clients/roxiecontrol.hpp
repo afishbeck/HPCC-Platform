@@ -22,12 +22,16 @@
 #include "jsocket.hpp"
 #include "jptree.hpp"
 #include "jsmartsock.hpp"
-#include "roxiecontrol.hpp"
+//#include "roxiecontrol.hpp"
+
+const unsigned ROXIECONNECTIONTIMEOUT = 1000;   //1 second
+const unsigned ROXIECONTROLQUERYTIMEOUT = 3000; //3 second
+const unsigned ROXIECONTROLQUERIESTIMEOUT = 30000; //30 second
+const unsigned ROXIELOCKCONNECTIONTIMEOUT = 60000; //60 second
 
 //bool sendRoxieControlLock(ISocket *sock, bool allOrNothing, unsigned wait)
 
 IPropertyTree *sendRoxieControlQuery(ISmartSocketFactory *conn, const char *msg, unsigned wait, unsigned connect_wait);
-IPropertyTree *sendRoxieControlQuery(const SocketEndpoint &ep, const char *msg, unsigned wait, unsigned connect_wait);
 IPropertyTree *sendRoxieControlQuery(ISocket *sock, const char *msg, unsigned wait);
 
 IPropertyTree *sendRoxieControlAllNodes(ISmartSocketFactory *conn, const char *msg, bool allOrNothing, unsigned wait, unsigned connect_wait);
