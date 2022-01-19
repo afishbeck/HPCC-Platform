@@ -29,7 +29,9 @@ project( ws_fs )
 include(${HPCC_SOURCE_DIR}/esp/scm/smcscm.cmake)
 
 set (    SRCS 
-         ../../../dali/dfu/dfuutil.cpp 
+         ${HPCC_SOURCE_DIR}/common/workunit/package.cpp
+         ${HPCC_SOURCE_DIR}/common/workunit/referencedfilelist.cpp
+         ../../../dali/dfu/dfuutil.cpp
          ../../../dali/sasha/sacmd.cpp 
          ${ESPSCM_GENERATED_DIR}/ws_fs_esp.cpp 
          ws_fsBinding.cpp 
@@ -60,7 +62,9 @@ include_directories (
          ./../../../fs/dafsclient 
          ./../../../common/workunit
          ${HPCC_SOURCE_DIR}/common/thorhelper
-    )
+         ${HPCC_SOURCE_DIR}/rtl/include
+         ${HPCC_SOURCE_DIR}/rtl/eclrtl
+         )
 
 ADD_DEFINITIONS( -D_USRDLL )
 

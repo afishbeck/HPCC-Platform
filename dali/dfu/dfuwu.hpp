@@ -65,7 +65,8 @@ enum DFUcmd
     DFUcmd_server,              // Cmd line only
     DFUcmd_monitor,
     DFUcmd_copymerge,
-    DFUcmd_supercopy
+    DFUcmd_supercopy,
+    DFUcmd_publish
 };
 
 enum DFUreplicateMode
@@ -436,10 +437,11 @@ interface IConstDFUWorkUnitIterator : extends IInterface
     virtual IConstDFUWorkUnit * get() = 0;
 };
 
-
 interface IDFUWorkUnitFactory : extends IInterface
 {
     virtual IDFUWorkUnit * createWorkUnit() = 0;    // opened in exclusive
+    virtual void createPublisherWorkUnit(StringBuffer &parent, bool startCount, const char *dfuserver, const char *jobname, const char *queue) = 0;
+    virtual IDFUWorkUnit * createPublisherSubTask(StringBuffer &parent) = 0;    // opened in exclusive
     virtual bool deleteWorkUnit(const char * wuid) = 0;
     virtual IConstDFUWorkUnit * openWorkUnit(const char * wuid, bool lock) = 0;
     virtual IConstDFUWorkUnitIterator * getWorkUnitsByXPath(const char *xpath) = 0;
@@ -454,7 +456,8 @@ interface IDFUWorkUnitFactory : extends IInterface
                                                         unsigned maxnum,
                                                         const char *queryowner,
                                                         __int64 *cachehint,         // set to NULL if caching not required
-                                                        unsigned *total) = 0;       // set to NULL if caching not required
+                                                        unsigned *total,
+                                                        const char *publisherWuid) = 0; 
     virtual unsigned numWorkUnits()=0;
     virtual __int64  subscribe(const char *xpath,void *iface) =0;       // internal use
 };

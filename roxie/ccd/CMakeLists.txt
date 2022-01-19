@@ -27,6 +27,8 @@
 project( ccd ) 
 
 set (   SRCS 
+        ${HPCC_SOURCE_DIR}/common/workunit/package.cpp
+        ${HPCC_SOURCE_DIR}/common/workunit/referencedfilelist.cpp
         ccdactivities.cpp
         ../ccdcache/ccdcache.cpp
         ccddali.cpp
@@ -125,6 +127,7 @@ target_link_libraries ( ccd
          schedulectrl
          dllserver 
          workunit 
+         dfuwu
          libbase58
     )
 

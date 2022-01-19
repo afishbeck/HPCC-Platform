@@ -15,6 +15,7 @@ include(${HPCC_SOURCE_DIR}/esp/scm/smcscm.cmake)
 
 set (    SRCS
          ${HPCC_SOURCE_DIR}/dali/dfu/dfuutil.cpp
+         ${HPCC_SOURCE_DIR}/common/workunit/referencedfilelist.cpp
          ${ESPSCM_GENERATED_DIR}/ws_fs_esp.cpp
          ${ESPSCM_GENERATED_DIR}/ws_packageprocess_esp.cpp
          ${HPCC_SOURCE_DIR}/esp/scm/ws_packageprocess.ecm

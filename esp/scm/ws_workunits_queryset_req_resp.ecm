@@ -48,6 +48,8 @@ ESPrequest [nil_remove] WURecreateQueryRequest
     bool IncludeFileErrors(false);
 
     int Wait(-1);
+    bool DfuCopyFiles(false);
+    bool OnlyCopyFiles(false);
 };
 
 ESPresponse [exceptions_inline, nil_remove] WURecreateQueryResponse
@@ -124,6 +126,8 @@ ESPrequest [nil_remove] WUPublishWorkunitRequest
     bool UpdateCloneFrom(false); //explicity wan't to change where roxie will grab from
     bool AppendCluster(true); //file exists on other local cluster, add new one, make optional in case of locking issues, but should be made to work
     bool IncludeFileErrors(false);
+    bool DfuCopyFiles(false);
+    bool OnlyCopyFiles(false);
 };
 
 ESPresponse [exceptions_inline] WUPublishWorkunitResponse
@@ -138,6 +142,8 @@ ESPresponse [exceptions_inline] WUPublishWorkunitResponse
     [min_ver("1.39")] string ErrorMessage;
     ESParray<ESPStruct WUCopyLogicalClusterFileSections, Cluster> ClusterFiles;
     [min_ver("1.68")] ESParray<ESPStruct LogicalFileError, File> FileErrors;
+    [min_ver("1.89")] string DfuPublisherWuid;
+    [min_ver("1.89")] string DfuPublisherState;
 };
 
 ESPrequest [nil_remove] WUQueryConfigRequest
@@ -364,6 +370,8 @@ ESPrequest WUQuerysetImportRequest
     bool UpdateCloneFrom(false); //explicity wan't to change where roxie will grab from
     bool AppendCluster(true); //file exists on other local cluster, add new one, make optional in case of locking issues, but should be made to work
     bool IncludeFileErrors(false);
+    bool DfuCopyFiles(false);
+    bool OnlyCopyFiles(false);
 };
 
 ESPresponse [exceptions_inline] WUQuerysetImportResponse
@@ -441,6 +449,8 @@ ESPrequest [nil_remove] WUQuerySetCopyQueryRequest
     bool AppendCluster(true); //file exists on other local cluster, add new one, make optional in case of locking issues, but should be made to work
     bool IncludeFileErrors(false);
     bool SourceSSL(false);
+    bool DfuCopyFiles(false);
+    bool OnlyCopyFiles(false);
 };
 
 ESPresponse [exceptions_inline] WUQuerySetCopyQueryResponse
@@ -466,6 +476,8 @@ ESPrequest [nil_remove] WUCopyQuerySetRequest
     bool AppendCluster(true); //file exists on other local cluster, add new one, make optional in case of locking issues, but should be made to work
     bool IncludeFileErrors(false);
     bool SourceSSL(false);
+    bool DfuCopyFiles(false);
+    bool OnlyCopyFiles(false);
 };
 
 ESPresponse [exceptions_inline] WUCopyQuerySetResponse

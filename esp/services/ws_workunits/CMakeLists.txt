@@ -29,6 +29,8 @@ include(${HPCC_SOURCE_DIR}/esp/scm/smcscm.cmake)
 set (    SRCS
          ../../../dali/sasha/sacmd.cpp
          ../../../dali/dfu/dfuutil.cpp
+         ${HPCC_SOURCE_DIR}/common/workunit/package.cpp
+         ${HPCC_SOURCE_DIR}/common/workunit/referencedfilelist.cpp
          ${ESPSCM_GENERATED_DIR}/common_esp.cpp
          ${ESPSCM_GENERATED_DIR}/ws_workunits_struct_esp.cpp
          ${ESPSCM_GENERATED_DIR}/ws_workunits_req_resp_esp.cpp

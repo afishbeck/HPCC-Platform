@@ -752,7 +752,8 @@ public:
         if (ps)
             pm = ps->queryActiveMap(target);
     }
-    void copy(IConstWorkUnit *cw, unsigned updateFlags)
+    //keep dfucopy as a boolean for now.  makes keeping track of affected code easier.  eventually turn it into an updateFlag for cleaner code
+    void copy(StringBuffer &publisherWuid, IConstWorkUnit *cw, unsigned updateFlags, bool dfucopy)
     {
         StringBuffer queryid;
         if (queryname && *queryname)
@@ -771,11 +772,11 @@ public:
         files->resolveFiles(locations, remoteIP, remotePrefix, srcCluster, !(updateFlags & (DALI_UPDATEF_REPLACE_FILE | DALI_UPDATEF_CLONE_FROM | DALI_UPDATEF_SUPERFILES)), true, false, true);
         Owned<IDFUhelper> helper = createIDFUhelper();
 #ifdef _CONTAINERIZED
-        files->cloneAllInfo(targetPlaneOrGroup, updateFlags, helper, true, true, 0, 1, 0, nullptr);
+        files->cloneAllInfo(publisherWuid, targetPlaneOrGroup, updateFlags, helper, true, true, 0, 1, 0, nullptr, dfucopy);
 #else
         StringBuffer defReplicateFolder;
         getConfigurationDirectory(NULL, "data2", "roxie", process.str(), defReplicateFolder);
-        files->cloneAllInfo(targetPlaneOrGroup, updateFlags, helper, true, true, clusterInfo->getRoxieRedundancy(), clusterInfo->getChannelsPerNode(), clusterInfo->getRoxieReplicateOffset(), defReplicateFolder);
+        files->cloneAllInfo(publisherWuid, targetPlaneOrGroup, updateFlags, helper, true, true, clusterInfo->getRoxieRedundancy(), clusterInfo->getChannelsPerNode(), clusterInfo->getRoxieReplicateOffset(), defReplicateFolder, dfucopy);
 #endif
     }
 
@@ -861,6 +862,9 @@ bool CWsWorkunitsEx::isQuerySuspended(const char* query, const char* target, uns
 
 bool CWsWorkunitsEx::onWUPublishWorkunit(IEspContext &context, IEspWUPublishWorkunitRequest & req, IEspWUPublishWorkunitResponse & resp)
 {
+    if (req.getDontCopyFiles() && req.getOnlyCopyFiles())
+        throw makeStringException(ECLWATCH_INVALID_INPUT,"Cannot combine 'dont-copy-files' and 'only-copy-files'");
+
     StringBuffer wuid(req.getWuid());
     WsWuHelpers::checkAndTrimWorkunit("WUPublishWorkunit", wuid);
 
@@ -911,6 +915,7 @@ bool CWsWorkunitsEx::onWUPublishWorkunit(IEspContext &context, IEspWUPublishWork
     if (req.getAppendCluster())
         updateFlags |= DALI_UPDATEF_APPEND_CLUSTER;
 
+    StringBuffer publisherWuid;
     if (!req.getDontCopyFiles())
     {
         QueryFileCopier cpr(target);
@@ -919,10 +924,31 @@ bool CWsWorkunitsEx::onWUPublishWorkunit(IEspContext &context, IEspWUPublishWork
         cpr.remotePrefix.set(srcPrefix);
         cpr.srcCluster.set(srcCluster);
         cpr.queryname.set(queryName);
-        cpr.copy(cw, updateFlags);
+        cpr.copy(publisherWuid, cw, updateFlags, req.getDfuCopyFiles());
 
         if (req.getIncludeFileErrors())
             cpr.gatherFileErrors(resp.getFileErrors());
+        if (!publisherWuid.isEmpty())
+            resp.setDfuPublisherWuid(publisherWuid);
+    }
+
+    //setting only-copy-files means the user doesn't want 
+    if (req.getOnlyCopyFiles())
+    {
+        StringBuffer statemsg;
+        resp.setDfuPublisherState(encodeDFUstate(DFUstate_started, statemsg));
+        return true;
+    }
+
+    if (!publisherWuid.isEmpty())
+    {
+        Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
+        Owned<IConstDFUWorkUnit> dfuPublisherWu = factory->openWorkUnit(publisherWuid, false);
+        DFUstate state = dfuPublisherWu->waitForCompletion(1000*60*60*24); // huge timeout for now, tbd
+        StringBuffer statemsg;
+        resp.setDfuPublisherState(encodeDFUstate(state, statemsg));
+        if (state != DFUstate_finished)
+            return true;
     }
 
     WorkunitUpdate wu(&cw->lock());
@@ -1982,7 +2008,6 @@ void copyWorkunitForRecompile(IEspContext &context, IWorkUnitFactory *factory, c
     }
 }
 
-
 bool CWsWorkunitsEx::onWURecreateQuery(IEspContext &context, IEspWURecreateQueryRequest &req, IEspWURecreateQueryResponse &resp)
 {
     try
@@ -2052,6 +2077,7 @@ bool CWsWorkunitsEx::onWURecreateQuery(IEspContext &context, IEspWURecreateQuery
 
         if (req.getRepublish())
         {
+            StringBuffer publisherWuid;
             if (!req.getDontCopyFiles())
             {
                 StringBuffer daliIP;
@@ -2080,7 +2106,7 @@ bool CWsWorkunitsEx::onWURecreateQuery(IEspContext &context, IEspWURecreateQuery
                 cpr.remotePrefix.set(srcPrefix);
                 cpr.srcCluster.set(srcCluster);
                 cpr.queryname.set(srcQueryName);
-                cpr.copy(cw, updateFlags);
+                cpr.copy(publisherWuid, cw, updateFlags, req.getDfuCopyFiles());
 
                 if (req.getIncludeFileErrors())
                     cpr.gatherFileErrors(resp.getFileErrors());
@@ -3044,8 +3070,8 @@ public:
         else
             process.set(destProcess);
     }
-
-    void cloneFiles()
+    //keep dfucopy as a boolean for now.  makes keeping track of affected code easier.  eventually turn it into an updateFlag for cleaner code
+    void cloneFiles(StringBuffer &publisherWuid, bool dfucopy)
     {
         if (cloneFilesEnabled)
         {
@@ -3055,12 +3081,12 @@ public:
             if (cl)
             {
 #ifdef _CONTAINERIZED
-                wufiles->cloneAllInfo(process.str(), updateFlags, helper, true, true, 0, 1, 0, nullptr);
+                wufiles->cloneAllInfo(publisherWuid, process.str(), updateFlags, helper, true, true, 0, 1, 0, nullptr, dfucopy);
 #else
                 SCMStringBuffer process;
                 StringBuffer defReplicateFolder;
                 getConfigurationDirectory(NULL, "data2", "roxie", cl->getRoxieProcess(process).str(), defReplicateFolder);
-                wufiles->cloneAllInfo(process.str(), updateFlags, helper, true, true, cl->getRoxieRedundancy(), cl->getChannelsPerNode(), cl->getRoxieReplicateOffset(), defReplicateFolder);
+                wufiles->cloneAllInfo(publisherWuid, process.str(), updateFlags, helper, true, true, cl->getRoxieRedundancy(), cl->getChannelsPerNode(), cl->getRoxieReplicateOffset(), defReplicateFolder, dfucopy);
 #endif
             }
         }
@@ -3119,6 +3145,7 @@ bool CWsWorkunitsEx::onWUCopyQuerySet(IEspContext &context, IEspWUCopyQuerySetRe
     cloner.setQueryDirectory(queryDirectory);
 
     SCMStringBuffer process;
+    StringBuffer publisherWuid;
     if (req.getCopyFiles())
     {
         Owned <IConstWUClusterInfo> clusterInfo = getWUClusterInfoByName(target);
@@ -3146,7 +3173,7 @@ bool CWsWorkunitsEx::onWUCopyQuerySet(IEspContext &context, IEspWUCopyQuerySetRe
     else
         cloner.cloneAll(req.getCloneActiveState());
 
-    cloner.cloneFiles();
+    cloner.cloneFiles(publisherWuid, req.getDfuCopyFiles());
     if (req.getIncludeFileErrors())
         cloner.gatherFileErrors(resp.getFileErrors());
 
@@ -3158,6 +3185,9 @@ bool CWsWorkunitsEx::onWUCopyQuerySet(IEspContext &context, IEspWUCopyQuerySetRe
 
 bool CWsWorkunitsEx::onWUQuerysetCopyQuery(IEspContext &context, IEspWUQuerySetCopyQueryRequest &req, IEspWUQuerySetCopyQueryResponse &resp)
 {
+    if (req.getDontCopyFiles() && req.getOnlyCopyFiles())
+        throw makeStringException(ECLWATCH_INVALID_INPUT,"Cannot combine 'dont-copy-files' and 'only-copy-files'");
+
     unsigned start = msTick();
     const char *source = req.getSource();
     if (!source || !*source)
@@ -3221,6 +3251,7 @@ bool CWsWorkunitsEx::onWUQuerysetCopyQuery(IEspContext &context, IEspWUQuerySetC
     Owned<IWorkUnitFactory> factory = getWorkUnitFactory(context.querySecManager(), context.queryUser());
     Owned<IConstWorkUnit> cw = factory->openWorkUnit(wuid.str());
 
+    StringBuffer publisherWuid;
     if (!req.getDontCopyFiles())
     {
         StringBuffer daliIP;
@@ -3243,7 +3274,7 @@ bool CWsWorkunitsEx::onWUQuerysetCopyQuery(IEspContext &context, IEspWUQuerySetC
         cpr.remotePrefix.set(srcPrefix);
         cpr.srcCluster.set(srcCluster);
         cpr.queryname.set(targetQueryName);
-        cpr.copy(cw, updateFlags);
+        cpr.copy(publisherWuid, cw, updateFlags, req.getDfuCopyFiles());
 
         if (req.getIncludeFileErrors())
             cpr.gatherFileErrors(resp.getFileErrors());
@@ -3352,7 +3383,8 @@ bool CWsWorkunitsEx::onWUQuerysetImport(IEspContext &context, IEspWUQuerysetImpo
         else
             cloner.cloneAllLocal(activate, req.getQueryMask());
 
-        cloner.cloneFiles();
+        StringBuffer publisherWuid;
+        cloner.cloneFiles(publisherWuid, req.getDfuCopyFiles());
         if (req.getIncludeFileErrors())
             cloner.gatherFileErrors(resp.getFileErrors());
 

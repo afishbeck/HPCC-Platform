@@ -347,6 +347,10 @@ public:
                 continue;
             if (iter.matchFlag(optDontCopyFiles, ECLOPT_DONT_COPY_FILES))
                 continue;
+            if (iter.matchFlag(optDfuCopyFiles, ECLOPT_DFU_COPY_FILES))
+                continue;
+            if (iter.matchFlag(optOnlyCopyFiles, ECLOPT_ONLY_COPY_FILES))
+                continue;
             if (iter.matchFlag(optAllowForeign, ECLOPT_ALLOW_FOREIGN))
                 continue;
             if (iter.matchFlag(optNoActivate, ECLOPT_NO_ACTIVATE))
@@ -469,6 +473,8 @@ public:
         req->setWait(remaining);
         req->setNoReload(optNoReload);
         req->setDontCopyFiles(optDontCopyFiles);
+        req->setDfuCopyFiles(optDfuCopyFiles);
+        req->setOnlyCopyFiles(optOnlyCopyFiles);
         req->setAllowForeignFiles(optAllowForeign);
         req->setUpdateDfs(optUpdateDfs);
         req->setUpdateSuperFiles(optUpdateSuperfiles);
@@ -488,6 +494,9 @@ public:
             req->setComment(optComment);
 
         Owned<IClientWUPublishWorkunitResponse> resp = client->WUPublishWorkunit(req);
+        if (!isEmptyString(resp->getDfuPublisherWuid()))
+            fprintf(stdout, "\nDFU publisher file copying Wuid: %s is %s\n", resp->getDfuPublisherWuid(), isEmptyString(resp->getDfuPublisherState()) ? "in unknown state" : resp->getDfuPublisherState());
+
         const char *id = resp->getQueryId();
         if (id && *id)
         {
@@ -532,6 +541,8 @@ public:
             "   --protect              protect workunit from deletion\n"
             "   -A-, --no-activate     Do not activate query when published\n"
             "   --no-reload            Do not request a reload of the (roxie) cluster\n"
+            "   --dfu-copy             Use DFU to copy files during deployment, not on roxie in the background\n"
+            "   --only-copy-files      Copy the files needed for the query, but don't publish the query\n"
             "   --no-files             Do not copy DFS file information for referenced files\n"
             "   --allow-foreign        Do not fail if foreign files are used in query (roxie)\n"
             "   --daliip=<IP>          The IP of the DALI to be used to locate remote files\n"
@@ -566,6 +577,8 @@ private:
     bool activateSet;
     bool optNoReload;
     bool optDontCopyFiles;
+    bool optDfuCopyFiles=false;
+    bool optOnlyCopyFiles=false;
     bool optSuspendPrevious;
     bool optDeletePrevious;
     bool optProtect = false;

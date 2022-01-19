@@ -23,7 +23,11 @@
 #include "dautils.hpp"
 #include "dasds.hpp"
 #include "dadfs.hpp"
+#include "daqueue.hpp"
 #include "dasess.hpp"
+#include "dfuwu.hpp"
+#include "environment.hpp"
+
 
 #define WF_LOOKUP_TIMEOUT (1000*15)  // 15 seconds
 
@@ -125,7 +129,7 @@ class ReferencedFile : implements IReferencedFile, public CInterface
 public:
     IMPLEMENT_IINTERFACE;
     ReferencedFile(const char *lfn, const char *sourceIP, const char *srcCluster, const char *prefix, bool isSubFile, unsigned _flags, const char *_pkgid, bool noDfs, bool calcSize)
-    : flags(_flags), pkgid(_pkgid), noDfsResolution(noDfs), calcFileSize(calcSize), fileSize(0), numParts(0), trackSubFiles(false)
+    : pkgid(_pkgid), fileSize(0), numParts(0), flags(_flags), noDfsResolution(noDfs), calcFileSize(calcSize), trackSubFiles(false)
     {
         {
             //Scope ensures strings are assigned
@@ -173,8 +177,8 @@ public:
             ep.set(NULL);
         return ep;
     }
-    virtual void cloneInfo(unsigned updateFlags, IDFUhelper *helper, IUserDescriptor *user, const char *dstCluster, const char *srcCluster, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder);
-    void cloneSuperInfo(unsigned updateFlags, ReferencedFileList *list, IUserDescriptor *user, INode *remote);
+    virtual void cloneInfo(StringBuffer &publisherWuid, unsigned updateFlags, IDFUhelper *helper, IUserDescriptor *user, const char *dstCluster, const char *srcCluster, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder, bool dfucopy);
+    void cloneSuperInfo(StringBuffer &publisherWuid, unsigned updateFlags, ReferencedFileList *list, IUserDescriptor *user, INode *remote);
     virtual const char *queryPackageId() const {return pkgid.get();}
     virtual __int64 getFileSize()
     {
@@ -240,12 +244,12 @@ public:
     void addFilesFromPackage(IPropertyTree &package, const char *_daliip, const char *srcCluster, const char *_remotePrefix);
 
     virtual IReferencedFileIterator *getFiles();
-    virtual void cloneFileInfo(const char *dstCluster, unsigned updateFlags, IDFUhelper *helper, bool cloneSuperInfo, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder);
+    virtual void cloneFileInfo(StringBuffer &publisherWuid, const char *dstCluster, unsigned updateFlags, IDFUhelper *helper, bool cloneSuperInfo, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder, bool dfucopy);
 
     virtual void cloneRelationships();
-    virtual void cloneAllInfo(const char *dstCluster, unsigned updateFlags, IDFUhelper *helper, bool cloneSuperInfo, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder)
+    virtual void cloneAllInfo(StringBuffer &publisherWuid, const char *dstCluster, unsigned updateFlags, IDFUhelper *helper, bool cloneSuperInfo, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder, bool dfucopy)
     {
-        cloneFileInfo(dstCluster, updateFlags, helper, cloneSuperInfo, cloneForeign, redundancy, channelsPerNode, replicateOffset, defReplicateFolder);
+        cloneFileInfo(publisherWuid, dstCluster, updateFlags, helper, cloneSuperInfo, cloneForeign, redundancy, channelsPerNode, replicateOffset, defReplicateFolder, dfucopy);
         cloneRelationships();
     }
     virtual void resolveFiles(const StringArray &locations, const char *remoteIP, const char *_remotePrefix, const char *srcCluster, bool checkLocalFirst, bool addSubFiles, bool trackSubFiles, bool resolveForeign=false) override;
@@ -474,7 +478,205 @@ void ReferencedFile::resolve(const char *dstCluster, const char *srcCluster, IUs
         locations.append(dstCluster);
 }
 
-void ReferencedFile::cloneInfo(unsigned updateFlags, IDFUhelper *helper, IUserDescriptor *user, const char *dstCluster, const char *srcCluster, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder)
+
+static void getNodeGroupFromLFN(IUserDescriptor *user, const char* lfn, StringBuffer& nodeGroup)
+{
+    
+    Owned<IDistributedFile> df = queryDistributedFileDirectory().lookup(lfn, user, false, false, false, nullptr, defaultPrivilegedUser, INFINITE);
+    if (!df)
+        throw makeStringExceptionV(-1, "Failed to find file: %s", lfn);
+    df->getClusterGroupName(0, nodeGroup);
+}
+
+static bool parseLogicalPath(const char * pLogicalPath, const char* groupName, const char* cluster, StringBuffer &folder, StringBuffer &title, StringBuffer &defaultFolder, StringBuffer &defaultReplicateFolder)
+{
+    if(!pLogicalPath || !*pLogicalPath)
+        return false;
+
+    folder.clear();
+    title.clear();
+
+    defaultFolder.clear();
+    defaultReplicateFolder.clear();
+
+    if(!isEmptyString(groupName))
+    {
+        Owned<IPropertyTree> plane = getStoragePlane(groupName);
+        if (plane)
+            defaultFolder.append(plane->queryProp("@prefix"));
+    }
+
+    getLFNDirectoryUsingBaseDir(folder, pLogicalPath, defaultFolder.str());
+
+    const char *n = pLogicalPath;
+    const char* p;
+    do {
+        p = strstr(n,"::");
+        if(p)
+            n = p+2;
+    } while(p);
+    title.append(n);
+    return true;
+}
+
+static StringBuffer& constructFileMask(const char* filename, StringBuffer& filemask)
+{
+    filemask.clear().append(filename).toLowerCase().append("._$P$_of_$N$");
+    return filemask;
+}
+
+static void setRoxieClusterPartDiskMapping(const char *clusterName, const char *defaultFolder, const char *defaultReplicateFolder, bool supercopy, IDFUfileSpec *wuFSpecDest, IDFUoptions *wuOptions)
+{
+    ClusterPartDiskMapSpec spec;
+    spec.setDefaultBaseDir(defaultFolder);
+
+    if (!supercopy)
+        spec.setRepeatedCopies(CPDMSRP_lastRepeated,false);
+    wuFSpecDest->setClusterPartDiskMapSpec(clusterName,spec);
+}
+
+//tbd make these parameters
+static void getDefaultDFUName(StringBuffer &dfuName, StringBuffer &dfuQueue)
+{
+    Owned<IEnvironmentFactory> factory = getEnvironmentFactory(true);
+    Owned<IConstEnvironment> env = factory->openEnvironment();
+
+    StringBuffer xpath ("Software/DfuServerProcess");
+    Owned<IPropertyTree> root = &env->getPTree();
+    Owned<IPropertyTreeIterator> targets = root->getElements(xpath.str());
+    ForEach(*targets)
+    {
+        IPropertyTree &target = targets->query();
+        if (target.hasProp("@queue"))
+        {
+            dfuName.set(target.queryProp("@name"));
+            dfuQueue.set(target.queryProp("@queue"));
+        }
+    }
+    return;
+}
+
+
+static void dfuCopy(StringBuffer &dfwuid, IUserDescriptor *user, const char *sourceLogicalName, const char *destLogicalName, const char *destNodeGroupIn, const char *srcDali, bool supercopy, bool overwrite, bool preserveCompression, bool nosplit)
+{
+    if(isEmptyString(sourceLogicalName))
+        throw MakeStringException(-1, "Source logical file not specified.");
+    if(isEmptyString(destLogicalName))
+        throw MakeStringException(-1, "Destination logical file not specified.");
+
+    PROGLOG("Copy from %s to %s", sourceLogicalName, destLogicalName);
+
+    StringBuffer destFolder, destTitle, defaultFolder, defaultReplicateFolder;
+    StringBuffer srcNodeGroup;
+    StringBuffer destNodeGroup(destNodeGroupIn);
+    if(destNodeGroup.isEmpty())
+    {
+        getNodeGroupFromLFN(user, sourceLogicalName, destNodeGroup);
+        DBGLOG("Destination node group not specified, using source node group %s", destNodeGroup.str());
+    }
+
+    CDfsLogicalFileName lfn;
+    parseLogicalPath(destLogicalName, destNodeGroup.str(), NULL, destFolder, destTitle, defaultFolder, defaultReplicateFolder);
+
+    StringBuffer fileMask;
+    constructFileMask(destTitle.str(), fileMask);
+
+    CDfsLogicalFileName logicalName;
+    logicalName.set(sourceLogicalName);
+    if (!isEmptyString(srcDali))
+    {
+        SocketEndpoint ep(srcDali);
+        if (ep.isNull())
+            throw MakeStringException(-1, "ReferencedFile Copy %s: cannot resolve SourceDali network IP from %s.", sourceLogicalName, srcDali);
+
+        logicalName.setForeign(ep,false);
+    }
+
+    Owned<IDistributedFile> file = queryDistributedFileDirectory().lookup(logicalName, user, false, false, false, nullptr, defaultPrivilegedUser);
+    if (!file)
+        throw MakeStringException(-1, "ReferencedFile failed to find file: %s", logicalName.get());
+
+    if (supercopy)
+    {
+        if (!file->querySuperFile())
+            supercopy = false;
+    }
+    else if (file->querySuperFile() && (file->querySuperFile()->numSubFiles() > 1) && isFileKey(file))
+        supercopy = true;
+
+    StringBuffer dfuQueueName;
+    StringBuffer dfuName;
+// Using the first queue for now.
+#ifdef _CONTAINERIZED
+    Owned<IPropertyTreeIterator> dfuQueues = getComponentConfigSP()->getElements("dfuQueues");
+    ForEach(*dfuQueues)
+    {
+        dfuName.set(dfuQueues->query().queryProp("@name"));
+        if (!isEmptyString(dfuName))
+        {
+            getDfuQueueName(dfuQueueName, dfuName);
+            break;
+        }
+    }
+#else
+    getDefaultDFUName(dfuName, dfuQueueName);
+#endif
+    Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
+    if (dfwuid.isEmpty())
+        factory->createPublisherWorkUnit(dfwuid, false, dfuName, "copy published files", dfuQueueName.str());
+
+    Owned<IDFUWorkUnit> wu = factory->createPublisherSubTask(dfwuid);
+    wu->setJobName(destLogicalName);
+    wu->setQueue(dfuQueueName);
+
+    if (user)
+    {
+        StringBuffer username, password;
+        wu->setUser(user->getUserName(username).str());
+        wu->setPassword(user->getPassword(password).str());
+    }
+
+    if(!destNodeGroup.isEmpty())
+        wu->setClusterName(destNodeGroup.str());
+    if (supercopy)
+        wu->setCommand(DFUcmd_supercopy);
+    else
+        wu->setCommand(DFUcmd_copy);
+
+    IDFUfileSpec *wuFSpecSource = wu->queryUpdateSource();
+    IDFUfileSpec *wuFSpecDest = wu->queryUpdateDestination();
+    IDFUoptions *wuOptions = wu->queryUpdateOptions();
+    wuFSpecSource->setLogicalName(sourceLogicalName);
+    if (!isEmptyString(srcDali))
+    {
+        SocketEndpoint ep(srcDali);
+        wuFSpecSource->setForeignDali(ep);
+
+        StringBuffer srcUserName;
+        user->getUserName(srcUserName);
+        if(!srcUserName.isEmpty())
+        {
+            StringBuffer srcPassWord;
+            user->getPassword(srcPassWord);
+            wuFSpecSource->setForeignUser(srcUserName, srcPassWord);
+        }
+    }
+    wuFSpecDest->setLogicalName(destLogicalName);
+    wuFSpecDest->setFileMask(fileMask.str());
+    wuOptions->setOverwrite(overwrite);
+    wuOptions->setPreserveCompression(preserveCompression);
+    wuOptions->setNoSplit(nosplit);
+
+    setRoxieClusterPartDiskMapping(destNodeGroup.str(), defaultFolder.str(), defaultReplicateFolder.str(), supercopy, wuFSpecDest, wuOptions);
+    wuFSpecDest->setWrap(true); // roxie always wraps
+    if (!supercopy)
+        wuOptions->setSuppressNonKeyRepeats(true); // **** only repeat last part when src kind = key
+
+    submitDFUWorkUnit(wu.getClear());
+}
+
+
+void ReferencedFile::cloneInfo(StringBuffer &publisherWuid, unsigned updateFlags, IDFUhelper *helper, IUserDescriptor *user, const char *dstCluster, const char *srcCluster, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder, bool dfucopy)
 {
     if ((flags & RefFileCloned) || (flags & RefFileSuper) || (flags & RefFileInPackage))
         return;
@@ -491,7 +693,13 @@ void ReferencedFile::cloneInfo(unsigned updateFlags, IDFUhelper *helper, IUserDe
         if (filePrefix.length())
             srcLFN.append(filePrefix.str()).append("::");
         srcLFN.append(logicalName.str());
-        helper->cloneRoxieSubFile(srcLFN, srcCluster, logicalName, dstCluster, filePrefix, redundancy, channelsPerNode, replicateOffset, defReplicateFolder, user, daliip, updateFlags);
+
+        if (!dfucopy)
+            //Whether remote or on a local plane if we get here the file is not on a plane that roxie considers an direct access plane, so if we're in copy data mode the the file will be copied
+            helper->cloneRoxieSubFile(srcLFN, srcCluster, logicalName, dstCluster, filePrefix, redundancy, channelsPerNode, replicateOffset, defReplicateFolder, user, daliip, updateFlags, false);
+        else
+            dfuCopy(publisherWuid, user, srcLFN, logicalName, dstCluster, daliip, false, false, true, false);
+
         flags |= RefFileCloned;
     }
     catch (IException *e)
@@ -507,7 +715,7 @@ void ReferencedFile::cloneInfo(unsigned updateFlags, IDFUhelper *helper, IUserDe
     }
 }
 
-void ReferencedFile::cloneSuperInfo(unsigned updateFlags, ReferencedFileList *list, IUserDescriptor *user, INode *remote)
+void ReferencedFile::cloneSuperInfo(StringBuffer &publisherWuid, unsigned updateFlags, ReferencedFileList *list, IUserDescriptor *user, INode *remote)
 {
     if ((flags & RefFileCloned) || (flags & RefFileInPackage) || !(flags & RefFileSuper) || !(flags & RefFileRemote))
         return;
@@ -539,7 +747,7 @@ void ReferencedFile::cloneSuperInfo(unsigned updateFlags, ReferencedFileList *li
                 //ensure superfile in superfile is cloned, before add
                 ReferencedFile *subref = list->map.getValue(name);
                 if (subref)
-                    subref->cloneSuperInfo(updateFlags, list, user, remote);
+                    subref->cloneSuperInfo(publisherWuid, updateFlags, list, user, remote);
             }
             if (name && *name)
                 superfile->addSubFile(name, false, NULL, false);
@@ -787,14 +995,14 @@ void ReferencedFileList::resolveFiles(const StringArray &locations, const char *
         resolveSubFiles(subfiles, locations, checkLocalFirst, trackSubFiles, resolveForeign);
 }
 
-void ReferencedFileList::cloneFileInfo(const char *dstCluster, unsigned updateFlags, IDFUhelper *helper, bool cloneSuperInfo, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder)
+void ReferencedFileList::cloneFileInfo(StringBuffer &publisherWuid, const char *dstCluster, unsigned updateFlags, IDFUhelper *helper, bool cloneSuperInfo, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder, bool dfucopy)
 {
     ReferencedFileIterator files(this);
     ForEach(files)
-        files.queryObject().cloneInfo(updateFlags, helper, user, dstCluster, srcCluster, cloneForeign, redundancy, channelsPerNode, replicateOffset, defReplicateFolder);
+        files.queryObject().cloneInfo(publisherWuid, updateFlags, helper, user, dstCluster, srcCluster, cloneForeign, redundancy, channelsPerNode, replicateOffset, defReplicateFolder, dfucopy);
     if (cloneSuperInfo)
         ForEach(files)
-            files.queryObject().cloneSuperInfo(updateFlags, this, user, remote);
+            files.queryObject().cloneSuperInfo(publisherWuid, updateFlags, this, user, remote);
 }
 
 void ReferencedFileList::cloneRelationships()
