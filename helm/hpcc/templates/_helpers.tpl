@@ -1338,6 +1338,67 @@ spec:
 {{- end }}
 
 {{/*
+Use cert-manager to create a public certificate and private key for use as
+remote client certificates.
+Adding the following to ESP, Roxie, or dafilesrv
+  remoteClients:
+  - name: myRemoteClient
+Will generate secrets containing certificates that can be deployed to the remote client.
+If ESP or Roxie is configured to require client certificates then these certificates
+can be used to allow those remote clietns to connect.  Unique certificates should be created
+for each client so we can start to create certificate based access control lists in the near future.
+*/}}
+{{- define "hpcc.addClientCertificate" }}
+{{- if (.root.Values.certificates | default dict).enabled -}}
+{{- $externalCert := or (and (hasKey . "external") .external) (ne (include "hpcc.isVisibilityPublic" .) "") -}}
+{{- $issuerName := .issuer | default (ternary "public" "local" $externalCert) -}}
+{{- if eq (include "hpcc.isIssuerEnabled" (dict "root" .root "issuer" $issuerName)) "true" -}}
+{{- $issuer := get .root.Values.certificates.issuers $issuerName -}}
+{{- if $issuer -}}
+{{- $namespace := .root.Release.Namespace -}}
+{{- $service := (.service | default dict) -}}
+{{- $domain := ( $service.domain | default $issuer.domain | default $namespace | default "default" ) -}}
+{{- $instance := .instance -}}
+{{- $component := .component -}}
+{{- $client := .client -}}
+{{- if not $externalCert -}}
+ {{- $_ := fail (printf "Remote certificate defined for non external facing service %s - %s." $component $instance) -}}
+{{- end }}
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: client-{{ $issuerName }}-{{ $component }}-{{ $instance }}-{{ $client }}-cert
+  namespace: {{ $namespace }}
+spec:
+  # Secret names are always required.
+  secretName: client-{{ $issuerName }}-{{ $component }}-{{ $instance }}-{{ $client }}-tls
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  subject:
+    organizations:
+    - HPCC Systems
+  commonName: {{ $client }}@{{ $instance }}.{{ $component }}.{{ $domain }}
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - client auth
+  uris:
+  - spiffe://hpcc-client.{{ $client }}/{{ $domain }}/{{ $component }}/{{ $instance }}
+  issuerRef:
+    name: {{ $issuer.name }}
+    kind: {{ $issuer.kind }}
+    group: cert-manager.io
+---
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
 Experimental: Use certmanager to generate a key for roxie udp encryption.
 A public certificate and private key are generated under /opt/HPCCSystems/secrets/certificates/udp.
 Current udp encryption design would only use the private key.

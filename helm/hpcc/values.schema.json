@@ -1109,6 +1109,9 @@
         "bindingInfo": {
           "description": "Customizable binding options",
           "type": "object"
+        },
+        "remoteClients": {
+          "$ref": "#/definitions/remoteClients"
         }
       }
     },
@@ -1236,7 +1239,6 @@
           "type": "string",
           "description": "Name of the secret which contains the TLS certificate.  Custom configuration instead of using, or overriding cert-manager certificate."
         },
-        
         "allFilesDynamic": { 
           "type": "boolean",
           "default": false,
@@ -1812,6 +1814,9 @@
           "default": 5000,
           "minimum": 0,
           "description": "Interval (in milliseconds) between checks that client socket is still open"
+        },
+        "remoteClients": {
+          "$ref": "#/definitions/remoteClients"
         }
       }
     },
@@ -2336,6 +2341,9 @@
         },
         "resources": {
           "$ref": "#/definitions/resources"
+        },
+        "remoteClients": {
+          "$ref": "#/definitions/remoteClients"
         }
       }
     },
@@ -2545,6 +2553,18 @@
           "default": "50m"
         },
         "additionalProperties": false
+      }
+    },
+    "remoteClients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Remote client name"
+          }
+        }
       }
     }
   }

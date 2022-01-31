@@ -183,5 +183,11 @@ kind: ConfigMap
 {{- if $generateSigningCert }}
  {{- include "hpcc.addCertificate" (dict "root" $ "name" "global" "component" $application "issuer" "signing") }}
 {{- end }}
+
+{{- $instance := .name -}}
+{{- $visibility := .service.visibility -}}
+{{- range $remoteClient := .remoteClients }}
+ {{ include "hpcc.addClientCertificate" (dict "root" $ "client" $remoteClient.name "instance" $instance "component" $application "visibility" $visibility) }}
+{{- end }}
 {{- end }}
 {{- end }}

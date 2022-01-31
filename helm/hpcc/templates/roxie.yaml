@@ -320,6 +320,9 @@ spec:
 ---
 
 {{ end -}}
+{{- range $remoteClient := $roxie.remoteClients }}
+ {{ include "hpcc.addClientCertificate" (dict "root" $ "client" $remoteClient.name "instance" $roxie.name "component" "roxie" "external" true) }}
+{{- end }}
 {{ range $c, $e := until ($commonCtx.numChannels|int) -}}
 {{- $channel := add $c 1 -}}
 {{- $name := printf "%s-agent-%d" $roxie.name $channel }}
