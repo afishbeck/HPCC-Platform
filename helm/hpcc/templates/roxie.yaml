@@ -41,7 +41,7 @@ data:
       - name: {{ $service.name }}
 {{ toYaml (omit $service "tls" "name") | indent 8 }}
    {{- if ne (int $service.servicePort) 0 }}
-     {{- include "hpcc.addTLSServiceEntries" (dict "root" $root "service" $service "component" $component "visibility" $service.visibility) | indent 6 }}
+     {{- include "hpcc.addTLSServiceEntries" (dict "root" $root "service" $service "component" $component "visibility" $service.visibility "remote" $component.remoteClients) | indent 6 }}
    {{- end }}
   {{- end }}
 {{ toYaml ( omit .me "logging" "topoServer" "encryptInTransit" "env" "services") | indent 6 }}
@@ -304,19 +304,19 @@ spec:
 {{ include "hpcc.addVolumeMounts" $commonCtx | indent 8 }}
 {{ include "hpcc.addSecretVolumeMounts" $commonCtx | indent 8 }}
 {{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-server" "name" $servername "external" false) | indent 8 }}
-{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-server" "name" $servername "certificate" $roxie.certificate "external" true) | indent 8 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-server" "name" $servername "certificate" $roxie.certificate "external" true "remote" $roxie.remoteClients) | indent 8 }}
 {{ include "hpcc.addUDPCertificateVolumeMount" (dict "root" $ "component" "udpkey" "name" $udpkeyname ) | indent 8 }}
       volumes:
 {{ include "hpcc.addConfigMapVolume" $roxie | indent 6 }}
 {{ include "hpcc.addVolumes" $commonCtx | indent 6 }}
 {{ include "hpcc.addSecretVolumes" $commonCtx | indent 6 }}
 {{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-server" "name" $servername "external" false) | indent 6 }}
-{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-server" "name" $servername "certificate" $roxie.certificate "external" true) | indent 6 }}
+{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-server" "name" $servername "certificate" $roxie.certificate "external" true "remote" $roxie.remoteClients) | indent 6 }}
 {{ include "hpcc.addUDPCertificateVolume" (dict "root" $ "component" "udpkey" "name" $udpkeyname) | indent 6 }}
 
 ---
 {{ include "hpcc.addCertificate" (dict "root" $ "name" $servername "services" $roxie.services "component" "roxie-server" "external" false) }}
-{{ include "hpcc.addCertificate" (dict "root" $ "name" $servername "services" $roxie.services "component" "roxie-server" "external" true) }}
+{{ include "hpcc.addCertificate" (dict "root" $ "name" $servername "services" $roxie.services "component" "roxie-server" "external" true "remote" $roxie.remoteClients) }}
 ---
 
 {{ end -}}
@@ -328,7 +328,7 @@ spec:
 {{- $name := printf "%s-agent-%d" $roxie.name $channel }}
 
 {{ include "hpcc.addCertificate" (dict "root" $ "name" $name "services" $roxie.services "component" "roxie-agent" "external" false) }}
-{{ include "hpcc.addCertificate" (dict "root" $ "name" $name "services" $roxie.services "component" "roxie-agent" "external" true) }}
+{{ include "hpcc.addCertificate" (dict "root" $ "name" $name "services" $roxie.services "component" "roxie-agent" "external" true "remote" $roxie.remoteClients) }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -423,7 +423,7 @@ spec:
 {{ include "hpcc.addSecretVolumeMounts" $commonCtx | indent 8 }}
 {{- if not $roxie.serverReplicas }}
 {{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-agent" "name" $name "external" false) | indent 8 }}
-{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-agent" "name" $name "certificate" $roxie.certificate "external" true) | indent 8 }}
+{{ include "hpcc.addCertificateVolumeMount" (dict "root" $ "component" "roxie-agent" "name" $name "certificate" $roxie.certificate "external" true "remote" $roxie.remoteClients) | indent 8 }}
 {{ include "hpcc.addUDPCertificateVolumeMount" (dict "root" $ "component" "udpkey" "name" $udpkeyname ) | indent 8 }}
 {{- end }}
 
@@ -433,7 +433,7 @@ spec:
 {{ include "hpcc.addSecretVolumes" $commonCtx | indent 6 }}
 {{- if not $roxie.serverReplicas }}
 {{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-agent" "name" $name "external" false) | indent 6 }}
-{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-agent" "name" $name "certificate" $roxie.certificate "external" true) | indent 6 }}
+{{ include "hpcc.addCertificateVolume" (dict "root" $ "component" "roxie-agent" "name" $name "certificate" $roxie.certificate "external" true "remote" $roxie.remoteClients) | indent 6 }}
 {{ include "hpcc.addUDPCertificateVolume" (dict "root" $ "component" "udpkey" "name" $udpkeyname) | indent 6 }}
 {{- end }}
 

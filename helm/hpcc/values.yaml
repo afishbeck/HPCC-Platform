@@ -229,6 +229,16 @@ certificates:
       spec:
         ca:
           secretName: hpcc-local-issuer-key-pair
+    remote:
+      name: hpcc-remote-issuer
+      ## kind can be changed to ClusterIssue to refer to a ClusterIssuer. https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.ClusterIssuer
+      kind: Issuer
+      ## do not define spec (set spec: null), to reference an Issuer resource that already exists in the cluster
+      ## change spec if you'd like to change how certificates get issued... see ## https://cert-manager.io/docs/configuration/#supported-issuer-types
+      ## for information on what spec should contain.
+      spec:
+        ca:
+          secretName: hpcc-local-issuer-key-pair
     public:
       name: hpcc-public-issuer
       ## kind can be changed to ClusterIssue to refer to a ClusterIssuer. https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.ClusterIssuer
@@ -467,6 +477,8 @@ esp:
   application: eclwatch
   auth: none
   replicas: 1
+  remoteClients:
+  - name: client333
   service:
     ## port can be used to change the local port used by the pod. If omitted, the default port (8880) is used
     port: 8888
@@ -534,6 +546,10 @@ esp:
   application: sql2ecl
   auth: none
   replicas: 1
+  remoteClients:
+  - name: sqlclient111
+  - name: client222
+  - name: client333
   service:
     visibility: local
     servicePort: 8510
