@@ -734,9 +734,9 @@ class QueryFileCopier
 {
 public:
     QueryFileCopier(const char *target_) : target(target_) {}
-    void init(IEspContext &context, bool allowForeignFiles)
+    void init(IEspContext &context, bool allowForeignFiles, const char *jobname)
     {
-        files.setown(createReferencedFileList(context.queryUserId(), context.queryPassword(), allowForeignFiles, false));
+        files.setown(createReferencedFileList(context.queryUserId(), context.queryPassword(), allowForeignFiles, false, jobname));
 #ifndef _CONTAINERIZED
         clusterInfo.setown(getTargetClusterInfo(target));
         StringBufferAdaptor sba(process);
@@ -919,7 +919,7 @@ bool CWsWorkunitsEx::onWUPublishWorkunit(IEspContext &context, IEspWUPublishWork
     if (!req.getDontCopyFiles())
     {
         QueryFileCopier cpr(target);
-        cpr.init(context, req.getAllowForeignFiles());
+        cpr.init(context, req.getAllowForeignFiles(), queryName);
         cpr.remoteIP.set(daliIP);
         cpr.remotePrefix.set(srcPrefix);
         cpr.srcCluster.set(srcCluster);
@@ -932,11 +932,13 @@ bool CWsWorkunitsEx::onWUPublishWorkunit(IEspContext &context, IEspWUPublishWork
             resp.setDfuPublisherWuid(publisherWuid);
     }
 
-    //setting only-copy-files means the user doesn't want 
-    if (req.getOnlyCopyFiles())
+    if (req.getOnlyCopyFiles() || (req.getStopIfFilesCopied() && !publisherWuid.isEmpty()))
     {
-        StringBuffer statemsg;
-        resp.setDfuPublisherState(encodeDFUstate(DFUstate_started, statemsg));
+        if (!publisherWuid.isEmpty())
+        {
+            StringBuffer statemsg;
+            resp.setDfuPublisherState(encodeDFUstate(DFUstate_started, statemsg));
+        }
         return true;
     }
 
@@ -944,7 +946,7 @@ bool CWsWorkunitsEx::onWUPublishWorkunit(IEspContext &context, IEspWUPublishWork
     {
         Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
         Owned<IConstDFUWorkUnit> dfuPublisherWu = factory->openWorkUnit(publisherWuid, false);
-        DFUstate state = dfuPublisherWu->waitForCompletion(1000*60*60*24); // huge timeout for now, tbd
+        DFUstate state = dfuPublisherWu->waitForCompletion(1000*60*30); //make an option, 30 min timeout for now, tbd
         StringBuffer statemsg;
         resp.setDfuPublisherState(encodeDFUstate(state, statemsg));
         if (state != DFUstate_finished)
@@ -2101,7 +2103,7 @@ bool CWsWorkunitsEx::onWURecreateQuery(IEspContext &context, IEspWURecreateQuery
                     updateFlags |= DALI_UPDATEF_APPEND_CLUSTER;
 
                 QueryFileCopier cpr(target);
-                cpr.init(context, req.getAllowForeignFiles());
+                cpr.init(context, req.getAllowForeignFiles(), srcQueryName);
                 cpr.remoteIP.set(daliIP);
                 cpr.remotePrefix.set(srcPrefix);
                 cpr.srcCluster.set(srcCluster);
@@ -2110,6 +2112,29 @@ bool CWsWorkunitsEx::onWURecreateQuery(IEspContext &context, IEspWURecreateQuery
 
                 if (req.getIncludeFileErrors())
                     cpr.gatherFileErrors(resp.getFileErrors());
+                if (!publisherWuid.isEmpty())
+                    resp.setDfuPublisherWuid(publisherWuid);
+            }
+
+            if (req.getOnlyCopyFiles() || (req.getStopIfFilesCopied() && !publisherWuid.isEmpty()))
+            {
+                if (!publisherWuid.isEmpty())
+                {
+                    StringBuffer statemsg;
+                    resp.setDfuPublisherState(encodeDFUstate(DFUstate_started, statemsg));
+                }
+                return true;
+            }
+
+            if (!publisherWuid.isEmpty())
+            {
+                Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
+                Owned<IConstDFUWorkUnit> dfuPublisherWu = factory->openWorkUnit(publisherWuid, false);
+                DFUstate state = dfuPublisherWu->waitForCompletion(1000*60*30); //make an option, 30 min timeout for now, tbd
+                StringBuffer statemsg;
+                resp.setDfuPublisherState(encodeDFUstate(state, statemsg));
+                if (state != DFUstate_finished)
+                    return true;
             }
 
             StringBuffer queryId;
@@ -2880,6 +2905,59 @@ public:
     {
         queryDirectory.set(dir);
     }
+
+    void addToBePublished(const char *wuid, const char *name, bool makeActive, const char *userid, IPropertyTree *query)
+    {
+        OwnedPTree entry = toBePublished->addPropTree("Publish");
+        entry->setProp("@wuid", wuid);
+        entry->setProp("@name", name);
+        entry->setPropBool("@makeActive", makeActive);
+        entry->setProp("@userid", userid);
+        entry->addPropTree("Info", createPTreeFromIPT(query));
+
+        Owned<IAttributeIterator> aiter = query->getAttributes();
+        OwnedPTree attrs = entry->addPropTree("Attrs");
+        ForEach(*aiter)
+        {
+            const char *atname = aiter->queryName();
+            attrs->setProp(atname, aiter->queryValue());
+        }
+    }
+
+    void publish()
+    {
+        Owned<IPropertyTreeIterator> entries = toBePublished->getElements("publish");
+        ForEach(*entries)
+        {
+            IPropertyTree &entry = entries->query();
+            StringBuffer newQueryId;
+            Owned<IWorkUnit> workunit = factory->updateWorkUnit(entry.queryProp("@wuid"));
+            addQueryToQuerySet(workunit, destQuerySet, entry.queryProp("@name"), entry.getPropBool("@makeActive") ? ACTIVATE_SUSPEND_PREVIOUS : DO_NOT_ACTIVATE, newQueryId, entry.queryProp("@userid"));
+            copiedQueryIds.append(newQueryId);
+            IPropertyTree *info = entry.queryPropTree("Info");
+            if (info)
+            {
+                Owned<IPropertyTree> destQuery = getQueryById(destQuerySet, newQueryId);
+                if (destQuery)
+                {
+                    Owned<IAttributeIterator> aiter = info->getAttributes();
+                    ForEach(*aiter)
+                    {
+                        const char *atname = aiter->queryName();
+                        if (!destQuery->hasProp(atname))
+                            destQuery->setProp(atname, aiter->queryValue());
+                    }
+                    Owned<IPropertyTreeIterator> children = info->getElements("*");
+                    ForEach(*children)
+                    {
+                        IPropertyTree &child = children->query();
+                        destQuery->addPropTree(child.queryName(), createPTreeFromIPT(&child));
+                    }
+                }
+            }
+        }
+    }
+
     void cloneQueryRemote(IPropertyTree *query, bool makeActive)
     {
         StringBuffer wuid(query->queryProp("Wuid"));
@@ -2906,22 +2984,13 @@ public:
                 activateQuery(destQuerySet, ACTIVATE_SUSPEND_PREVIOUS, queryName, existingQueryId.str(), context->queryUserId());
             return;
         }
-        StringBuffer newQueryId;
-        Owned<IWorkUnit> workunit = factory->updateWorkUnit(wuid);
-        addQueryToQuerySet(workunit, destQuerySet, queryName, makeActive ? ACTIVATE_SUSPEND_PREVIOUS : DO_NOT_ACTIVATE, newQueryId, context->queryUserId());
-        copiedQueryIds.append(newQueryId);
-        Owned<IPropertyTree> destQuery = getQueryById(destQuerySet, newQueryId);
-        if (destQuery)
+        addToBePublished(wuid, queryName, makeActive, context->queryUserId(), query);
+
+        if (cloneFilesEnabled && wufiles)
         {
-            Owned<IAttributeIterator> aiter = query->getAttributes();
-            ForEach(*aiter)
-            {
-                const char *atname = aiter->queryName();
-                if (!destQuery->hasProp(atname))
-                    destQuery->setProp(atname, aiter->queryValue());
-            }
-            if (cloneFilesEnabled && wufiles)
-                wufiles->addFilesFromQuery(workunit, pm, newQueryId);
+            VStringBuffer queryPmMatch("%s.0", queryName);
+            Owned<IConstWorkUnit> workunit = factory->openWorkUnit(wuid);
+            wufiles->addFilesFromQuery(workunit, pm, queryPmMatch);
         }
     }
 
@@ -2951,28 +3020,14 @@ public:
             missingWuids.append(msg);
             return;
         }
-
-        if (!newQueryId.length())
-            addQueryToQuerySet(workunit, destQuerySet, queryName, makeActive ? ACTIVATE_SUSPEND_PREVIOUS : DO_NOT_ACTIVATE, newQueryId, context->queryUserId());
-        copiedQueryIds.append(newQueryId);
-        Owned<IPropertyTree> destQuery = getQueryById(destQuerySet, newQueryId);
-        if (destQuery)
+        addToBePublished(wuid, queryName, makeActive, context->queryUserId(), query);
+        if (cloneFilesEnabled && wufiles)
+            wufiles->addFilesFromQuery(workunit, pm, newQueryId);
+        if (cloneFilesEnabled && wufiles)
         {
-            Owned<IAttributeIterator> aiter = query->getAttributes();
-            ForEach(*aiter)
-            {
-                const char *atname = aiter->queryName();
-                if (!destQuery->hasProp(atname))
-                    destQuery->setProp(atname, aiter->queryValue());
-            }
-            Owned<IPropertyTreeIterator> children = query->getElements("*");
-            ForEach(*children)
-            {
-                IPropertyTree &child = children->query();
-                destQuery->addPropTree(child.queryName(), createPTreeFromIPT(&child));
-            }
-            if (cloneFilesEnabled && wufiles)
-                wufiles->addFilesFromQuery(workunit, pm, newQueryId);
+            VStringBuffer queryPmMatch("%s.0", queryName);
+            Owned<IConstWorkUnit> workunit = factory->openWorkUnit(wuid);
+            wufiles->addFilesFromQuery(workunit, pm, queryPmMatch);
         }
     }
 
@@ -3102,6 +3157,7 @@ private:
     Linked<IWorkUnitFactory> factory;
     Owned<IPropertyTree> destQuerySet;
     Owned<IPropertyTree> srcQuerySet;
+    Owned<IPropertyTree> toBePublished;
     Owned<IReferencedFileList> wufiles;
     Owned<const IHpccPackageMap> pm;
     StringBuffer dfsIP;
@@ -3176,6 +3232,31 @@ bool CWsWorkunitsEx::onWUCopyQuerySet(IEspContext &context, IEspWUCopyQuerySetRe
     cloner.cloneFiles(publisherWuid, req.getDfuCopyFiles());
     if (req.getIncludeFileErrors())
         cloner.gatherFileErrors(resp.getFileErrors());
+    if (!publisherWuid.isEmpty())
+        resp.setDfuPublisherWuid(publisherWuid);
+
+    if (req.getOnlyCopyFiles() || (req.getStopIfFilesCopied() && !publisherWuid.isEmpty()))
+    {
+        if (!publisherWuid.isEmpty())
+        {
+            StringBuffer statemsg;
+            resp.setDfuPublisherState(encodeDFUstate(DFUstate_started, statemsg));
+        }
+        return true;
+    }
+
+    if (!publisherWuid.isEmpty())
+    {
+        Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
+        Owned<IConstDFUWorkUnit> dfuPublisherWu = factory->openWorkUnit(publisherWuid, false);
+        DFUstate state = dfuPublisherWu->waitForCompletion(1000*60*30); //make an option, 30 min timeout for now, tbd
+        StringBuffer statemsg;
+        resp.setDfuPublisherState(encodeDFUstate(state, statemsg));
+        if (state != DFUstate_finished)
+            return true;
+    }
+
+    cloner.publish();
 
     resp.setCopiedQueries(cloner.copiedQueryIds);
     resp.setExistingQueries(cloner.existingQueryIds);
@@ -3269,7 +3350,7 @@ bool CWsWorkunitsEx::onWUQuerysetCopyQuery(IEspContext &context, IEspWUQuerySetC
             updateFlags |= DALI_UPDATEF_APPEND_CLUSTER;
 
         QueryFileCopier cpr(target);
-        cpr.init(context, req.getAllowForeignFiles());
+        cpr.init(context, req.getAllowForeignFiles(), targetQueryName);
         cpr.remoteIP.set(daliIP);
         cpr.remotePrefix.set(srcPrefix);
         cpr.srcCluster.set(srcCluster);
@@ -3278,6 +3359,29 @@ bool CWsWorkunitsEx::onWUQuerysetCopyQuery(IEspContext &context, IEspWUQuerySetC
 
         if (req.getIncludeFileErrors())
             cpr.gatherFileErrors(resp.getFileErrors());
+        if (!publisherWuid.isEmpty())
+            resp.setDfuPublisherWuid(publisherWuid);
+    }
+
+    if (req.getOnlyCopyFiles() || (req.getStopIfFilesCopied() && !publisherWuid.isEmpty()))
+    {
+        if (!publisherWuid.isEmpty())
+        {
+            StringBuffer statemsg;
+            resp.setDfuPublisherState(encodeDFUstate(DFUstate_started, statemsg));
+        }
+        return true;
+    }
+
+    if (!publisherWuid.isEmpty())
+    {
+        Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
+        Owned<IConstDFUWorkUnit> dfuPublisherWu = factory->openWorkUnit(publisherWuid, false);
+        DFUstate state = dfuPublisherWu->waitForCompletion(1000*60*30); //make an option, 30 min timeout for now, tbd
+        StringBuffer statemsg;
+        resp.setDfuPublisherState(encodeDFUstate(state, statemsg));
+        if (state != DFUstate_finished)
+            return true;
     }
 
     WorkunitUpdate wu(&cw->lock());
@@ -3387,6 +3491,31 @@ bool CWsWorkunitsEx::onWUQuerysetImport(IEspContext &context, IEspWUQuerysetImpo
         cloner.cloneFiles(publisherWuid, req.getDfuCopyFiles());
         if (req.getIncludeFileErrors())
             cloner.gatherFileErrors(resp.getFileErrors());
+        if (!publisherWuid.isEmpty())
+            resp.setDfuPublisherWuid(publisherWuid);
+
+        if (req.getOnlyCopyFiles() || (req.getStopIfFilesCopied() && !publisherWuid.isEmpty()))
+        {
+            if (!publisherWuid.isEmpty())
+            {
+                StringBuffer statemsg;
+                resp.setDfuPublisherState(encodeDFUstate(DFUstate_started, statemsg));
+            }
+            return true;
+        }
+
+        if (!publisherWuid.isEmpty())
+        {
+            Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
+            Owned<IConstDFUWorkUnit> dfuPublisherWu = factory->openWorkUnit(publisherWuid, false);
+            DFUstate state = dfuPublisherWu->waitForCompletion(1000*60*30); //make an option, 30 min timeout for now, tbd
+            StringBuffer statemsg;
+            resp.setDfuPublisherState(encodeDFUstate(state, statemsg));
+            if (state != DFUstate_finished)
+                return true;
+        }
+
+        cloner.publish();
 
         resp.setImportedQueries(cloner.copiedQueryIds);
         resp.setExistingQueries(cloner.existingQueryIds);

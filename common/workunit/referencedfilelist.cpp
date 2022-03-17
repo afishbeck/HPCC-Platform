@@ -166,6 +166,8 @@ public:
 
     void resolve(const StringArray &locations, const char *srcCluster, IUserDescriptor *user, INode *remote, const char *remotePrefix, bool checkLocalFirst, StringArray *subfiles, bool trackSubFiles, bool resolveForeign=false);
     void resolve(const char *dstCluster, const char *srcCluster, IUserDescriptor *user, INode *remote, const char *remotePrefix, bool checkLocalFirst, StringArray *subfiles, bool trackSubFiles, bool resolveForeign=false);
+    
+    bool needsCopying(bool cloneForeign) const override;
 
     virtual const char *getLogicalName() const {return logicalName.str();}
     virtual unsigned getFlags() const {return flags;}
@@ -213,8 +215,8 @@ class ReferencedFileList : implements IReferencedFileList, public CInterface
 {
 public:
     IMPLEMENT_IINTERFACE;
-    ReferencedFileList(const char *username, const char *pw, bool allowForeignFiles, bool allowFileSizeCalc)
-        : allowForeign(allowForeignFiles), allowSizeCalc(allowFileSizeCalc)
+    ReferencedFileList(const char *username, const char *pw, bool allowForeignFiles, bool allowFileSizeCalc, const char *_jobname)
+        : jobName(_jobname), allowForeign(allowForeignFiles), allowSizeCalc(allowFileSizeCalc)
     {
         if (username && pw)
         {
@@ -223,8 +225,8 @@ public:
         }
     }
 
-    ReferencedFileList(IUserDescriptor *userDesc, bool allowForeignFiles, bool allowFileSizeCalc)
-        : allowForeign(allowForeignFiles), allowSizeCalc(allowFileSizeCalc)
+    ReferencedFileList(IUserDescriptor *userDesc, bool allowForeignFiles, bool allowFileSizeCalc, const char *_jobname)
+        : jobName(_jobname), allowForeign(allowForeignFiles), allowSizeCalc(allowFileSizeCalc)
     {
         if (userDesc)
             user.set(userDesc);
@@ -255,6 +257,8 @@ public:
     virtual void resolveFiles(const StringArray &locations, const char *remoteIP, const char *_remotePrefix, const char *srcCluster, bool checkLocalFirst, bool addSubFiles, bool trackSubFiles, bool resolveForeign=false) override;
 
     void resolveSubFiles(StringArray &subfiles, const StringArray &locations, bool checkLocalFirst, bool trackSubFiles, bool resolveForeign);
+    bool needsCopying(bool cloneForeign);
+
 
 public:
     Owned<IUserDescriptor> user;
@@ -262,6 +266,7 @@ public:
     MapStringToMyClass<ReferencedFile> map;
     StringAttr srcCluster;
     StringAttr remotePrefix;
+    StringAttr jobName; //used to populate DFU job name, but could be used elsewhere
     bool allowForeign;
     bool allowSizeCalc;
 };
@@ -535,9 +540,22 @@ static void setRoxieClusterPartDiskMapping(const char *clusterName, const char *
     wuFSpecDest->setClusterPartDiskMapSpec(clusterName,spec);
 }
 
-//tbd make these parameters
-static void getDefaultDFUName(StringBuffer &dfuName, StringBuffer &dfuQueue)
+//tbd make these parameters to requests using --dfu-copy
+static void getDefaultDFUName(StringBuffer &dfuQueueName)
 {
+// Using the first queue for now.
+#ifdef _CONTAINERIZED
+    Owned<IPropertyTreeIterator> dfuQueues = getComponentConfigSP()->getElements("dfuQueues");
+    ForEach(*dfuQueues)
+    {
+        const char *dfuName = dfuQueues->query().queryProp("@name");
+        if (!isEmptyString(dfuName))
+        {
+            getDfuQueueName(dfuQueueName, dfuName);
+            break;
+        }
+    }
+#else
     Owned<IEnvironmentFactory> factory = getEnvironmentFactory(true);
     Owned<IConstEnvironment> env = factory->openEnvironment();
 
@@ -548,17 +566,16 @@ static void getDefaultDFUName(StringBuffer &dfuName, StringBuffer &dfuQueue)
     {
         IPropertyTree &target = targets->query();
         if (target.hasProp("@queue"))
-        {
-            dfuName.set(target.queryProp("@name"));
-            dfuQueue.set(target.queryProp("@queue"));
-        }
+            dfuQueueName.set(target.queryProp("@queue"));
     }
-    return;
+#endif
 }
 
 
-static void dfuCopy(StringBuffer &dfwuid, IUserDescriptor *user, const char *sourceLogicalName, const char *destLogicalName, const char *destNodeGroupIn, const char *srcDali, bool supercopy, bool overwrite, bool preserveCompression, bool nosplit)
+static void dfuCopy(StringBuffer &publisherWuid, IUserDescriptor *user, const char *sourceLogicalName, const char *destLogicalName, const char *destNodeGroupIn, const char *srcDali, bool supercopy, bool overwrite, bool preserveCompression, bool nosplit)
 {
+    if(isEmptyString(publisherWuid))
+        throw MakeStringException(-1, "Failed to create Publisher DFU Workunit.");
     if(isEmptyString(sourceLogicalName))
         throw MakeStringException(-1, "Source logical file not specified.");
     if(isEmptyString(destLogicalName))
@@ -605,27 +622,10 @@ static void dfuCopy(StringBuffer &dfwuid, IUserDescriptor *user, const char *sou
         supercopy = true;
 
     StringBuffer dfuQueueName;
-    StringBuffer dfuName;
-// Using the first queue for now.
-#ifdef _CONTAINERIZED
-    Owned<IPropertyTreeIterator> dfuQueues = getComponentConfigSP()->getElements("dfuQueues");
-    ForEach(*dfuQueues)
-    {
-        dfuName.set(dfuQueues->query().queryProp("@name"));
-        if (!isEmptyString(dfuName))
-        {
-            getDfuQueueName(dfuQueueName, dfuName);
-            break;
-        }
-    }
-#else
-    getDefaultDFUName(dfuName, dfuQueueName);
-#endif
-    Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
-    if (dfwuid.isEmpty())
-        factory->createPublisherWorkUnit(dfwuid, false, dfuName, "copy published files", dfuQueueName.str());
+    getDefaultDFUName(dfuQueueName);
 
-    Owned<IDFUWorkUnit> wu = factory->createPublisherSubTask(dfwuid);
+    Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
+    Owned<IDFUWorkUnit> wu = factory->createPublisherSubTask(publisherWuid);
     wu->setJobName(destLogicalName);
     wu->setQueue(dfuQueueName);
 
@@ -675,14 +675,20 @@ static void dfuCopy(StringBuffer &dfwuid, IUserDescriptor *user, const char *sou
     submitDFUWorkUnit(wu.getClear());
 }
 
+bool ReferencedFile::needsCopying(bool cloneForeign) const
+{
+    if ((flags & RefFileCloned) || (flags & RefFileSuper) || (flags & RefFileInPackage))
+        return false;
+    if ((flags & RefFileForeign) && !cloneForeign)
+        return false;
+    if (!(flags & (RefFileRemote | RefFileForeign | RefFileNotOnCluster)))
+        return false;
+    return true;
+}
 
 void ReferencedFile::cloneInfo(StringBuffer &publisherWuid, unsigned updateFlags, IDFUhelper *helper, IUserDescriptor *user, const char *dstCluster, const char *srcCluster, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder, bool dfucopy)
 {
-    if ((flags & RefFileCloned) || (flags & RefFileSuper) || (flags & RefFileInPackage))
-        return;
-    if ((flags & RefFileForeign) && !cloneForeign)
-        return;
-    if (!(flags & (RefFileRemote | RefFileForeign | RefFileNotOnCluster)))
+    if (!needsCopying(cloneForeign))
         return;
     if (fileSrcCluster.length())
         srcCluster = fileSrcCluster;
@@ -995,8 +1001,27 @@ void ReferencedFileList::resolveFiles(const StringArray &locations, const char *
         resolveSubFiles(subfiles, locations, checkLocalFirst, trackSubFiles, resolveForeign);
 }
 
+bool ReferencedFileList::needsCopying(bool cloneForeign)
+{
+    ReferencedFileIterator files(this);
+    ForEach(files)
+    {
+        if (files.queryObject().needsCopying(cloneForeign))
+            return true;
+    }
+    return false;
+}
 void ReferencedFileList::cloneFileInfo(StringBuffer &publisherWuid, const char *dstCluster, unsigned updateFlags, IDFUhelper *helper, bool cloneSuperInfo, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defReplicateFolder, bool dfucopy)
 {
+    if (dfucopy && publisherWuid.isEmpty() && needsCopying(cloneForeign))
+    {
+        StringBuffer dfuQueueName;
+        getDefaultDFUName(dfuQueueName);
+
+        Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
+        factory->createPublisherWorkUnit(publisherWuid, jobName.isEmpty() ? "copy published files" : jobName, dfuQueueName);
+    }
+
     ReferencedFileIterator files(this);
     ForEach(files)
         files.queryObject().cloneInfo(publisherWuid, updateFlags, helper, user, dstCluster, srcCluster, cloneForeign, redundancy, channelsPerNode, replicateOffset, defReplicateFolder, dfucopy);
@@ -1045,12 +1070,12 @@ IReferencedFileIterator *ReferencedFileList::getFiles()
     return new ReferencedFileIterator(this);
 }
 
-IReferencedFileList *createReferencedFileList(const char *user, const char *pw, bool allowForeignFiles, bool allowFileSizeCalc)
+IReferencedFileList *createReferencedFileList(const char *user, const char *pw, bool allowForeignFiles, bool allowFileSizeCalc, const char *jobname)
 {
-    return new ReferencedFileList(user, pw, allowForeignFiles, allowFileSizeCalc);
+    return new ReferencedFileList(user, pw, allowForeignFiles, allowFileSizeCalc, jobname);
 }
 
-IReferencedFileList *createReferencedFileList(IUserDescriptor *user, bool allowForeignFiles, bool allowFileSizeCalc)
+IReferencedFileList *createReferencedFileList(IUserDescriptor *user, bool allowForeignFiles, bool allowFileSizeCalc, const char *jobname)
 {
-    return new ReferencedFileList(user, allowForeignFiles, allowFileSizeCalc);
+    return new ReferencedFileList(user, allowForeignFiles, allowFileSizeCalc, jobname);
 }

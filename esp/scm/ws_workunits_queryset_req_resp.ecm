@@ -49,7 +49,8 @@ ESPrequest [nil_remove] WURecreateQueryRequest
 
     int Wait(-1);
     bool DfuCopyFiles(false);
-    bool OnlyCopyFiles(false);
+    bool OnlyCopyFiles(false); //Copies the files needed for the command but doesn't actually complete the command
+    bool StopIfFilesCopied(false); //Command only completes if no files need copying.  User can run again after DFU Publisher Workunit completes.
 };
 
 ESPresponse [exceptions_inline, nil_remove] WURecreateQueryResponse
@@ -69,6 +70,8 @@ ESPresponse [exceptions_inline, nil_remove] WURecreateQueryResponse
     bool Suspended;
     string ErrorMessage;
     ESParray<ESPStruct LogicalFileError, File> FileErrors;
+    [min_ver("1.89")] string DfuPublisherWuid;
+    [min_ver("1.89")] string DfuPublisherState;
 };
 
 ESPrequest WUQueryGetGraphRequest
@@ -127,7 +130,8 @@ ESPrequest [nil_remove] WUPublishWorkunitRequest
     bool AppendCluster(true); //file exists on other local cluster, add new one, make optional in case of locking issues, but should be made to work
     bool IncludeFileErrors(false);
     bool DfuCopyFiles(false);
-    bool OnlyCopyFiles(false);
+    bool OnlyCopyFiles(false); //Copies the files needed for the command but doesn't actually complete the command
+    bool StopIfFilesCopied(false); //Command only completes if no files need copying.  User can run again after DFU Publisher Workunit completes.
 };
 
 ESPresponse [exceptions_inline] WUPublishWorkunitResponse
@@ -371,7 +375,8 @@ ESPrequest WUQuerysetImportRequest
     bool AppendCluster(true); //file exists on other local cluster, add new one, make optional in case of locking issues, but should be made to work
     bool IncludeFileErrors(false);
     bool DfuCopyFiles(false);
-    bool OnlyCopyFiles(false);
+    bool OnlyCopyFiles(false); //Copies the files needed for the command but doesn't actually complete the command
+    bool StopIfFilesCopied(false); //Command only completes if no files need copying.  User can run again after DFU Publisher Workunit completes.
 };
 
 ESPresponse [exceptions_inline] WUQuerysetImportResponse
@@ -384,6 +389,8 @@ ESPresponse [exceptions_inline] WUQuerysetImportResponse
     ESParray<string, QueryId> ExistingQueries;
     ESParray<string, QueryId> MissingWuids;
     ESParray<ESPStruct LogicalFileError, File> FileErrors;
+    [min_ver("1.89")] string DfuPublisherWuid;
+    [min_ver("1.89")] string DfuPublisherState;
 };
 
 ESPrequest [nil_remove] WUUpdateQueryEntryRequest
@@ -450,13 +457,16 @@ ESPrequest [nil_remove] WUQuerySetCopyQueryRequest
     bool IncludeFileErrors(false);
     bool SourceSSL(false);
     bool DfuCopyFiles(false);
-    bool OnlyCopyFiles(false);
+    bool OnlyCopyFiles(false); //Copies the files needed for the command but doesn't actually complete the command
+    bool StopIfFilesCopied(false); //Command only completes if no files need copying.  User can run again after DFU Publisher Workunit completes.
 };
 
 ESPresponse [exceptions_inline] WUQuerySetCopyQueryResponse
 {
     string QueryId;
     [min_ver("1.68")] ESParray<ESPStruct LogicalFileError, File> FileErrors;
+    [min_ver("1.89")] string DfuPublisherWuid;
+    [min_ver("1.89")] string DfuPublisherState;
 };
 
 ESPrequest [nil_remove] WUCopyQuerySetRequest
@@ -477,7 +487,8 @@ ESPrequest [nil_remove] WUCopyQuerySetRequest
     bool IncludeFileErrors(false);
     bool SourceSSL(false);
     bool DfuCopyFiles(false);
-    bool OnlyCopyFiles(false);
+    bool OnlyCopyFiles(false); //Copies the files needed for the command but doesn't actually complete the command
+    bool StopIfFilesCopied(false); //Command only completes if no files need copying.  User can run again after DFU Publisher Workunit completes.
 };
 
 ESPresponse [exceptions_inline] WUCopyQuerySetResponse
@@ -485,4 +496,6 @@ ESPresponse [exceptions_inline] WUCopyQuerySetResponse
     ESParray<string, QueryId> CopiedQueries;
     ESParray<string, QueryId> ExistingQueries;
     [min_ver("1.68")] ESParray<ESPStruct LogicalFileError, File> FileErrors;
+    [min_ver("1.89")] string DfuPublisherWuid;
+    [min_ver("1.89")] string DfuPublisherState;
 };

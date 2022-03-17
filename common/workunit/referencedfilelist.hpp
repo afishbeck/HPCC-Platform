@@ -48,6 +48,7 @@ interface IReferencedFile : extends IInterface
     virtual __int64 getFileSize()=0;
     virtual unsigned getNumParts()=0;
     virtual const StringArray &getSubFileNames() const =0;
+    virtual bool needsCopying(bool cloneForeign) const = 0;
 };
 
 interface IReferencedFileIterator : extends IIteratorOf<IReferencedFile> { };
@@ -71,8 +72,8 @@ interface IReferencedFileList : extends IInterface
 
 const char *skipForeign(const char *name, StringBuffer *ip=NULL);
 
-IReferencedFileList *createReferencedFileList(const char *user, const char *pw, bool allowForeignFiles, bool allowFileSizeCalc);
-IReferencedFileList *createReferencedFileList(IUserDescriptor *userDesc, bool allowForeignFiles, bool allowFileSizeCalc);
+IReferencedFileList *createReferencedFileList(const char *user, const char *pw, bool allowForeignFiles, bool allowFileSizeCalc, const char *jobname = nullptr);
+IReferencedFileList *createReferencedFileList(IUserDescriptor *userDesc, bool allowForeignFiles, bool allowFileSizeCalc, const char *jobname = nullptr);
 
 void splitDfsLocation(const char *address, StringBuffer &cluster, StringBuffer &ip, StringBuffer &prefix, const char *defaultCluster);
 void splitDerivedDfsLocation(const char *address, StringBuffer &cluster, StringBuffer &ip, StringBuffer &prefix, const char *defaultCluster, const char *baseCluster, const char *baseIP, const char *basePrefix);

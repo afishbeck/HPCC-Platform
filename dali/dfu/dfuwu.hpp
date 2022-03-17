@@ -440,7 +440,7 @@ interface IConstDFUWorkUnitIterator : extends IInterface
 interface IDFUWorkUnitFactory : extends IInterface
 {
     virtual IDFUWorkUnit * createWorkUnit() = 0;    // opened in exclusive
-    virtual void createPublisherWorkUnit(StringBuffer &parent, bool startCount, const char *dfuserver, const char *jobname, const char *queue) = 0;
+    virtual void createPublisherWorkUnit(StringBuffer &parent, const char *jobname, const char *queue) = 0;
     virtual IDFUWorkUnit * createPublisherSubTask(StringBuffer &parent) = 0;    // opened in exclusive
     virtual bool deleteWorkUnit(const char * wuid) = 0;
     virtual IConstDFUWorkUnit * openWorkUnit(const char * wuid, bool lock) = 0;

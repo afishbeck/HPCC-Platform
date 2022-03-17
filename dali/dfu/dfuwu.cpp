@@ -342,6 +342,8 @@ static bool notePublisherSubTaskState(const char *subtaskWuid, DFUstate state)
     }
     StringBuffer publisherRoot;
     getSubTaskParentXPath(publisherRoot, subtaskWuid);
+
+    //Only lock the Progress section to avoid parent child lock issues
     publisherRoot.append("/Progress");
     Owned<IRemoteConnection> conn = querySDS().connect(publisherRoot.str(), myProcessSession(), RTM_LOCK_WRITE, SDS_LOCK_TIMEOUT);
     if (!conn)
@@ -362,6 +364,7 @@ static bool notePublisherSubTaskState(const char *subtaskWuid, DFUstate state)
         root->setProp("@state", "failed");
     unsigned edition = (unsigned) root->getPropInt("Edition",0);
     root->setPropInt("Edition", ++edition);
+    conn->commit();
     return true;
 }
 
@@ -2496,7 +2499,7 @@ public:
         // called with crit locked
         if (!subscriberid) {
             StringBuffer xpath;
-            getXPath(xpath,queryId()).append("/Progress/Edition");
+            getXPath(xpath,queryId()).append("/Progress");///Edition");
             if (parent)
                 subscriberid = (SubscriptionId)parent->subscribe(xpath.str(),QUERYINTERFACE(this,ISDSSubscription));
         }
@@ -2564,8 +2567,10 @@ public:
             case DFUstate_finished:
                 return ret;
             }
-            if (!completed.wait(timeout))       // should only go round loop once
-                break;
+            MilliSleep(5000);
+            // TBD figure out why subsctiption + Semaphore isn't working
+            //if (!completed.wait(timeout))       // should only go round loop once
+            //    break;
         }
         return queryProgress(true)->getState();
     }
@@ -3022,7 +3027,7 @@ public:
         return ret;
     }
 
-    void createPublisherWorkUnit(StringBuffer &wuid, bool startCount, const char *dfuserver, const char *jobname, const char *queue) override
+    void createPublisherWorkUnit(StringBuffer &wuid, const char *jobname, const char *queue) override
     {
         newWUID(wuid, 'P');
         StringBuffer wuRoot;
@@ -3032,17 +3037,17 @@ public:
             return;
         OwnedPTree root = conn->getRoot();
         root->setProp("@command", "publish");
-        if (!isEmptyString(dfuserver))
-            root->setProp("@dfuserver", dfuserver);
         if (!isEmptyString(jobname))
             root->setProp("@jobName", jobname);
         if (!isEmptyString(queue))
             root->setProp("@queue", queue);
         IPropertyTree *progress = root->addPropTree("Progress");
+        progress->setPropInt("Edition", 1);
         progress->setPropInt("@percentdone", 0);
-        progress->setPropInt("@taskcount", startCount ? 1 : 0);
+        progress->setPropInt("@taskcount", 0);
         progress->setPropInt("@taskscomplete", 0);
         progress->setProp("@state", "started");
+        conn->commit();
     }
 
     unsigned incrementPublisherTaskCount(const char *parent)
@@ -3061,11 +3066,9 @@ public:
 
     IDFUWorkUnit * createPublisherSubTask(StringBuffer &parent) override
     {
-        unsigned taskId = 1;
         if (parent.isEmpty())
-            createPublisherWorkUnit(parent, true, nullptr, nullptr, nullptr);
-        else
-            taskId = incrementPublisherTaskCount(parent);
+            createPublisherWorkUnit(parent, nullptr, nullptr);
+        unsigned taskId = incrementPublisherTaskCount(parent);
 
         StringBuffer wuRoot;
         getXPath(wuRoot, parent, taskId);
