@@ -1,0 +1,796 @@
+<esxdl name="ws_workunits_req_resp">
+	<EsdlInclude file='common'/>
+	<EsdlInclude file='ws_workunits_struct'/>
+	<EsdlRequest name='WUCreateRequest' nil_remove='1'>
+	</EsdlRequest>
+	<EsdlResponse name='WUCreateResponse' exceptions_inline='1'>
+		<EsdlElement name='Workunit' complex_type='ECLWorkunit'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUDeployWorkunitRequest' nil_remove='1'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Wait' type='int' default='-1'/>
+		<EsdlElement name='ObjType' type='string'/>
+		<EsdlElement name='FileName' type='string'/>
+		<EsdlElement name='Object' type='binary'/>
+		<EsdlElement name='ResultLimit' type='int'/>
+		<EsdlElement name='QueryMainDefinition' type='string'/>
+		<EsdlElement name='Snapshot' type='string'/>
+		<EsdlArray name='DebugValues'  type='NamedValue'/>
+		<EsdlElement name='Protect' type='bool' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUDeployWorkunitResponse' exceptions_inline='1'>
+		<EsdlElement name='Workunit' complex_type='ECLWorkunit'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQueryRequest' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Type' type='string' min_ver='1.01'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='RoxieCluster' type='string' min_ver='1.08'/>
+		<EsdlElement name='Owner' type='string'/>
+		<EsdlElement name='State' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='ECL' type='string'/>
+		<EsdlElement name='Jobname' type='string'/>
+		<EsdlElement name='LogicalFile' type='string'/>
+		<EsdlElement name='LogicalFileSearchType' type='string' default=''/>
+		<EsdlElement name='ApplicationName' type='string' depr_ver='1.57'/>
+		<EsdlElement name='ApplicationKey' type='string' depr_ver='1.57'/>
+		<EsdlElement name='ApplicationData' type='string' depr_ver='1.57'/>
+		<EsdlArray name='ApplicationValues'  type='ApplicationValue' min_ver='1.57'/>
+		<EsdlElement name='BeforeWU' type='string' min_ver='1.72'/>
+		<EsdlElement name='AfterWU' type='string' min_ver='1.72'/>
+		<EsdlElement name='TotalClusterTimeThresholdMilliSec' type='unsigned' default='0' min_ver='1.77'/>
+		<EsdlElement name='After' type='string' depr_ver='1.02'/>
+		<EsdlElement name='Before' type='string' depr_ver='1.02'/>
+		<EsdlElement name='Count' type='int'/>
+		<EsdlElement name='PageSize' type='int64' default='0' min_ver='1.03'/>
+		<EsdlElement name='PageStartFrom' type='int64' default='0' min_ver='1.03'/>
+		<EsdlElement name='PageEndAt' type='int64' min_ver='1.03'/>
+		<EsdlElement name='LastNDays' type='int' depr_ver='1.72' min_ver='1.26'/>
+		<EsdlElement name='Sortby' type='string'/>
+		<EsdlElement name='Descending' type='bool' default='0'/>
+		<EsdlElement name='CacheHint' type='int64'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQueryResponse' exceptions_inline='1' nil_remove='1'>
+		<EsdlElement name='Type' type='string' default='' min_ver='1.01'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='RoxieCluster' type='string' min_ver='1.08'/>
+		<EsdlElement name='Owner' type='string'/>
+		<EsdlElement name='State' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='ECL' type='string'/>
+		<EsdlElement name='Jobname' type='string'/>
+		<EsdlElement name='LogicalFile' type='string' min_ver='1.01'/>
+		<EsdlElement name='LogicalFileSearchType' type='string' default='' min_ver='1.01'/>
+		<EsdlElement name='Current' type='string'/>
+		<EsdlElement name='Next' type='string'/>
+		<EsdlElement name='Count' type='int' default='0'/>
+		<EsdlElement name='PageSize' type='int64' default='0' min_ver='1.03'/>
+		<EsdlElement name='PrevPage' type='int64' min_ver='1.03'/>
+		<EsdlElement name='NextPage' type='int64' min_ver='1.03'/>
+		<EsdlElement name='LastPage' type='int64' default='-1' min_ver='1.03'/>
+		<EsdlElement name='NumWUs' type='int'/>
+		<EsdlElement name='First' type='bool' default='1'/>
+		<EsdlElement name='PageStartFrom' type='int64' default='-1' min_ver='1.03'/>
+		<EsdlElement name='PageEndAt' type='int64' min_ver='1.03'/>
+		<EsdlElement name='LastNDays' type='int' depr_ver='1.72' min_ver='1.26'/>
+		<EsdlElement name='Sortby' type='string'/>
+		<EsdlElement name='Descending' type='bool' default='0'/>
+		<EsdlElement name='BasicQuery' type='string'/>
+		<EsdlElement name='Filters' type='string'/>
+		<EsdlElement name='CacheHint' type='int64' min_ver='1.41'/>
+		<EsdlArray name='Workunits'  type='ECLWorkunit'/>
+	</EsdlResponse>
+	<EsdlRequest name='WULightWeightQueryRequest' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Type' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Owner' type='string'/>
+		<EsdlElement name='JobName' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='BeforeWU' type='string' min_ver='1.72'/>
+		<EsdlElement name='AfterWU' type='string' min_ver='1.72'/>
+		<EsdlElement name='State' type='string'/>
+		<EsdlArray name='ApplicationValues'  type='ApplicationValue'/>
+		<EsdlElement name='PageStartFrom' type='int64'/>
+		<EsdlElement name='PageSize' type='unsigned'/>
+		<EsdlElement name='SortBy' type='string'/>
+		<EsdlElement name='Descending' type='bool' default='0'/>
+		<EsdlElement name='CacheHint' type='int64'/>
+	</EsdlRequest>
+	<EsdlResponse name='WULightWeightQueryResponse' exceptions_inline='1' nil_remove='1'>
+		<EsdlElement name='NumWUs' type='int'/>
+		<EsdlElement name='CacheHint' type='int64'/>
+		<EsdlArray name='Workunits'  type='ECLWorkunitLW'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUUpdateRequest' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='State' type='int'/>
+		<EsdlElement name='StateOrig' type='int'/>
+		<EsdlElement name='Jobname' type='string'/>
+		<EsdlElement name='JobnameOrig' type='string'/>
+		<EsdlElement name='QueryText' type='string'/>
+		<EsdlElement name='Action' type='int'/>
+		<EsdlElement name='Description' type='string'/>
+		<EsdlElement name='DescriptionOrig' type='string'/>
+		<EsdlElement name='AddDrilldownFields' type='bool'/>
+		<EsdlElement name='ResultLimit' type='int'/>
+		<EsdlElement name='Protected' type='bool' http_nillable='0'/>
+		<EsdlElement name='ProtectedOrig' type='bool' http_nillable='0'/>
+		<EsdlElement name='PriorityClass' type='int'/>
+		<EsdlElement name='PriorityLevel' type='int'/>
+		<EsdlElement name='Scope' type='string'/>
+		<EsdlElement name='ScopeOrig' type='string'/>
+		<EsdlElement name='ClusterSelection' type='string' min_ver='1.05'/>
+		<EsdlElement name='ClusterOrig' type='string' min_ver='1.05'/>
+		<EsdlElement name='XmlParams' type='string' min_ver='1.22'/>
+		<EsdlElement name='ThorSlaveIP' type='string' min_ver='1.25'/>
+		<EsdlElement name='QueryMainDefinition' type='string' min_ver='1.35'/>
+		<EsdlArray name='DebugValues'  type='DebugValue'/>
+		<EsdlArray name='ApplicationValues'  type='ApplicationValue'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUUpdateResponse' exceptions_inline='1'>
+		<EsdlElement name='Workunit' complex_type='ECLWorkunit'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUDeleteRequest'>
+		<EsdlArray name='Wuids'  type='string'/>
+		<EsdlElement name='BlockTillFinishTimer' type='int' default='0' min_ver='1.02'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUDeleteResponse' exceptions_inline='1'>
+		<EsdlArray name='ActionResults'  type='WUActionResult'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUActionRequest' nil_remove='1'>
+		<EsdlArray name='Wuids'  type='string'/>
+		<EsdlElement name='ActionType' type='string' depr_ver='1.57'/>
+		<EsdlEnum name='WUActionType' enum_type='ECLWUActions' min_ver='1.57'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Owner' type='string'/>
+		<EsdlElement name='State' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='ECL' type='string'/>
+		<EsdlElement name='Jobname' type='string'/>
+		<EsdlElement name='Test' type='string'/>
+		<EsdlElement name='CurrentPage' type='string' default=''/>
+		<EsdlElement name='PageSize' type='string' default='' min_ver='1.03'/>
+		<EsdlElement name='Sortby' type='string'/>
+		<EsdlElement name='Descending' type='bool' default='0'/>
+		<EsdlElement name='EventServer' type='string' default='' min_ver='1.01'/>
+		<EsdlElement name='EventName' type='string' default='' min_ver='1.01'/>
+		<EsdlElement name='PageFrom' type='string' default='' min_ver='1.01'/>
+		<EsdlElement name='BlockTillFinishTimer' type='int' default='0' min_ver='1.02'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUActionResponse' exceptions_inline='1'>
+		<EsdlArray name='ActionResults'  type='WUActionResult'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUAbortRequest'>
+		<EsdlArray name='Wuids'  type='string'/>
+		<EsdlElement name='BlockTillFinishTimer' type='int' default='0' min_ver='1.02'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUAbortResponse' exceptions_inline='1'>
+		<EsdlArray name='ActionResults'  type='WUActionResult'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUProtectRequest'>
+		<EsdlArray name='Wuids'  type='string'/>
+		<EsdlElement name='Protect' type='bool' default='1'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUProtectResponse' exceptions_inline='1'>
+		<EsdlArray name='ActionResults'  type='WUActionResult'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUResubmitRequest'>
+		<EsdlArray name='Wuids'  type='string'/>
+		<EsdlElement name='Recompile' type='bool' max_ver='1.30'/>
+		<EsdlElement name='BlockTillFinishTimer' type='int' default='0' min_ver='1.02'/>
+		<EsdlElement name='ResetWorkflow' type='bool'/>
+		<EsdlElement name='CloneWorkunit' type='bool'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUResubmitResponse' exceptions_inline='1'>
+		<EsdlArray name='WUs'  type='ResubmittedWU' item_tag='WU' min_ver='1.40'/>
+	</EsdlResponse>
+	<EsdlRequest name='WURunRequest'>
+		<EsdlElement name='QuerySet' type='string'/>
+		<EsdlElement name='Query' type='string'/>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='CloneWorkunit' type='bool'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Wait' type='int' default='-1'/>
+		<EsdlElement name='Input' type='string' rows='15'/>
+		<EsdlElement name='NoRootTag' type='bool' default='0'/>
+		<EsdlArray name='DebugValues'  type='NamedValue'/>
+		<EsdlArray name='Variables'  type='NamedValue'/>
+		<EsdlArray name='ApplicationValues'  type='ApplicationValue' min_ver='1.56'/>
+		<EsdlEnum name='ExceptionSeverity' enum_type='WUExceptionSeverity' default='info'/>
+	</EsdlRequest>
+	<EsdlResponse name='WURunResponse' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='State' type='string'/>
+		<EsdlElement name='Results' type='string'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUSubmitRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Queue' type='string'/>
+		<EsdlElement name='Snapshot' type='string'/>
+		<EsdlElement name='MaxRunTime' type='int'/>
+		<EsdlElement name='MaxCost' type='int' default='0' min_ver='1.80'/>
+		<EsdlElement name='BlockTillFinishTimer' type='int' default='0' min_ver='1.02'/>
+		<EsdlElement name='SyntaxCheck' type='bool' default='0' min_ver='1.19'/>
+		<EsdlElement name='NotifyCluster' type='bool' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUSubmitResponse' exceptions_inline='1'>
+	</EsdlResponse>
+	<EsdlRequest name='WUScheduleRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Queue' type='string'/>
+		<EsdlElement name='Snapshot' type='string'/>
+		<EsdlElement name='When' type='string'/>
+		<EsdlElement name='MaxRunTime' type='int'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUScheduleResponse' exceptions_inline='1'>
+	</EsdlResponse>
+	<EsdlRequest name='WUPushEventRequest' nil_remove='1'>
+		<EsdlElement name='EventName' type='string' default=''/>
+		<EsdlElement name='EventText' type='string' default=''/>
+	</EsdlRequest>
+	<EsdlResponse name='WUPushEventResponse' exceptions_inline='1'>
+	</EsdlResponse>
+	<EsdlRequest name='WUInfoRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='TruncateEclTo64k' type='bool' default='1'/>
+		<EsdlElement name='Type' type='string' min_ver='1.01'/>
+		<EsdlElement name='IncludeExceptions' type='bool' default='1' min_ver='1.16'/>
+		<EsdlElement name='IncludeGraphs' type='bool' default='1' min_ver='1.16'/>
+		<EsdlElement name='IncludeSourceFiles' type='bool' default='1' min_ver='1.16'/>
+		<EsdlElement name='IncludeResults' type='bool' default='1' min_ver='1.16'/>
+		<EsdlElement name='IncludeResultsViewNames' type='bool' default='0' min_ver='1.34'/>
+		<EsdlElement name='IncludeVariables' type='bool' default='1' min_ver='1.16'/>
+		<EsdlElement name='IncludeTimers' type='bool' default='1' min_ver='1.16'/>
+		<EsdlElement name='IncludeDebugValues' type='bool' default='1' min_ver='1.16'/>
+		<EsdlElement name='IncludeApplicationValues' type='bool' default='1' min_ver='1.16'/>
+		<EsdlElement name='IncludeWorkflows' type='bool' default='1' min_ver='1.16'/>
+		<EsdlElement name='IncludeXmlSchemas' type='bool' default='0' min_ver='1.39'/>
+		<EsdlElement name='IncludeResourceURLs' type='bool' default='0' min_ver='1.47'/>
+		<EsdlElement name='IncludeECL' type='bool' default='1' min_ver='1.66'/>
+		<EsdlElement name='IncludeHelpers' type='bool' default='1' min_ver='1.66'/>
+		<EsdlElement name='IncludeAllowedClusters' type='bool' default='1' min_ver='1.66'/>
+		<EsdlElement name='IncludeTotalClusterTime' type='bool' default='1' min_ver='1.73'/>
+		<EsdlElement name='IncludeServiceNames' type='bool' default='0' min_ver='1.78'/>
+		<EsdlElement name='SuppressResultSchemas' type='bool' default='0' min_ver='1.16'/>
+		<EsdlElement name='ThorSlaveIP' type='string' min_ver='1.25'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUInfoResponse' exceptions_inline='1'>
+		<EsdlElement name='Workunit' complex_type='ECLWorkunit'/>
+		<EsdlElement name='AutoRefresh' type='int' default='0'/>
+		<EsdlElement name='CanCompile' type='bool'/>
+		<EsdlElement name='ThorSlaveIP' type='string' min_ver='1.25'/>
+		<EsdlArray name='ResultViews'  type='string' item_tag='View' min_ver='1.34'/>
+		<EsdlElement name='SecMethod' type='string' min_ver='1.54'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUResultSummaryRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Sequence' type='int'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUResultSummaryResponse' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Sequence' type='int'/>
+		<EsdlElement name='Format' type='int'/>
+		<EsdlElement name='Result' complex_type='ECLResult'/>
+	</EsdlResponse>
+	<EsdlRequest name='WULogFileRequest'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Type' type='string'/>
+		<EsdlElement name='Option' type='int'/>
+		<EsdlElement name='SlaveIP' type='string' min_ver='1.10'/>
+		<EsdlElement name='IPAddress' type='string' min_ver='1.32'/>
+		<EsdlElement name='Description' type='string' min_ver='1.32'/>
+		<EsdlElement name='QuerySet' type='string' min_ver='1.36'/>
+		<EsdlElement name='Query' type='string' min_ver='1.36'/>
+		<EsdlElement name='Process' type='string' min_ver='1.38'/>
+		<EsdlElement name='ClusterGroup' type='string' min_ver='1.38'/>
+		<EsdlElement name='LogDate' type='string' min_ver='1.38'/>
+		<EsdlElement name='SlaveNumber' type='int' default='1' min_ver='1.38'/>
+		<EsdlElement name='SizeLimit' type='int64' default='0' min_ver='1.55'/>
+		<EsdlEnum name='ErrorMessageFormat' enum_type='ErrorMessageFormat' min_ver='1.77'/>
+		<EsdlElement name='PlainText' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WULogFileResponse' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string' min_ver='1.36'/>
+		<EsdlElement name='QuerySet' type='string' min_ver='1.36'/>
+		<EsdlElement name='QueryName' type='string' min_ver='1.36'/>
+		<EsdlElement name='QueryId' type='string' min_ver='1.36'/>
+		<EsdlElement name='FileName' type='string' min_ver='1.36'/>
+		<EsdlElement name='DaliServer' type='string' min_ver='1.38'/>
+		<EsdlElement name='thefile' type='binary' http_content='application/octet-stream'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUDownloadFilesRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='QuerySet' type='string'/>
+		<EsdlElement name='Query' type='string'/>
+		<EsdlEnum name='DownloadOption' enum_type='WUFileDownloadOption'/>
+		<EsdlArray name='WUFileOptions'  type='WUFileOption'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUDownloadFilesResponse' exceptions_inline='1'>
+		<EsdlElement name='thefile' type='binary' http_content='application/octet-stream'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUResultBinRequest'>
+		<EsdlElement name='LogicalName' type='string'/>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='ResultName' type='string'/>
+		<EsdlElement name='Sequence' type='int'/>
+		<EsdlElement name='Format' type='string' default='raw'/>
+		<EsdlElement name='Cluster' type='string' min_ver='1.73'/>
+		<EsdlArray name='FilterBy'  type='NamedValue' min_ver='1.50'/>
+		<EsdlElement name='Start' type='int64' default='0'/>
+		<EsdlElement name='Count' type='int'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUResultBinResponse' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Sequence' type='int'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Start' type='int64'/>
+		<EsdlElement name='Count' type='int'/>
+		<EsdlElement name='Requested' type='int'/>
+		<EsdlElement name='Total' type='int64'/>
+		<EsdlElement name='Result' type='binary' http_content='application/octet-stream'/>
+		<EsdlElement name='Format' type='string'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUResultRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Sequence' type='int'/>
+		<EsdlElement name='ResultName' type='string'/>
+		<EsdlElement name='LogicalName' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='SuppressXmlSchema' type='bool' default='0'/>
+		<EsdlElement name='BypassCachedResult' type='bool' default='0' min_ver='1.60'/>
+		<EsdlArray name='FilterBy'  type='NamedValue' min_ver='1.50'/>
+		<EsdlElement name='Start' type='int64' default='0'/>
+		<EsdlElement name='Count' type='int'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUResultResponse' http_encode='0' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Sequence' type='int'/>
+		<EsdlElement name='LogicalName' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Start' type='int64'/>
+		<EsdlElement name='Requested' type='int'/>
+		<EsdlElement name='Count' type='int'/>
+		<EsdlElement name='Total' type='int64'/>
+		<EsdlElement name='Result' type='string' json_inline='1'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUFullResultRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='NoRootTag' type='bool' default='0'/>
+		<EsdlEnum name='ExceptionSeverity' enum_type='WUExceptionSeverity' default='info'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUFullResultResponse' http_encode='0' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Results' type='string' json_inline='1'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUResultViewRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='ViewName' type='string'/>
+		<EsdlElement name='Sequence' type='int'/>
+		<EsdlElement name='ResultName' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUResultViewResponse' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='ViewName' type='string'/>
+		<EsdlElement name='Result' type='string' http_content='text/html'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUClusterJobQueueXLSRequest'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='ShowType' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUClusterJobQueueXLSResponse' exceptions_inline='1'>
+		<EsdlElement name='Result' type='binary' http_content='application/octet-stream'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUClusterJobQueueLOGRequest' nil_remove='1'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUClusterJobQueueLOGResponse' exceptions_inline='1'>
+		<EsdlElement name='thefile' type='binary' http_content='text/xml'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUClusterJobXLSRequest'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='ShowAll' type='bool'/>
+		<EsdlElement name='BusinessStartTime' type='string'/>
+		<EsdlElement name='BusinessEndTime' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUClusterJobXLSResponse' exceptions_inline='1'>
+		<EsdlElement name='Result' type='binary' http_content='application/octet-stream'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUClusterJobSummaryXLSRequest'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='ShowAll' type='bool'/>
+		<EsdlElement name='BusinessStartTime' type='string'/>
+		<EsdlElement name='BusinessEndTime' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUClusterJobSummaryXLSResponse' exceptions_inline='1'>
+		<EsdlElement name='Result' type='binary' http_content='application/octet-stream'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetThorJobQueueRequest' nil_remove='1'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='MaxJobQueueItemsToReturn' type='unsigned' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetThorJobQueueResponse' exceptions_inline='1'>
+		<EsdlElement name='LongestQueue' type='int'/>
+		<EsdlElement name='MaxThorConnected' type='int'/>
+		<EsdlArray name='QueueList'  type='ThorQueue'/>
+		<EsdlElement name='Warning' type='string'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetThorJobListRequest' nil_remove='1'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='MaxJobsToReturn' type='unsigned' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetThorJobListResponse' exceptions_inline='1'>
+		<EsdlArray name='JobList'  type='ECLJob'/>
+		<EsdlArray name='InProgressJobList'  type='ECLJob'/>
+		<EsdlElement name='Warning' type='string'/>
+	</EsdlResponse>
+	<EsdlRequest name='GVCAjaxGraphRequest'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='GraphName' type='string'/>
+		<EsdlElement name='SubGraphId' type='int' min_ver='1.20'/>
+		<EsdlElement name='SubGraphOnly' type='bool' min_ver='1.21'/>
+	</EsdlRequest>
+	<EsdlResponse name='GVCAjaxGraphResponse'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='GraphName' type='string'/>
+		<EsdlElement name='GraphType' type='string'/>
+		<EsdlElement name='SubGraphId' type='int' min_ver='1.20'/>
+		<EsdlElement name='SubGraphOnly' type='bool' min_ver='1.21'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGraphInfoRequest' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='GID' type='string' min_ver='1.02'/>
+		<EsdlElement name='BatchWU' type='int' min_ver='1.15'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGraphInfoResponse' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='GID' type='string' min_ver='1.02'/>
+		<EsdlElement name='BatchWU' type='int' min_ver='1.15'/>
+		<EsdlElement name='Running' type='bool'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGVCGraphInfoRequest' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='GID' type='string'/>
+		<EsdlElement name='BatchWU' type='int' min_ver='1.15'/>
+		<EsdlElement name='SubgraphId' type='int' min_ver='1.18'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGVCGraphInfoResponse' http_encode='0' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='GID' type='string'/>
+		<EsdlElement name='Running' type='bool'/>
+		<EsdlElement name='TheGraph' type='string'/>
+		<EsdlElement name='BatchWU' type='int' min_ver='1.15'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGraphTimingRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGraphTimingResponse' exceptions_inline='1'>
+		<EsdlElement name='Workunit' complex_type='ECLWorkunit'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetGraphNameAndTypesRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Type' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetGraphNameAndTypesResponse' exceptions_inline='1' encode='0'>
+		<EsdlArray name='GraphNameAndTypes'  type='NameAndType' item_tag='GraphNameAndType'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUProcessGraphRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUProcessGraphResponse' exceptions_inline='1' encode='0'>
+		<EsdlElement name='theGraph' type='string'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetGraphRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='GraphName' type='string' min_ver='1.19'/>
+		<EsdlElement name='SubGraphId' type='string' min_version='1.21'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetGraphResponse' exceptions_inline='1'>
+		<EsdlArray name='Graphs'  type='ECLGraphEx'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUExportRequest'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Owner' type='string'/>
+		<EsdlElement name='State' type='string'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='ECL' type='string' max_ver='1.57'/>
+		<EsdlElement name='Jobname' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUExportResponse' exceptions_inline='1'>
+		<EsdlElement name='ExportData' type='binary' http_content='text/xml'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUWaitRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Wait' type='int' default='-1'/>
+		<EsdlElement name='ReturnOnWait' type='bool' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUWaitResponse' exceptions_inline='1'>
+		<EsdlElement name='StateID' type='int'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUSyntaxCheckRequest'>
+		<EsdlElement name='ECL' type='string'/>
+		<EsdlElement name='ModuleName' type='string'/>
+		<EsdlElement name='AttributeName' type='string'/>
+		<EsdlElement name='Queue' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Snapshot' type='string'/>
+		<EsdlElement name='TimeToWait' type='int' default='60000'/>
+		<EsdlElement name='PersistWorkunit' type='bool' default='0' min_ver='1.88'/>
+		<EsdlArray name='DebugValues'  type='DebugValue' min_ver='1.04'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUSyntaxCheckResponse' exceptions_inline='1'>
+		<EsdlArray name='Errors'  type='ECLException'/>
+		<EsdlElement name='Message' type='string' min_ver='1.57'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUCompileECLRequest'>
+		<EsdlElement name='ECL' type='string'/>
+		<EsdlElement name='ModuleName' type='string'/>
+		<EsdlElement name='AttributeName' type='string'/>
+		<EsdlElement name='Queue' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Snapshot' type='string'/>
+		<EsdlElement name='IncludeDependencies' type='bool' default='0'/>
+		<EsdlElement name='IncludeComplexity' type='bool'/>
+		<EsdlElement name='TimeToWait' type='int' default='60000'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUCompileECLResponse' exceptions_inline='1'>
+		<EsdlElement name='Complexity' type='string'/>
+		<EsdlArray name='Errors'  type='ECLException'/>
+		<EsdlArray name='Dependencies'  type='WUECLAttribute' item_tag='ECLAttribute'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUJobListRequest'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Process' type='string' min_ver='1.50'/>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlElement name='ShowAll' type='bool'/>
+		<EsdlElement name='BusinessStartHour' type='int'/>
+		<EsdlElement name='BusinessEndHour' type='int'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUJobListResponse' exceptions_inline='1'>
+		<EsdlElement name='StartDate' type='string'/>
+		<EsdlElement name='EndDate' type='string'/>
+		<EsdlArray name='Jobs'  type='ECLJob'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUShowScheduledRequest' nil_remove='1'>
+		<EsdlElement name='Cluster' type='string' default=''/>
+		<EsdlElement name='EventName' type='string' default=''/>
+		<EsdlElement name='PushEventName' type='string' default=''/>
+		<EsdlElement name='PushEventText' type='string' default=''/>
+		<EsdlElement name='State' type='string' default='' min_ver='1.51'/>
+		<EsdlElement name='JobName' type='string' default='' min_ver='1.71'/>
+		<EsdlElement name='Owner' type='string' default='' min_ver='1.77'/>
+		<EsdlElement name='EventText' type='string' default='' min_ver='1.77'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUShowScheduledResponse' exceptions_inline='1' nil_remove='1'>
+		<EsdlElement name='ClusterSelected' type='int' default='0'/>
+		<EsdlElement name='EventName' type='string' default=''/>
+		<EsdlElement name='PushEventName' type='string' default=''/>
+		<EsdlElement name='PushEventText' type='string' default=''/>
+		<EsdlElement name='Query' type='string' default=''/>
+		<EsdlArray name='Clusters'  type='ServerInfo'/>
+		<EsdlArray name='Workunits'  type='ScheduledWU'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetDependancyTreesRequest'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='Queue' type='string'/>
+		<EsdlElement name='Snapshot' type='string'/>
+		<EsdlElement name='Items' type='string'/>
+		<EsdlElement name='TimeoutMilliSec' type='string' min_ver='1.12'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetDependancyTreesResponse' exceptions_inline='1' nil_remove='1'>
+		<EsdlArray name='Errors'  type='ECLException'/>
+		<EsdlElement name='DependancyTrees' type='binary' http_content='text/xml'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUListLocalFileRequiredRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUListLocalFileRequiredResponse' exceptions_inline='1' nil_remove='1'>
+		<EsdlArray name='LocalFileUploads'  type='LogicalFileUpload'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUAddLocalFileToWorkunitRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Val' type='string'/>
+		<EsdlElement name='DefVal' type='string'/>
+		<EsdlElement name='Type' type='int'/>
+		<EsdlElement name='Length' type='int'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUAddLocalFileToWorkunitResponse' exceptions_inline='1' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Result' type='string'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUDebugRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Command' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUDebugResponse' exceptions_inline='1'>
+		<EsdlElement name='Result' type='string'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUCopyLogicalFilesRequest'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='CopyLocal' type='bool'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUCopyLogicalFilesResponse' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlArray name='ClusterFiles'  type='WUCopyLogicalClusterFileSections' item_tag='Cluster'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetZAPInfoRequest' nil_remove='1'>
+		<EsdlElement name='WUID' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetZAPInfoResponse' exceptions_inline='1'>
+		<EsdlElement name='WUID' type='string'/>
+		<EsdlElement name='ESPIPAddress' type='string'/>
+		<EsdlElement name='ThorIPAddress' type='string'/>
+		<EsdlElement name='BuildVersion' type='string'/>
+		<EsdlElement name='Archive' type='string'/>
+		<EsdlElement name='EmailTo' type='string' min_ver='1.73'/>
+		<EsdlElement name='EmailFrom' type='string' min_ver='1.73'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUCreateZAPInfoRequest' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='ESPIPAddress' type='string'/>
+		<EsdlElement name='ThorIPAddress' type='string'/>
+		<EsdlElement name='BuildVersion' type='string'/>
+		<EsdlElement name='ProblemDescription' type='string'/>
+		<EsdlElement name='WhatChanged' type='string'/>
+		<EsdlElement name='WhereSlow' type='string'/>
+		<EsdlElement name='Password' type='string' depr_ver='1.70' min_ver='1.53'/>
+		<EsdlElement name='ZAPFileName' type='string' min_ver='1.65'/>
+		<EsdlElement name='IncludeThorSlaveLog' type='string' default='on' min_ver='1.57'/>
+		<EsdlElement name='ZAPPassword' type='string' min_ver='1.70'/>
+		<EsdlElement name='SendEmail' type='bool' default='0' min_ver='1.73'/>
+		<EsdlElement name='AttachZAPReportToEmail' type='bool' default='0' min_ver='1.73'/>
+		<EsdlElement name='EmailFrom' type='string' min_ver='1.73'/>
+		<EsdlElement name='EmailSubject' type='string' min_ver='1.73'/>
+		<EsdlElement name='EmailBody' type='string' min_ver='1.73'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUCreateZAPInfoResponse' exceptions_inline='1'>
+		<EsdlElement name='thefile' type='binary' http_content='application/octet-stream'/>
+		<EsdlElement name='ZAPFileName' type='string' min_ver='1.70'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUCheckFeaturesRequest' nil_remove='1'>
+	</EsdlRequest>
+	<EsdlResponse name='WUCheckFeaturesResponse' exceptions_inline='1'>
+		<EsdlElement name='BuildVersionMajor' type='int'/>
+		<EsdlElement name='BuildVersionMinor' type='int'/>
+		<EsdlElement name='BuildVersionPoint' type='int'/>
+		<EsdlElement name='maxRequestEntityLength' type='unsigned'/>
+		<EsdlElement name='Deployment' complex_type='DeploymentFeatures'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetStatsRequest' nil_remove='1'>
+		<EsdlElement name='WUID' type='string'/>
+		<EsdlElement name='CreatorType' type='string'/>
+		<EsdlElement name='Creator' type='string'/>
+		<EsdlElement name='ScopeType' type='string'/>
+		<EsdlElement name='Scope' type='string'/>
+		<EsdlElement name='Kind' type='string'/>
+		<EsdlElement name='Measure' type='string'/>
+		<EsdlElement name='MinScopeDepth' type='unsigned'/>
+		<EsdlElement name='MaxScopeDepth' type='unsigned'/>
+		<EsdlElement name='IncludeGraphs' type='boolean'/>
+		<EsdlElement name='CreateDescriptions' type='boolean'/>
+		<EsdlElement name='MinValue' type='int64' min_ver='1.62'/>
+		<EsdlElement name='MaxValue' type='int64' min_ver='1.62'/>
+		<EsdlElement name='Filter' type='string' min_ver='1.62'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetStatsResponse' exceptions_inline='1'>
+		<EsdlElement name='WUID' type='string'/>
+		<EsdlArray name='Statistics'  type='WUStatisticItem'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUListArchiveFilesRequest' nil_remove='1'>
+		<EsdlElement name='WUID' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUListArchiveFilesResponse' nil_remove='1' exceptions_inline='1'>
+		<EsdlArray name='ArchiveModules'  type='WUArchiveModule' item_tag='ArchiveModule'/>
+		<EsdlArray name='Files'  type='WUArchiveFile' item_tag='File'/>
+		<EsdlElement name='Message' type='string'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetArchiveFileRequest' nil_remove='1'>
+		<EsdlElement name='WUID' type='string'/>
+		<EsdlElement name='ModuleName' type='string'/>
+		<EsdlElement name='FileName' type='string'/>
+		<EsdlElement name='Path' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetArchiveFileResponse' nil_remove='1' exceptions_inline='1'>
+		<EsdlElement name='File' type='string'/>
+		<EsdlElement name='Message' type='string'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetNumFileToCopyRequest' nil_remove='1'>
+		<EsdlElement name='ClusterName' type='string'/>
+		<EsdlElement name='TargetName' type='string' min_ver='1.81'/>
+		<EsdlElement name='PageSize' type='int64' default='0' min_ver='1.69'/>
+		<EsdlElement name='PageStartFrom' type='int64' default='0' min_ver='1.69'/>
+		<EsdlElement name='Sortby' type='string' min_ver='1.69'/>
+		<EsdlElement name='Descending' type='bool' default='0' min_ver='1.69'/>
+		<EsdlElement name='CacheHint' type='int64' min_ver='1.69'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetNumFileToCopyResponse' nil_remove='1' exceptions_inline='1'>
+		<EsdlArray name='Endpoints'  type='ClusterEndpoint' item_tag='Endpoint'/>
+		<EsdlElement name='CacheHint' type='int64' min_ver='1.69'/>
+		<EsdlElement name='Total' type='int64' min_ver='1.69'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUDetailsRequest'>
+		<EsdlElement name='WUID' type='string'/>
+		<EsdlElement name='ScopeFilter' complex_type='WUScopeFilter' optional='1'/>
+		<EsdlElement name='NestedFilter' complex_type='WUNestedFilter' optional='1'/>
+		<EsdlElement name='PropertiesToReturn' complex_type='WUPropertiesToReturn' optional='1'/>
+		<EsdlElement name='Filter' type='string' optional='1'/>
+		<EsdlElement name='ScopeOptions' complex_type='WUScopeOptions' optional='1'/>
+		<EsdlElement name='PropertyOptions' complex_type='WUPropertyOptions' optional='1'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUDetailsResponse' exceptions_inline='1'>
+		<EsdlElement name='MaxVersion' type='uint64'/>
+		<EsdlElement name='WUID' type='string'/>
+		<EsdlArray name='Scopes'  type='WUResponseScope' item_tag='Scope'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUDetailsMetaRequest'>
+	</EsdlRequest>
+	<EsdlResponse name='WUDetailsMetaResponse' exceptions_inline='1'>
+		<EsdlArray name='Properties'  type='WUDetailsMetaProperty' item_tag='Property'/>
+		<EsdlArray name='ScopeTypes'  type='string' item_tag='ScopeType'/>
+		<EsdlArray name='Measures'  type='string' item_tag='Measure'/>
+		<EsdlArray name='Activities'  type='WUDetailsActivityInfo' item_tag='Activity'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUEclDefinitionActionRequest' nil_remove='1'>
+		<EsdlArray name='EclDefinitions'  type='string'/>
+		<EsdlEnum name='ActionType' enum_type='EclDefinitionActions'/>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='RemoteDali' type='string'/>
+		<EsdlElement name='SourceProcess' type='string'/>
+		<EsdlElement name='Priority' type='string'/>
+		<EsdlElement name='Comment' type='string'/>
+		<EsdlElement name='MemoryLimit' type='string'/>
+		<EsdlElement name='DeletePrevious' type='bool' default='0'/>
+		<EsdlElement name='SuspendPrevious' type='bool' default='0'/>
+		<EsdlElement name='NoActivate' type='bool' default='0'/>
+		<EsdlElement name='NoReload' type='bool' default='0'/>
+		<EsdlElement name='DontCopyFiles' type='bool' default='0'/>
+		<EsdlElement name='AllowForeign' type='bool' default='0'/>
+		<EsdlElement name='UpdateDfs' type='bool' default='0'/>
+		<EsdlElement name='UpdateSuperfiles' type='bool' default='0'/>
+		<EsdlElement name='UpdateCloneFrom' type='bool' default='0'/>
+		<EsdlElement name='DontAppendCluster' type='bool' default='0'/>
+		<EsdlElement name='MsToWait' type='int' default='-1'/>
+		<EsdlElement name='TimeLimit' type='int' default='-1'/>
+		<EsdlElement name='WarnTimeLimit' type='int' default='-1'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUEclDefinitionActionResponse' exceptions_inline='1'>
+		<EsdlArray name='ActionResults'  type='WUEclDefinitionActionResult'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUGetPluginsRequest' nil_remove='1'>
+	</EsdlRequest>
+	<EsdlResponse name='WUGetPluginsResponse' exceptions_inline='1'>
+		<EsdlArray name='Plugins'  type='WUEclPluginsInFolder'/>
+	</EsdlResponse>
+</esxdl>

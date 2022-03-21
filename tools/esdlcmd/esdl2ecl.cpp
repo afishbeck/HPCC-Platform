@@ -103,7 +103,7 @@ public:
             {
                 fileName.append(srcext);
                 StringBuffer esxml;
-                EsdlCmdHelper::convertECMtoESXDL(fileName.str(), srcfile, esxml, loadincludes && rollUp, true, true, isIncludedESDL, includePath);
+                EsdlCmdHelper::convertECMtoESXDL(fileName.str(), srcfile, esxml, rollUp, true, true, isIncludedESDL, includePath);
                 src = createPTreeFromXMLString(esxml, 0);
             }
             else if (!srcext || !*srcext || stricmp(srcext, XML_FILE_EXTENSION)==0)

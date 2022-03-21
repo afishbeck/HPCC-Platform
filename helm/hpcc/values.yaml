@@ -553,8 +553,8 @@ esp:
   #resources:
   #  cpu: "250m"
   #  memory: "1G"
-- name: esdl-sandbox
-  application: esdl-sandbox
+- name: esdl
+  application: esdl
   auth: none
   replicas: 1
   service:

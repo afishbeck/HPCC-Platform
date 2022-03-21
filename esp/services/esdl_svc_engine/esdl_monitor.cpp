@@ -263,7 +263,7 @@ public:
         entries.appendList(paths, ";");
 
         const char *process = compConfig->queryProp("@instance");
-        unsigned int port  = compConfig->getPropInt("@port");
+        unsigned int port  = compConfig->getPropInt("@port", 8880);
         ForEachItemIn(i, entries)
         {
             const char *path = entries.item(i);

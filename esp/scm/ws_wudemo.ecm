@@ -1,0 +1,38 @@
+/*##############################################################################
+
+    HPCC SYSTEMS software Copyright (C) 2012 HPCC Systems®.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+############################################################################## */
+
+#include "xslprocessor.hpp"
+//  ===========================================================================
+
+EspInclude(common);
+EspInclude(ws_workunits_struct);
+EspInclude(ws_workunits_req_resp);
+EspInclude(ws_workunits_queryset_req_resp);
+
+ESPservice [
+    auth_feature("DEFERRED"), //This declares that the method logic handles feature level authorization
+    version("1.88"), default_client_version("1.88"), cache_group("ESPWsWUs"),
+    noforms,exceptions_inline("./smc_xslt/exceptions.xslt"),use_method_name] WsWorkunits
+{
+    ESPmethod [cache_seconds(60), min_ver("1.57")] WULightWeightQuery(WULightWeightQueryRequest, WULightWeightQueryResponse);
+};
+
+
+SCMexportdef(WSWU);
+
+SCMapi(WSWU) IClientWsWorkunits *createWsWorkunitsClient();
+

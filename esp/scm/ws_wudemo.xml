@@ -1,0 +1,13 @@
+<esxdl name="ws_wudemo">
+	<EsdlInclude file='common'/>
+	<EsdlInclude file='ws_workunits_struct'/>
+	<EsdlInclude file='ws_workunits_req_resp'/>
+	<EsdlInclude file='ws_workunits_queryset_req_resp'/>
+	<EsdlRequest name='WsWorkunitsPingRequest'>
+	</EsdlRequest>
+	<EsdlResponse name='WsWorkunitsPingResponse'>
+	</EsdlResponse>
+		<EsdlService name='WsWorkunits'  use_method_name='1' exceptions_inline='./smc_xslt/exceptions.xslt' noforms='1' cache_group='ESPWsWUs' default_client_version='1.88' version='1.88' auth_feature='DEFERRED'>
+	<EsdlMethod name='Ping' request_type='WsWorkunitsPingRequest' response_type='WsWorkunitsPingResponse'  auth_feature='none'/>
+	<EsdlMethod name='WULightWeightQuery' request_type='WULightWeightQueryRequest' response_type='WULightWeightQueryResponse'  min_ver='1.57' cache_seconds='60'/>
+		</EsdlService></esxdl>

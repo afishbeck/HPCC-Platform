@@ -1,0 +1,366 @@
+<esxdl name="ws_workunits_queryset_req_resp">
+	<EsdlInclude file='common'/>
+	<EsdlInclude file='ws_workunits_struct'/>
+	<EsdlRequest name='WURecreateQueryRequest' nil_remove='1'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlArray name='DebugValues'  type='NamedValue'/>
+		<EsdlElement name='DestTarget' type='string'/>
+		<EsdlElement name='Republish' type='bool' default='0'/>
+		<EsdlEnum name='Activate' enum_type='WUQueryActivationMode'/>
+		<EsdlElement name='NoReload' type='bool' default='0'/>
+		<EsdlElement name='MemoryLimit' type='string'/>
+		<EsdlElement name='TimeLimit' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='WarnTimeLimit' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='Priority' type='string'/>
+		<EsdlElement name='Comment' type='string'/>
+		<EsdlElement name='RemoteDali' type='string'/>
+		<EsdlElement name='DontCopyFiles' type='bool' default='0'/>
+		<EsdlElement name='SourceProcess' type='string'/>
+		<EsdlElement name='AllowForeignFiles' type='bool' default='0'/>
+		<EsdlElement name='UpdateDfs' type='bool' default='0'/>
+		<EsdlElement name='UpdateSuperFiles' type='bool' default='0'/>
+		<EsdlElement name='UpdateCloneFrom' type='bool' default='0'/>
+		<EsdlElement name='AppendCluster' type='bool' default='1'/>
+		<EsdlElement name='IncludeFileErrors' type='bool' default='0'/>
+		<EsdlElement name='Wait' type='int' default='-1'/>
+	</EsdlRequest>
+	<EsdlResponse name='WURecreateQueryResponse' nil_remove='1' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='QuerySet' type='string'/>
+		<EsdlElement name='QueryName' type='string'/>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='MemoryLimit' type='string'/>
+		<EsdlElement name='TimeLimit' type='nonNegativeInteger'/>
+		<EsdlElement name='WarnTimeLimit' type='nonNegativeInteger'/>
+		<EsdlElement name='Priority' type='string'/>
+		<EsdlElement name='Comment' type='string'/>
+		<EsdlElement name='ReloadFailed' type='bool'/>
+		<EsdlElement name='Suspended' type='bool'/>
+		<EsdlElement name='ErrorMessage' type='string'/>
+		<EsdlArray name='FileErrors'  type='LogicalFileError' item_tag='File'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQueryGetGraphRequest'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='GraphName' type='string' min_ver='1.19'/>
+		<EsdlElement name='SubGraphId' type='string' min_version='1.21'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQueryGetGraphResponse' exceptions_inline='1'>
+		<EsdlArray name='Graphs'  type='ECLGraphEx'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQueryGetSummaryStatsRequest'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='FromTime' type='string'/>
+		<EsdlElement name='ToTime' type='string'/>
+		<EsdlElement name='IncludeRawStats' type='bool' default='0' min_ver='1.75'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQueryGetSummaryStatsResponse' exceptions_inline='1'>
+		<EsdlArray name='StatsList'  type='QuerySummaryStats'/>
+		<EsdlArray name='QueryStatsList'  type='EndpointQueryStats' min_ver='1.75'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUPublishWorkunitRequest' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='QueryName' type='string' min_ver='1.81'/>
+		<EsdlElement name='WorkUnitJobName' type='string' min_ver='1.81'/>
+		<EsdlElement name='JobName' type='string'/>
+		<EsdlElement name='Activate' type='int'/>
+		<EsdlElement name='NotifyCluster' type='bool' default='0'/>
+		<EsdlElement name='Wait' type='int' default='10000'/>
+		<EsdlElement name='NoReload' type='bool' default='0'/>
+		<EsdlElement name='UpdateWorkUnitName' type='bool' default='0'/>
+		<EsdlElement name='memoryLimit' type='string'/>
+		<EsdlElement name='TimeLimit' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='WarnTimeLimit' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='Priority' type='string'/>
+		<EsdlElement name='RemoteDali' type='string'/>
+		<EsdlElement name='Comment' type='string'/>
+		<EsdlElement name='DontCopyFiles' type='bool' default='0'/>
+		<EsdlElement name='SourceProcess' type='string'/>
+		<EsdlElement name='AllowForeignFiles' type='bool' default='0'/>
+		<EsdlElement name='UpdateDfs' type='bool' default='0'/>
+		<EsdlElement name='UpdateSuperFiles' type='bool' default='0'/>
+		<EsdlElement name='UpdateCloneFrom' type='bool' default='0'/>
+		<EsdlElement name='AppendCluster' type='bool' default='1'/>
+		<EsdlElement name='IncludeFileErrors' type='bool' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUPublishWorkunitResponse' exceptions_inline='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Result' type='string'/>
+		<EsdlElement name='QuerySet' type='string'/>
+		<EsdlElement name='QueryName' type='string'/>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='ReloadFailed' type='bool'/>
+		<EsdlElement name='Suspended' type='bool' min_ver='1.39'/>
+		<EsdlElement name='ErrorMessage' type='string' min_ver='1.39'/>
+		<EsdlArray name='ClusterFiles'  type='WUCopyLogicalClusterFileSections' item_tag='Cluster'/>
+		<EsdlArray name='FileErrors'  type='LogicalFileError' item_tag='File' min_ver='1.68'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQueryConfigRequest' nil_remove='1'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='Wait' type='int' default='10000'/>
+		<EsdlElement name='NoReload' type='bool' default='0'/>
+		<EsdlElement name='memoryLimit' type='string'/>
+		<EsdlElement name='TimeLimit' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='WarnTimeLimit' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='Priority' type='string'/>
+		<EsdlElement name='Comment' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQueryConfigResponse' exceptions_inline='1'>
+		<EsdlElement name='ReloadFailed' type='bool'/>
+		<EsdlArray name='Results'  type='WUQueryConfigResult' item_tag='Result'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQuerysetsRequest'>
+		<EsdlElement name='test' type='bool'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQuerysetsResponse' exceptions_inline='1'>
+		<EsdlArray name='Querysets'  type='QuerySet'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQuerySetDetailsRequest'>
+		<EsdlElement name='QuerySetName' type='string'/>
+		<EsdlElement name='Filter' type='string'/>
+		<EsdlElement name='ClusterName' type='string'/>
+		<EsdlEnum name='FilterType' enum_type='WUQuerySetFilterType' default='All'/>
+		<EsdlElement name='CheckAllNodes' type='bool' default='1' min_ver='1.57'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQuerySetDetailsResponse' exceptions_inline='1'>
+		<EsdlElement name='QuerySetName' type='string'/>
+		<EsdlArray name='QuerysetQueries'  type='QuerySetQuery'/>
+		<EsdlArray name='QuerysetAliases'  type='QuerySetAlias'/>
+		<EsdlElement name='ClusterName' type='string' min_ver='1.37'/>
+		<EsdlElement name='Filter' type='string' min_ver='1.37'/>
+		<EsdlEnum name='FilterType' enum_type='WUQuerySetFilterType' min_ver='1.37'/>
+		<EsdlArray name='ClusterNames'  type='string' min_ver='1.37'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUListQueriesRequest' nil_remove='1'>
+		<EsdlElement name='QuerySetName' type='string'/>
+		<EsdlElement name='ClusterName' type='string'/>
+		<EsdlElement name='LibraryName' type='string'/>
+		<EsdlElement name='MemoryLimitLow' type='int64'/>
+		<EsdlElement name='MemoryLimitHigh' type='int64'/>
+		<EsdlElement name='TimeLimitLow' type='nonNegativeInteger'/>
+		<EsdlElement name='TimeLimitHigh' type='nonNegativeInteger'/>
+		<EsdlElement name='WarnTimeLimitLow' type='nonNegativeInteger'/>
+		<EsdlElement name='WarnTimeLimitHigh' type='nonNegativeInteger'/>
+		<EsdlElement name='PriorityLow' type='nonNegativeInteger'/>
+		<EsdlElement name='PriorityHigh' type='nonNegativeInteger'/>
+		<EsdlElement name='Activated' type='bool' min_ver='1.48'/>
+		<EsdlElement name='SuspendedByUser' type='bool' depr_ver='1.78' min_ver='1.48'/>
+		<EsdlEnum name='SuspendedFilter' enum_type='WUQueryFilterSuspendedType' min_ver='1.78'/>
+		<EsdlElement name='WUID' type='string' min_ver='1.50'/>
+		<EsdlElement name='QueryID' type='string' min_ver='1.51'/>
+		<EsdlElement name='QueryName' type='string' min_ver='1.51'/>
+		<EsdlElement name='PublishedBy' type='string' min_ver='1.56'/>
+		<EsdlElement name='PageSize' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='PageStartFrom' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='Sortby' type='string'/>
+		<EsdlElement name='Descending' type='bool' default='0'/>
+		<EsdlElement name='CacheHint' type='int64'/>
+		<EsdlElement name='FileName' type='string'/>
+		<EsdlElement name='CheckAllNodes' type='bool' default='1' min_ver='1.57'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUListQueriesResponse' exceptions_inline='1'>
+		<EsdlElement name='NumberOfQueries' type='int'/>
+		<EsdlElement name='CacheHint' type='int64'/>
+		<EsdlArray name='QuerysetQueries'  type='QuerySetQuery'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUListQueriesUsingFileRequest' nil_remove='1'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='Process' type='string'/>
+		<EsdlElement name='FileName' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUListQueriesUsingFileResponse' exceptions_inline='1'>
+		<EsdlElement name='Process' type='string'/>
+		<EsdlElement name='FileName' type='string'/>
+		<EsdlArray name='Targets'  type='TargetQueriesUsingFile'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQueryFilesRequest' nil_remove='1'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='QueryId' type='string'/>
+	</EsdlRequest>
+	<EsdlStruct name='QueryFilesUsed' exceptions_inline='1'>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlArray name='Files'  type='FileUsedByQuery' item_tag='File'/>
+		<EsdlArray name='SuperFiles'  type='QuerySuperFile' item_tag='SuperFile'/>
+	</EsdlStruct>
+	<EsdlResponse name='WUQueryFilesResponse' exceptions_inline='1'>
+		<EsdlArray name='Files'  type='FileUsedByQuery' item_tag='File'/>
+		<EsdlArray name='SuperFiles'  type='QuerySuperFile' item_tag='SuperFile' min_ver='1.85'/>
+		<EsdlArray name='Queries'  type='QueryFilesUsed' item_tag='Query' min_ver='1.86'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQueryDetailsLightWeightRequest'>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='QuerySet' type='string'/>
+		<EsdlElement name='IncludeWUDetails' type='bool' default='0'/>
+		<EsdlElement name='IncludeWUQueryFiles' type='bool' default='0'/>
+		<EsdlElement name='IncludeSuperFiles' type='bool' default='0'/>
+		<EsdlElement name='IncludeWsEclAddresses' type='bool' default='0'/>
+		<EsdlElement name='IncludeStateOnClusters' type='bool' default='0'/>
+		<EsdlElement name='CheckAllNodes' type='bool' default='0'/>
+	</EsdlRequest>
+	<EsdlRequest name='WUQueryDetailsRequest'>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='QuerySet' type='string'/>
+		<EsdlElement name='IncludeStateOnClusters' type='bool' default='0'/>
+		<EsdlElement name='IncludeSuperFiles' type='bool' default='0'/>
+		<EsdlElement name='IncludeWsEclAddresses' type='bool' default='0'/>
+		<EsdlElement name='CheckAllNodes' type='bool' default='1' min_ver='1.57'/>
+		<EsdlElement name='IncludeWUDetails' type='bool' default='1' min_ver='1.78'/>
+		<EsdlElement name='IncludeWUQueryFiles' type='bool' default='1' min_ver='1.78'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQueryDetailsResponse' exceptions_inline='1'>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='QuerySet' type='string'/>
+		<EsdlElement name='QueryName' type='string'/>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Dll' type='string'/>
+		<EsdlElement name='Suspended' type='bool'/>
+		<EsdlElement name='Activated' type='bool' min_ver='1.42'/>
+		<EsdlElement name='SuspendedBy' type='string'/>
+		<EsdlArray name='Clusters'  type='ClusterQueryState' min_ver='1.43'/>
+		<EsdlElement name='PublishedBy' type='string'/>
+		<EsdlElement name='Comment' type='string'/>
+		<EsdlArray name='LogicalFiles'  type='string'/>
+		<EsdlArray name='SuperFiles'  type='QuerySuperFile' item_tag='SuperFile' min_ver='1.44'/>
+		<EsdlElement name='IsLibrary' type='bool' min_ver='1.46'/>
+		<EsdlElement name='Priority' type='string' min_ver='1.46'/>
+		<EsdlElement name='PriorityID' type='int' min_ver='1.83'/>
+		<EsdlElement name='WUSnapShot' type='string' min_ver='1.46'/>
+		<EsdlElement name='CompileTime' type='string' min_ver='1.46'/>
+		<EsdlArray name='LibrariesUsed'  type='string' min_ver='1.46'/>
+		<EsdlElement name='CountGraphs' type='int' min_ver='1.46'/>
+		<EsdlArray name='GraphIds'  type='string' depr_ver='1.64' min_ver='1.46'/>
+		<EsdlElement name='ResourceURLCount' type='int' min_ver='1.50'/>
+		<EsdlArray name='WsEclAddresses'  type='string' item_tag='Address' min_ver='1.51'/>
+		<EsdlArray name='WUGraphs'  type='ECLGraph' min_ver='1.64'/>
+		<EsdlArray name='WUTimers'  type='ECLTimer' min_ver='1.64'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUMultiQuerySetDetailsRequest'>
+		<EsdlElement name='ClusterName' type='string'/>
+		<EsdlElement name='QuerySetName' type='string'/>
+		<EsdlElement name='Filter' type='string'/>
+		<EsdlEnum name='FilterType' enum_type='WUQuerySetFilterType' default='All'/>
+		<EsdlElement name='CheckAllNodes' type='bool' default='1' min_ver='1.57'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUMultiQuerySetDetailsResponse' exceptions_inline='1'>
+		<EsdlElement name='ClusterName' type='string'/>
+		<EsdlArray name='Querysets'  type='WUQuerySetDetail'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQuerysetExportRequest'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='Compress' type='bool' default='1'/>
+		<EsdlElement name='ActiveOnly' type='bool' default='0'/>
+		<EsdlElement name='Protect' type='bool' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQuerysetExportResponse' exceptions_inline='1'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='Compressed' type='bool'/>
+		<EsdlElement name='Data' type='binary'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQuerysetImportRequest'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='QueryMask' type='string'/>
+		<EsdlElement name='Replace' type='bool' default='0'/>
+		<EsdlElement name='ActiveOnly' type='bool' default='0'/>
+		<EsdlEnum name='Activation' enum_type='QuerysetImportActivation'/>
+		<EsdlElement name='Compressed' type='bool' default='1'/>
+		<EsdlElement name='Data' type='binary'/>
+		<EsdlElement name='AllowForeignFiles' type='bool' default='1'/>
+		<EsdlElement name='DfsServer' type='string'/>
+		<EsdlElement name='CopyFiles' type='bool' default='1'/>
+		<EsdlElement name='OverwriteDfs' type='bool' default='0'/>
+		<EsdlElement name='SourceProcess' type='string'/>
+		<EsdlElement name='UpdateSuperFiles' type='bool' default='0'/>
+		<EsdlElement name='UpdateCloneFrom' type='bool' default='0'/>
+		<EsdlElement name='AppendCluster' type='bool' default='1'/>
+		<EsdlElement name='IncludeFileErrors' type='bool' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQuerysetImportResponse' exceptions_inline='1'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='ClearedExisting' type='bool' default='1'/>
+		<EsdlElement name='Success' type='bool' default='0'/>
+		<EsdlArray name='ImportedQueries'  type='string' item_tag='QueryId'/>
+		<EsdlArray name='ExistingQueries'  type='string' item_tag='QueryId'/>
+		<EsdlArray name='MissingWuids'  type='string' item_tag='QueryId'/>
+		<EsdlArray name='FileErrors'  type='LogicalFileError' item_tag='File'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUUpdateQueryEntryRequest' nil_remove='1'>
+		<EsdlElement name='QuerySet' type='string'/>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='Comment' type='string'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUUpdateQueryEntryResponse' exceptions_inline='1'>
+	</EsdlResponse>
+	<EsdlRequest name='WUQuerySetQueryActionRequest'>
+		<EsdlEnum name='Action' enum_type='QuerySetQueryActionTypes'/>
+		<EsdlElement name='QuerySetName' type='string'/>
+		<EsdlArray name='Queries'  type='QuerySetQueryActionItem' item_tag='Query'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQuerySetQueryActionResponse' exceptions_inline='1'>
+		<EsdlEnum name='Action' enum_type='QuerySetQueryActionTypes'/>
+		<EsdlElement name='QuerySetName' type='string'/>
+		<EsdlArray name='Results'  type='QuerySetQueryActionResult' item_tag='Result'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQuerySetAliasActionRequest'>
+		<EsdlEnum name='Action' enum_type='QuerySetAliasActionTypes'/>
+		<EsdlElement name='QuerySetName' type='string'/>
+		<EsdlArray name='Aliases'  type='QuerySetAliasActionItem' item_tag='Alias'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQuerySetAliasActionResponse' exceptions_inline='1'>
+		<EsdlEnum name='Action' enum_type='QuerySetAliasActionTypes'/>
+		<EsdlElement name='QuerySetName' type='string'/>
+		<EsdlArray name='Results'  type='QuerySetAliasActionResult' item_tag='Result'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUQuerySetCopyQueryRequest' nil_remove='1'>
+		<EsdlElement name='Source' type='string'/>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='DaliServer' type='string'/>
+		<EsdlElement name='Activate' type='int'/>
+		<EsdlElement name='Overwrite' type='bool' default='0'/>
+		<EsdlElement name='DontCopyFiles' type='bool' default='0'/>
+		<EsdlElement name='Wait' type='int' default='10000'/>
+		<EsdlElement name='NoReload' type='bool' default='0'/>
+		<EsdlElement name='memoryLimit' type='string'/>
+		<EsdlElement name='TimeLimit' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='WarnTimeLimit' type='nonNegativeInteger' default='0'/>
+		<EsdlElement name='priority' type='string'/>
+		<EsdlElement name='Comment' type='string'/>
+		<EsdlElement name='SourceProcess' type='string'/>
+		<EsdlElement name='DestName' type='string'/>
+		<EsdlElement name='AllowForeignFiles' type='bool' default='1'/>
+		<EsdlElement name='UpdateSuperFiles' type='bool' default='0'/>
+		<EsdlElement name='UpdateCloneFrom' type='bool' default='0'/>
+		<EsdlElement name='AppendCluster' type='bool' default='1'/>
+		<EsdlElement name='IncludeFileErrors' type='bool' default='0'/>
+		<EsdlElement name='SourceSSL' type='bool' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUQuerySetCopyQueryResponse' exceptions_inline='1'>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlArray name='FileErrors'  type='LogicalFileError' item_tag='File' min_ver='1.68'/>
+	</EsdlResponse>
+	<EsdlRequest name='WUCopyQuerySetRequest' nil_remove='1'>
+		<EsdlElement name='Source' type='string'/>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='ActiveOnly' type='bool' default='1'/>
+		<EsdlElement name='CloneActiveState' type='bool' default='1'/>
+		<EsdlElement name='AllowForeignFiles' type='bool' default='1'/>
+		<EsdlElement name='DfsServer' type='string'/>
+		<EsdlElement name='CopyFiles' type='bool' default='1'/>
+		<EsdlElement name='OverwriteDfs' type='bool' default='0'/>
+		<EsdlElement name='SourceProcess' type='string'/>
+		<EsdlElement name='UpdateSuperFiles' type='bool' default='0'/>
+		<EsdlElement name='UpdateCloneFrom' type='bool' default='0'/>
+		<EsdlElement name='AppendCluster' type='bool' default='1'/>
+		<EsdlElement name='IncludeFileErrors' type='bool' default='0'/>
+		<EsdlElement name='SourceSSL' type='bool' default='0'/>
+	</EsdlRequest>
+	<EsdlResponse name='WUCopyQuerySetResponse' exceptions_inline='1'>
+		<EsdlArray name='CopiedQueries'  type='string' item_tag='QueryId'/>
+		<EsdlArray name='ExistingQueries'  type='string' item_tag='QueryId'/>
+		<EsdlArray name='FileErrors'  type='LogicalFileError' item_tag='File' min_ver='1.68'/>
+	</EsdlResponse>
+</esxdl>

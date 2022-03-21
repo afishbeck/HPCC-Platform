@@ -30,7 +30,7 @@ class Esdl2XSDCmd : public EsdlHelperConvertCmd
 {
 public:
     Esdl2XSDCmd() : optUnversionedNamespace(false), optInterfaceVersion(0), optAllAnnot(false), optNoAnnot(false),
-                    optEnforceOptional(true), optRawOutput(false), optXformTimes(1), optFlags(DEPFLAG_COLLAPSE|DEPFLAG_ARRAYOF),
+                    optRawOutput(false), optXformTimes(1), optFlags(DEPFLAG_COLLAPSE|DEPFLAG_ARRAYOF),
                     outfileext(".xsd")
     {}
 
@@ -102,7 +102,7 @@ public:
             return true;
         if (iter.matchOption(optOptional, ESDLOPT_OPT_PARAM_VAL) || iter.matchOption(optOptional, ESDLOPT_OPTIONAL_PARAM_VAL))
             return true;
-        if (iter.matchFlag(optEnforceOptional, ESDLOPT_NO_OPTIONAL_ATTRIBUTES))
+        if (iter.matchFlag(optDontEnforceOptional, ESDLOPT_NO_OPTIONAL_ATTRIBUTES))
             return true;
         if (iter.matchOption(optXformTimes, ESDLOPT_NUMBER))
             return true;
@@ -311,7 +311,7 @@ public:
         // getDependencies call we're indicating that we want to turn off
         // optional filtering.
 
-        if( optEnforceOptional )
+        if( !optDontEnforceOptional )
         {
             opts.setown(createProperties(false));
             if( optOptional.length() )
@@ -436,7 +436,7 @@ public:
     StringAttr optXsltPath;
     StringAttr optMethod;
     StringAttr optOptional;
-    bool optEnforceOptional;
+    bool optDontEnforceOptional = false;
     StringAttr optAnnotate;
     bool optAllAnnot, optNoAnnot;
     StringAttr optTargetNamespace;

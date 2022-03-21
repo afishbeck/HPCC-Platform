@@ -1,0 +1,642 @@
+<esxdl name="ws_workunits_struct">
+	<EsdlInclude file='common'/>
+	<EsdlEnumType name='ECLWUActions' base_type='string'>
+		<EsdlEnumItem name='Abort' enum='Abort'/>
+		<EsdlEnumItem name='Delete' enum='Delete'/>
+		<EsdlEnumItem name='EventDeschedule' enum='Deschedule'/>
+		<EsdlEnumItem name='EventReschedule' enum='Reschedule'/>
+		<EsdlEnumItem name='Pause' enum='Pause'/>
+		<EsdlEnumItem name='PauseNow' enum='PauseNow'/>
+		<EsdlEnumItem name='Protect' enum='Protect'/>
+		<EsdlEnumItem name='Unprotect' enum='Unprotect'/>
+		<EsdlEnumItem name='Restore' enum='Restore'/>
+		<EsdlEnumItem name='Resume' enum='Resume'/>
+		<EsdlEnumItem name='SetToFailed' enum='SetToFailed'/>
+		<EsdlEnumItem name='Archive' enum='Archive'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='EclDefinitionActions' base_type='string'>
+		<EsdlEnumItem name='SyntaxCheck' enum='SyntaxCheck'/>
+		<EsdlEnumItem name='Deploy' enum='Deploy'/>
+		<EsdlEnumItem name='Publish' enum='Publish'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='ErrorMessageFormat' base_type='string'>
+		<EsdlEnumItem name='XML' enum='xml'/>
+		<EsdlEnumItem name='JSON' enum='json'/>
+		<EsdlEnumItem name='Text' enum='text'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='WUFileType' base_type='string'>
+		<EsdlEnumItem name='XML' enum='XML'/>
+		<EsdlEnumItem name='CPP' enum='cpp'/>
+		<EsdlEnumItem name='DLL' enum='dll'/>
+		<EsdlEnumItem name='Res' enum='res'/>
+		<EsdlEnumItem name='LOG' enum='log'/>
+		<EsdlEnumItem name='WUECL' enum='WUECL'/>
+		<EsdlEnumItem name='ThorLog' enum='ThorLog'/>
+		<EsdlEnumItem name='ThorSlaveLog' enum='ThorSlaveLog'/>
+		<EsdlEnumItem name='EclAgentLog' enum='EclAgentLog'/>
+		<EsdlEnumItem name='ArchiveQuery' enum='ArchiveQuery'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='WUFileDownloadOption' base_type='int'>
+		<EsdlEnumItem name='OriginalText' desc='OriginalText' enum='0'/>
+		<EsdlEnumItem name='Attachment' desc='Attachment' enum='1'/>
+		<EsdlEnumItem name='ZIP' desc='ZIP' enum='2'/>
+		<EsdlEnumItem name='GZIP' desc='GZIP' enum='3'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='WUQueryActivationMode' base_type='int'>
+		<EsdlEnumItem name='NoActivate' desc='Do not activate query' enum='0'/>
+		<EsdlEnumItem name='Activate' desc='Activate query' enum='1'/>
+		<EsdlEnumItem name='ActivateSuspendPrevious' desc='Activate query, suspend previous' enum='2'/>
+		<EsdlEnumItem name='ActivateDeletePrevious' desc='Activate query, delete previous' enum='3'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='WUExceptionSeverity' base_type='string'>
+		<EsdlEnumItem name='INFO' enum='info'/>
+		<EsdlEnumItem name='WARNING' enum='warning'/>
+		<EsdlEnumItem name='ERROR' enum='error'/>
+		<EsdlEnumItem name='ALERT' enum='alert'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='WUQuerySetFilterType' base_type='string'>
+		<EsdlEnumItem name='ALL' enum='All'/>
+		<EsdlEnumItem name='ID' enum='Id'/>
+		<EsdlEnumItem name='NAME' enum='Name'/>
+		<EsdlEnumItem name='ALIAS' enum='Alias'/>
+		<EsdlEnumItem name='STATUS' enum='Status'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='WUQueryFilterSuspendedType' base_type='string'>
+		<EsdlEnumItem name='ALL' enum='All queries'/>
+		<EsdlEnumItem name='NOTSUSPD' enum='Not suspended'/>
+		<EsdlEnumItem name='SUSPD' enum='Suspended'/>
+		<EsdlEnumItem name='SUSPDBYUSER' enum='Suspended by user'/>
+		<EsdlEnumItem name='SUSPDBYFirstNode' enum='Suspended by first node'/>
+		<EsdlEnumItem name='SUSPDBYAnyNode' enum='Suspended by any node'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='QuerysetImportActivation' base_type='string'>
+		<EsdlEnumItem name='None' enum='None'/>
+		<EsdlEnumItem name='ImportedActive' enum='ActivateImportedActive'/>
+	</EsdlEnumType>
+	<EsdlEnumType name='QuerySetQueryActionTypes' base_type='string'>
+		<EsdlEnumItem name='Suspend' enum='Suspend'/>
+		<EsdlEnumItem name='Unsuspend' enum='Unsuspend'/>
+		<EsdlEnumItem name='ToggleSuspend' enum='ToggleSuspend'/>
+		<EsdlEnumItem name='Activate' enum='Activate'/>
+		<EsdlEnumItem name='Delete' enum='Delete'/>
+		<EsdlEnumItem name='RemoveAllAliases' enum='RemoveAllAliases'/>
+		<EsdlEnumItem name='ResetQueryStats' enum='ResetQueryStats'/>
+	</EsdlEnumType>
+	<EsdlStruct name='ECLException' nil_remove='1'>
+		<EsdlElement name='Source' type='string'/>
+		<EsdlElement name='Severity' type='string'/>
+		<EsdlElement name='Code' type='int'/>
+		<EsdlElement name='Message' type='string'/>
+		<EsdlElement name='FileName' type='string'/>
+		<EsdlElement name='LineNo' type='int'/>
+		<EsdlElement name='Column' type='int'/>
+		<EsdlElement name='Activity' type='int' min_ver='1.63'/>
+		<EsdlElement name='Scope' type='string' min_ver='1.69'/>
+		<EsdlElement name='Priority' type='int' min_ver='1.69'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLSchemaItem' nil_remove='1'>
+		<EsdlElement name='ColumnName' type='string'/>
+		<EsdlElement name='ColumnType' type='string'/>
+		<EsdlElement name='ColumnTypeCode' type='int'/>
+		<EsdlElement name='isConditional' type='bool' default='0'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLResult' nil_remove='1'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Sequence' type='int'/>
+		<EsdlElement name='Value' type='string'/>
+		<EsdlElement name='Link' type='string'/>
+		<EsdlElement name='FileName' type='string'/>
+		<EsdlElement name='IsSupplied' type='bool'/>
+		<EsdlElement name='ShowFileContent' type='bool' default='1'/>
+		<EsdlElement name='Total' type='int64'/>
+		<EsdlArray name='ECLSchemas'  type='ECLSchemaItem'/>
+		<EsdlElement name='XmlSchema' type='string' min_ver='1.39'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLTimingData' nil_remove='1'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='GraphNum' type='int'/>
+		<EsdlElement name='SubGraphNum' type='int'/>
+		<EsdlElement name='GID' type='int'/>
+		<EsdlElement name='Min' type='int'/>
+		<EsdlElement name='MS' type='int'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLGraph' nil_remove='1'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Label' type='string'/>
+		<EsdlElement name='Type' type='string'/>
+		<EsdlElement name='Running' type='bool'/>
+		<EsdlElement name='Complete' type='bool' min_ver='1.09'/>
+		<EsdlElement name='Failed' type='bool' min_ver='1.14'/>
+		<EsdlElement name='RunningId' type='int64'/>
+		<EsdlElement name='WhenStarted' type='string' min_ver='1.53'/>
+		<EsdlElement name='WhenFinished' type='string' min_ver='1.53'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLGraphEx' nil_remove='1'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Label' type='string'/>
+		<EsdlElement name='Type' type='string'/>
+		<EsdlElement name='Graph' type='string'/>
+		<EsdlElement name='Running' type='bool'/>
+		<EsdlElement name='RunningId' type='int64'/>
+		<EsdlElement name='Complete' type='bool' min_ver='1.21'/>
+		<EsdlElement name='Failed' type='bool' min_ver='1.21'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLSourceFile' nil_remove='1'>
+		<EsdlElement name='FileCluster' type='string' min_ver='1.01'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='IsSuperFile' type='bool' min_ver='1.12'/>
+		<EsdlElement name='Subs' type='int' min_ver='1.27'/>
+		<EsdlElement name='Count' type='int'/>
+		<EsdlArray name='ECLSourceFiles'  type='ECLSourceFile' min_ver='1.27'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLTimer' nil_remove='1'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Value' type='string'/>
+		<EsdlElement name='count' type='int'/>
+		<EsdlElement name='GraphName' type='string' min_ver='1.20'/>
+		<EsdlElement name='SubGraphId' type='int' min_ver='1.20'/>
+		<EsdlElement name='Timestamp' type='int64' min_ver='1.72'/>
+		<EsdlElement name='When' type='string' min_ver='1.72'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLHelpFile' nil_remove='1'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Type' type='string'/>
+		<EsdlElement name='IPAddress' type='string' min_ver='1.32'/>
+		<EsdlElement name='Description' type='string' min_ver='1.32'/>
+		<EsdlElement name='FileSize' type='int64' min_ver='1.43'/>
+		<EsdlElement name='PID' type='unsigned' default='0' min_ver='1.44'/>
+		<EsdlElement name='minActivityId' type='unsigned' default='0' min_ver='1.58'/>
+		<EsdlElement name='maxActivityId' type='unsigned' default='0' min_ver='1.58'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLQuery' nil_remove='1'>
+		<EsdlElement name='Text' type='string'/>
+		<EsdlElement name='Cpp' type='string'/>
+		<EsdlElement name='ResTxt' type='string'/>
+		<EsdlElement name='Dll' type='string'/>
+		<EsdlElement name='ThorLog' type='string'/>
+		<EsdlElement name='QueryMainDefinition' type='string' min_ver='1.35'/>
+	</EsdlStruct>
+	<EsdlStruct name='QueryStatsRecord' nil_remove='1'>
+		<EsdlElement name='StartTime' type='string'/>
+		<EsdlElement name='ElapsedTimeMs' type='int64'/>
+		<EsdlElement name='MemoryUsed' type='int64'/>
+		<EsdlElement name='BytesOut' type='int64'/>
+		<EsdlElement name='SlavesReplyLen' type='int'/>
+		<EsdlElement name='Failed' type='bool'/>
+	</EsdlStruct>
+	<EsdlStruct name='QuerySummaryStats' nil_remove='1'>
+		<EsdlElement name='Endpoint' type='string'/>
+		<EsdlElement name='Status' type='string'/>
+		<EsdlElement name='StartTime' type='string'/>
+		<EsdlElement name='EndTime' type='string'/>
+		<EsdlElement name='CountTotal' type='int'/>
+		<EsdlElement name='CountFailed' type='int'/>
+		<EsdlElement name='AverageSlavesReplyLen' type='int'/>
+		<EsdlElement name='AverageBytesOut' type='int64'/>
+		<EsdlElement name='SizeAvgPeakMemory' type='int64'/>
+		<EsdlElement name='TimeAvgTotalExecuteMinutes' type='int64'/>
+		<EsdlElement name='TimeMinTotalExecuteMinutes' type='int64'/>
+		<EsdlElement name='TimeMaxTotalExecuteMinutes' type='int64'/>
+		<EsdlElement name='Percentile97' type='int64'/>
+		<EsdlElement name='Percentile97Estimate' type='bool'/>
+	</EsdlStruct>
+	<EsdlStruct name='QueryStats' nil_remove='1'>
+		<EsdlElement name='ID' type='string'/>
+		<EsdlArray name='AggregateQueryStatsList'  type='QuerySummaryStats'/>
+		<EsdlArray name='QueryStatsRecordList'  type='QueryStatsRecord'/>
+	</EsdlStruct>
+	<EsdlStruct name='EndpointQueryStats' nil_remove='1'>
+		<EsdlElement name='Endpoint' type='string'/>
+		<EsdlElement name='Status' type='string'/>
+		<EsdlArray name='QueryStatsList'  type='QueryStats'/>
+	</EsdlStruct>
+	<EsdlStruct name='DebugValue' nil_remove='1'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Value' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUActionResult' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Action' type='string'/>
+		<EsdlElement name='Result' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='ApplicationValue' nil_remove='1'>
+		<EsdlElement name='Application' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Value' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLWorkflow' nil_remove='1'>
+		<EsdlElement name='WFID' type='string'/>
+		<EsdlElement name='EventName' type='string' default=''/>
+		<EsdlElement name='EventText' type='string' default=''/>
+		<EsdlElement name='Count' type='int' default='-1'/>
+		<EsdlElement name='CountRemaining' type='int' default='-1'/>
+	</EsdlStruct>
+	<EsdlStruct name='ThorLogInfo' nil_remove='1'>
+		<EsdlElement name='ProcessName' type='string'/>
+		<EsdlElement name='ClusterGroup' type='string'/>
+		<EsdlElement name='LogDate' type='string'/>
+		<EsdlElement name='NumberSlaves' type='int'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLWorkunitLW' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Owner' type='string'/>
+		<EsdlElement name='JobName' type='string'/>
+		<EsdlElement name='WuScope' type='string'/>
+		<EsdlElement name='ClusterName' type='string'/>
+		<EsdlElement name='State' type='int'/>
+		<EsdlElement name='StateDesc' type='string'/>
+		<EsdlElement name='Action' type='int'/>
+		<EsdlElement name='ActionDesc' type='string'/>
+		<EsdlElement name='Priority' type='int'/>
+		<EsdlElement name='PriorityDesc' type='string'/>
+		<EsdlElement name='PriorityLevel' type='int'/>
+		<EsdlElement name='IsProtected' type='bool'/>
+		<EsdlElement name='DateTimeScheduled' type='string'/>
+		<EsdlElement name='TotalClusterTime' type='unsigned'/>
+		<EsdlArray name='ApplicationValues'  type='ApplicationValue'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLWorkunit' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Owner' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='RoxieCluster' type='string' min_ver='1.07'/>
+		<EsdlElement name='Jobname' type='string'/>
+		<EsdlElement name='Queue' type='string'/>
+		<EsdlElement name='StateID' type='int'/>
+		<EsdlElement name='State' type='string'/>
+		<EsdlElement name='StateEx' type='string'/>
+		<EsdlElement name='Description' type='string'/>
+		<EsdlElement name='Protected' type='bool'/>
+		<EsdlElement name='Active' type='bool'/>
+		<EsdlElement name='Action' type='int'/>
+		<EsdlElement name='ActionEx' type='string' min_ver='1.33'/>
+		<EsdlElement name='DateTimeScheduled' type='string'/>
+		<EsdlElement name='PriorityClass' type='int'/>
+		<EsdlElement name='PriorityLevel' type='int'/>
+		<EsdlElement name='Scope' type='string'/>
+		<EsdlElement name='Snapshot' type='string'/>
+		<EsdlElement name='ResultLimit' type='int'/>
+		<EsdlElement name='Archived' type='bool' min_ver='1.01'/>
+		<EsdlElement name='IsPausing' type='bool' default='0' min_ver='1.30'/>
+		<EsdlElement name='ThorLCR' type='bool' default='0' min_ver='1.30'/>
+		<EsdlElement name='EventSchedule' type='int' min_ver='1.01'/>
+		<EsdlElement name='HaveSubGraphTimings' type='bool' depr_ver='1.71' min_ver='1.02'/>
+		<EsdlElement name='TotalThorTime' type='string' depr_ver='1.53' min_ver='1.28'/>
+		<EsdlElement name='TotalClusterTime' type='string' min_ver='1.53'/>
+		<EsdlElement name='AbortBy' type='string' min_ver='1.59'/>
+		<EsdlElement name='AbortTime' type='string' min_ver='1.59'/>
+		<EsdlElement name='Query' complex_type='ECLQuery'/>
+		<EsdlArray name='Helpers'  type='ECLHelpFile' min_ver='1.03'/>
+		<EsdlArray name='Exceptions'  type='ECLException'/>
+		<EsdlArray name='Graphs'  type='ECLGraph'/>
+		<EsdlArray name='SourceFiles'  type='ECLSourceFile'/>
+		<EsdlArray name='Results'  type='ECLResult'/>
+		<EsdlArray name='Variables'  type='ECLResult'/>
+		<EsdlArray name='Timers'  type='ECLTimer'/>
+		<EsdlArray name='DebugValues'  type='DebugValue'/>
+		<EsdlArray name='ApplicationValues'  type='ApplicationValue'/>
+		<EsdlArray name='Workflows'  type='ECLWorkflow' min_ver='1.01'/>
+		<EsdlArray name='TimingData'  type='ECLTimingData' min_ver='1.02'/>
+		<EsdlArray name='AllowedClusters'  type='string' item_tag='AllowedCluster' min_ver='1.05'/>
+		<EsdlElement name='ErrorCount' type='int' min_ver='1.17'/>
+		<EsdlElement name='WarningCount' type='int' min_ver='1.17'/>
+		<EsdlElement name='InfoCount' type='int' min_ver='1.17'/>
+		<EsdlElement name='AlertCount' type='int' min_ver='1.52'/>
+		<EsdlElement name='GraphCount' type='int' min_ver='1.17'/>
+		<EsdlElement name='SourceFileCount' type='int' min_ver='1.17'/>
+		<EsdlElement name='ResultCount' type='int' min_ver='1.17'/>
+		<EsdlElement name='VariableCount' type='int' min_ver='1.17'/>
+		<EsdlElement name='TimerCount' type='int' min_ver='1.17'/>
+		<EsdlElement name='HasDebugValue' type='bool' min_ver='1.17'/>
+		<EsdlElement name='ApplicationValueCount' type='int' min_ver='1.17'/>
+		<EsdlElement name='XmlParams' type='string' min_ver='1.22'/>
+		<EsdlElement name='AccessFlag' type='int' min_ver='1.23'/>
+		<EsdlElement name='ClusterFlag' type='int' min_ver='1.24'/>
+		<EsdlElement name='HelpersDesc' type='string' min_ver='1.29'/>
+		<EsdlElement name='GraphsDesc' type='string' min_ver='1.29'/>
+		<EsdlElement name='SourceFilesDesc' type='string' min_ver='1.29'/>
+		<EsdlElement name='ResultsDesc' type='string' min_ver='1.29'/>
+		<EsdlElement name='VariablesDesc' type='string' min_ver='1.29'/>
+		<EsdlElement name='TimersDesc' type='string' min_ver='1.29'/>
+		<EsdlElement name='DebugValuesDesc' type='string' min_ver='1.29'/>
+		<EsdlElement name='ApplicationValuesDesc' type='string' min_ver='1.29'/>
+		<EsdlElement name='WorkflowsDesc' type='string' min_ver='1.29'/>
+		<EsdlElement name='HasArchiveQuery' type='bool' min_ver='1.31'/>
+		<EsdlArray name='ThorLogList'  type='ThorLogInfo' min_ver='1.38'/>
+		<EsdlArray name='ResourceURLs'  type='string' item_tag='URL' min_ver='1.47'/>
+		<EsdlElement name='ResultViewCount' type='int' min_ver='1.50'/>
+		<EsdlElement name='ResourceURLCount' type='int' min_ver='1.50'/>
+		<EsdlElement name='DebugValueCount' type='int' min_ver='1.50'/>
+		<EsdlElement name='WorkflowCount' type='int' min_ver='1.50'/>
+		<EsdlElement name='HelpersCount' type='int' min_ver='1.67'/>
+		<EsdlArray name='ServiceNames'  type='string' min_ver='1.78'/>
+		<EsdlElement name='ExecuteCost' type='double' min_ver='1.84'/>
+		<EsdlElement name='FileAccessCost' type='double' min_ver='1.85'/>
+		<EsdlElement name='CompileCost' type='double' min_ver='1.87'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUECLAttribute' nil_remove='1'>
+		<EsdlElement name='ModuleName' type='string'/>
+		<EsdlElement name='AttributeName' type='string'/>
+		<EsdlElement name='IsLocked' type='bool'/>
+		<EsdlElement name='IsCheckedOut' type='bool'/>
+		<EsdlElement name='IsSandbox' type='bool'/>
+		<EsdlElement name='IsOrphaned' type='bool'/>
+	</EsdlStruct>
+	<EsdlStruct name='NetworkNode'>
+		<EsdlElement name='Category' type='int'/>
+		<EsdlElement name='id' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='ClusterEndpoint' nil_remove='1'>
+		<EsdlElement name='URL' type='string'/>
+		<EsdlElement name='Status' type='string'/>
+		<EsdlElement name='NumQueryFileToCopy' type='int'/>
+	</EsdlStruct>
+	<EsdlStruct name='LogicalFileUpload'>
+		<EsdlElement name='Type' type='int'/>
+		<EsdlElement name='Source' type='string'/>
+		<EsdlElement name='Destination' type='string'/>
+		<EsdlElement name='EventTag' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='ECLJob' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Graph' type='string'/>
+		<EsdlElement name='State' type='string'/>
+		<EsdlElement name='StartedDate' type='string'/>
+		<EsdlElement name='FinishedDate' type='string'/>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='GraphNum' type='string' min_ver='1.06'/>
+		<EsdlElement name='SubGraphNum' type='string' min_ver='1.06'/>
+		<EsdlElement name='NumOfRuns' type='string' min_ver='1.06'/>
+		<EsdlElement name='Duration' type='int' min_ver='1.06'/>
+	</EsdlStruct>
+	<EsdlStruct name='ThorQueue' nil_remove='1'>
+		<EsdlElement name='DT' type='string'/>
+		<EsdlElement name='RunningWUs' type='string'/>
+		<EsdlElement name='QueuedWUs' type='string'/>
+		<EsdlElement name='WaitingThors' type='string'/>
+		<EsdlElement name='ConnectedThors' type='string'/>
+		<EsdlElement name='IdledThors' type='string'/>
+		<EsdlElement name='RunningWU1' type='string'/>
+		<EsdlElement name='RunningWU2' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='ResubmittedWU' nil_remove='1'>
+		<EsdlElement name='WUID' type='string'/>
+		<EsdlElement name='ParentWUID' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUFileOption'>
+		<EsdlEnum name='FileType' enum_type='WUFileType'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='IPAddress' type='string'/>
+		<EsdlElement name='Description' type='string'/>
+		<EsdlElement name='Process' type='string'/>
+		<EsdlElement name='LogDate' type='string'/>
+		<EsdlElement name='ClusterGroup' type='string'/>
+		<EsdlElement name='PlainText' type='string'/>
+		<EsdlElement name='SlaveNumber' type='int' default='1'/>
+		<EsdlElement name='SizeLimit' type='int64' default='0'/>
+	</EsdlStruct>
+	<EsdlStruct name='ScheduledWU' nil_remove='1'>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Cluster' type='string' default=''/>
+		<EsdlElement name='EventName' type='string' default=''/>
+		<EsdlElement name='EventText' type='string' default=''/>
+		<EsdlElement name='JobName' type='string' default=''/>
+		<EsdlElement name='StateID' type='int' min_ver='1.51'/>
+		<EsdlElement name='State' type='string' default='' min_ver='1.51'/>
+		<EsdlElement name='Owner' type='string' default='' min_ver='1.51'/>
+	</EsdlStruct>
+	<EsdlStruct name='ServerInfo' nil_remove='1'>
+		<EsdlElement name='Name' type='string' default=''/>
+		<EsdlElement name='NetAddress' type='string' default=''/>
+	</EsdlStruct>
+	<EsdlStruct name='WULogicalFileCopyInfo'>
+		<EsdlElement name='IsIndex' type='bool'/>
+		<EsdlElement name='LogicalName' type='string'/>
+		<EsdlElement name='DfuCopyWuid' type='string'/>
+		<EsdlElement name='DfuCopyError' type='string'/>
+		<EsdlArray name='Clusters'  type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUCopyLogicalClusterFileSections'>
+		<EsdlElement name='ClusterName' type='string'/>
+		<EsdlArray name='OnCluster'  type='WULogicalFileCopyInfo'/>
+		<EsdlArray name='NotOnCluster'  type='WULogicalFileCopyInfo'/>
+		<EsdlArray name='Foreign'  type='WULogicalFileCopyInfo'/>
+		<EsdlArray name='NotFound'  type='WULogicalFileCopyInfo'/>
+	</EsdlStruct>
+	<EsdlStruct name='QuerySet'>
+		<EsdlElement name='QuerySetName' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='ClusterQueryState'>
+		<EsdlElement name='Cluster' type='string'/>
+		<EsdlElement name='State' type='string'/>
+		<EsdlElement name='Errors' type='string' min_ver='1.46'/>
+		<EsdlElement name='MixedNodeStates' type='bool' min_ver='1.47'/>
+	</EsdlStruct>
+	<EsdlStruct name='QuerySetQuery' nil_remove='1'>
+		<EsdlElement name='Id' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Wuid' type='string'/>
+		<EsdlElement name='Dll' type='string'/>
+		<EsdlElement name='Suspended' type='bool'/>
+		<EsdlArray name='Clusters'  type='ClusterQueryState'/>
+		<EsdlElement name='memoryLimit' type='string'/>
+		<EsdlElement name='timeLimit' type='nonNegativeInteger'/>
+		<EsdlElement name='warnTimeLimit' type='nonNegativeInteger'/>
+		<EsdlElement name='priority' type='string'/>
+		<EsdlElement name='Comment' type='string'/>
+		<EsdlElement name='QuerySetId' type='string' min_ver='1.45'/>
+		<EsdlElement name='IsLibrary' type='bool' min_ver='1.46'/>
+		<EsdlElement name='Activated' type='bool' min_ver='1.46'/>
+		<EsdlElement name='PublishedBy' type='string' min_ver='1.46'/>
+		<EsdlElement name='snapshot' type='string' min_ver='1.48'/>
+		<EsdlElement name='PriorityID' type='int' min_ver='1.83'/>
+	</EsdlStruct>
+	<EsdlStruct name='QuerySetAlias'>
+		<EsdlElement name='Id' type='string'/>
+		<EsdlElement name='Name' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='QueryUsingFile' nil_remove='1'>
+		<EsdlElement name='Id' type='string'/>
+		<EsdlElement name='Package' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='TargetQueriesUsingFile' nil_remove='1'>
+		<EsdlElement name='Target' type='string'/>
+		<EsdlElement name='PackageMap' type='string'/>
+		<EsdlArray name='Queries'  type='QueryUsingFile'/>
+	</EsdlStruct>
+	<EsdlStruct name='FileUsedByQuery' nil_remove='1'>
+		<EsdlElement name='FileName' type='string'/>
+		<EsdlElement name='FileSize' type='int64'/>
+		<EsdlElement name='NumberOfParts' type='unsigned'/>
+	</EsdlStruct>
+	<EsdlStruct name='QuerySuperFile'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlArray name='SubFiles'  type='string' item_tag='File'/>
+		<EsdlArray name='SuperFiles'  type='QuerySuperFile' item_tag='SuperFile' min_ver='1.57'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUQuerySetDetail'>
+		<EsdlElement name='QuerySetName' type='string'/>
+		<EsdlArray name='Queries'  type='QuerySetQuery'/>
+		<EsdlArray name='Aliases'  type='QuerySetAlias'/>
+	</EsdlStruct>
+	<EsdlStruct name='QuerySetQueryClientState'>
+		<EsdlElement name='Suspended' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='QuerySetQueryActionItem'>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='ClientState' complex_type='QuerySetQueryClientState'/>
+	</EsdlStruct>
+	<EsdlStruct name='QuerySetQueryActionResult'>
+		<EsdlElement name='QueryId' type='string'/>
+		<EsdlElement name='Suspended' type='bool'/>
+		<EsdlElement name='Success' type='bool'/>
+		<EsdlElement name='Code' type='int'/>
+		<EsdlElement name='Message' type='string'/>
+	</EsdlStruct>
+	<EsdlEnumType name='QuerySetAliasActionTypes' base_type='string'>
+		<EsdlEnumItem name='Deactivate' enum='Deactivate'/>
+	</EsdlEnumType>
+	<EsdlStruct name='QuerySetAliasActionItem'>
+		<EsdlElement name='Name' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='QuerySetAliasActionResult'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Success' type='bool'/>
+		<EsdlElement name='Code' type='int'/>
+		<EsdlElement name='Message' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='DeploymentFeatures'>
+		<EsdlElement name='UseCompression' type='bool'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUStatisticItem' nil_remove='1'>
+		<EsdlElement name='Creator' type='string'/>
+		<EsdlElement name='CreatorType' type='string'/>
+		<EsdlElement name='Scope' type='string'/>
+		<EsdlElement name='ScopeType' type='string'/>
+		<EsdlElement name='Description' type='string'/>
+		<EsdlElement name='TimeStamp' type='string'/>
+		<EsdlElement name='Measure' type='string'/>
+		<EsdlElement name='Kind' type='string'/>
+		<EsdlElement name='Value' type='string'/>
+		<EsdlElement name='RawValue' type='int64'/>
+		<EsdlElement name='Count' type='int64'/>
+		<EsdlElement name='Max' type='int64'/>
+		<EsdlElement name='Wuid' type='string' min_ver='1.62'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUArchiveFile' nil_remove='1'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='Key' type='string'/>
+		<EsdlElement name='SourcePath' type='string'/>
+		<EsdlElement name='Path' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUArchiveModule' nil_remove='1'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='FullName' type='string'/>
+		<EsdlElement name='Flags' type='unsigned'/>
+		<EsdlElement name='Key' type='string'/>
+		<EsdlElement name='Plugin' type='string'/>
+		<EsdlElement name='SourcePath' type='string'/>
+		<EsdlElement name='Version' type='string'/>
+		<EsdlElement name='Path' type='string'/>
+		<EsdlArray name='ArchiveModules'  type='WUArchiveModule' item_tag='ArchiveModule'/>
+		<EsdlArray name='Files'  type='WUArchiveFile' item_tag='File'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUPropertyFilter'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='ExactValue' type='string' optional='1'/>
+		<EsdlElement name='MinValue' type='string' optional='1'/>
+		<EsdlElement name='MaxValue' type='string' optional='1'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUScopeFilter'>
+		<EsdlElement name='MaxDepth' type='integer' default='9999' optional='1'/>
+		<EsdlArray name='Scopes'  type='string' item_tag='Scope' optional='1'/>
+		<EsdlArray name='Ids'  type='string' item_tag='id' optional='1'/>
+		<EsdlArray name='ScopeTypes'  type='string' item_tag='ScopeType' optional='1'/>
+		<EsdlArray name='PropertyFilters'  type='WUPropertyFilter' item_tag='PropertyFilter' optional='1'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUNestedFilter'>
+		<EsdlElement name='Depth' type='unsigned' default='9999' optional='1'/>
+		<EsdlArray name='ScopeTypes'  type='string' item_tag='ScopeType' optional='1'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUExtraProperties'>
+		<EsdlElement name='scopeType' type='string'/>
+		<EsdlArray name='Properties'  type='string' item_tag='Property' optional='1'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUPropertiesToReturn'>
+		<EsdlElement name='AllStatistics' type='bool' default='0'/>
+		<EsdlElement name='AllAttributes' type='bool' default='0'/>
+		<EsdlElement name='AllHints' type='bool' default='0'/>
+		<EsdlElement name='AllScopes' type='bool' default='0'/>
+		<EsdlElement name='AllProperties' type='bool' default='0'/>
+		<EsdlElement name='AllNotes' type='bool' default='0' min_ver='1.76'/>
+		<EsdlElement name='MinVersion' type='uint64' optional='1'/>
+		<EsdlElement name='Measure' type='string' optional='1'/>
+		<EsdlArray name='Properties'  type='string' item_tag='Property' optional='1'/>
+		<EsdlArray name='ExtraProperties'  type='WUExtraProperties' item_tag='Extra' optional='1'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUScopeOptions'>
+		<EsdlElement name='IncludeMatchedScopesInResults' type='bool' default='1'/>
+		<EsdlElement name='IncludeScope' type='bool' default='1'/>
+		<EsdlElement name='IncludeId' type='bool' default='0'/>
+		<EsdlElement name='IncludeScopeType' type='bool' default='0'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUPropertyOptions'>
+		<EsdlElement name='IncludeName' type='bool' default='1'/>
+		<EsdlElement name='IncludeRawValue' type='bool' default='0'/>
+		<EsdlElement name='IncludeFormatted' type='bool' default='1'/>
+		<EsdlElement name='IncludeMeasure' type='bool' default='1'/>
+		<EsdlElement name='IncludeCreator' type='bool' default='0'/>
+		<EsdlElement name='IncludeCreatorType' type='bool' default='0'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUResponseProperty' nil_remove='1'>
+		<EsdlElement name='Name' type='string' optional='1'/>
+		<EsdlElement name='RawValue' type='string' optional='1'/>
+		<EsdlElement name='Formatted' type='string' optional='1'/>
+		<EsdlElement name='Measure' type='string' optional='1'/>
+		<EsdlElement name='Creator' type='string' optional='1'/>
+		<EsdlElement name='CreatorType' type='string' optional='1'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUResponseNote' nil_remove='1'>
+		<EsdlElement name='Source' type='string' optional='1'/>
+		<EsdlElement name='Message' type='string' optional='1'/>
+		<EsdlElement name='ErrorCode' type='nonNegativeInteger' optional='1'/>
+		<EsdlElement name='Severity' type='string' optional='1'/>
+		<EsdlElement name='Cost' type='nonNegativeInteger' optional='1'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUResponseScope' nil_remove='1'>
+		<EsdlElement name='ScopeName' type='string' optional='1'/>
+		<EsdlElement name='Id' type='string' optional='1'/>
+		<EsdlElement name='ScopeType' type='string' optional='1'/>
+		<EsdlArray name='Properties'  type='WUResponseProperty' item_tag='Property' optional='1'/>
+		<EsdlArray name='Notes'  type='WUResponseNote' item_tag='Note' min_ver='1.76' optional='1'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUQueryConfigResult'>
+		<EsdlElement name='QueryId' type='string'/>
+	</EsdlStruct>
+	<EsdlEnumType name='WUDetailsAttrValueType' base_type='string'>
+		<EsdlEnumItem name='Single' enum='Single'/>
+		<EsdlEnumItem name='List' enum='List'/>
+		<EsdlEnumItem name='Multi' enum='Multi'/>
+	</EsdlEnumType>
+	<EsdlStruct name='WUDetailsMetaProperty'>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlEnum name='ValueType' enum_type='WUDetailsAttrValueType'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUDetailsActivityInfo'>
+		<EsdlElement name='Kind' type='unsigned'/>
+		<EsdlElement name='Name' type='string'/>
+		<EsdlElement name='IsSink' type='boolean'/>
+		<EsdlElement name='IsSource' type='boolean'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUEclDefinitionActionResult' nil_remove='1'>
+		<EsdlElement name='EclDefinition' type='string'/>
+		<EsdlElement name='Action' type='string'/>
+		<EsdlElement name='WUID' type='string'/>
+		<EsdlElement name='QueryID' type='string'/>
+		<EsdlElement name='Result' type='string'/>
+	</EsdlStruct>
+	<EsdlStruct name='WUEclPluginsInFolder'>
+		<EsdlElement name='Path' type='string'/>
+		<EsdlArray name='Plugins'  type='string' item_tag='Plugin'/>
+	</EsdlStruct>
+</esxdl>
