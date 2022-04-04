@@ -1506,7 +1506,7 @@
     <xsl:template name="showOptionalSupscript">
       <xsl:param name="optional" select="''"/>
       <!-- optional starts with _ is deeemed as implementation specific and don't show it -->
-      <xsl:if test="$optional and substring($optional,1,1)!='_' and substring($optional,1,2)!='!_'">
+      <xsl:if test="false() and $optional and substring($optional,1,1)!='_' and substring($optional,1,2)!='!_'">
         <xsl:text><![CDATA[<sup style='color:red'>]]></xsl:text>
         <xsl:value-of select="$optional"/>
         <xsl:text><![CDATA[</sup>]]></xsl:text>

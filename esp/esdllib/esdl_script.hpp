@@ -71,6 +71,7 @@ inline bool isEmptyTransformSet(IEsdlTransformSet *set)
 #define ESDLScriptEntryPoint_BackendResponse "BackendResponse"
 #define ESDLScriptEntryPoint_ScriptedService "Service"
 #define ESDLScriptEntryPoint_InitialEsdlResponse "EsdlResponse"
+#define ESDLScriptEntryPoint_FinalResponse "FinalResponse"
 #define ESDLScriptEntryPoint_PreLogging "PreLogging"
 
 interface IEsdlTransformEntryPointMap : extends IInterface

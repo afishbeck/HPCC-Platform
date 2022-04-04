@@ -1,0 +1,87 @@
+<esxdl name="custom" EsdlXslTypeId="0"
+    xmlns:tns="urn:hpccsystems:ws:multiecl:multi(queryfiles,queryset)@ver=1.88" ns_uri="urn:hpccsystems:ws:multiecl:multi(queryfiles,queryset)@ver=1.88">
+    <EsdlStruct name="MultiProductsStruct">
+        <EsdlElement type="bool" default="0" optional="queryfiles" name="QueryFiles"/>
+        <EsdlElement type="bool" default="0" optional="queryset" name="QuerysetDetails"/>
+    </EsdlStruct>
+    <EsdlRequest name="MultiRequest">
+        <EsdlElement type="string" name="Target"/>
+        <EsdlElement type="string" name="QueryId"/>
+        <EsdlElement type="string" name="ClusterName"/>
+        <EsdlElement name="Products" complex_type="MultiProductsStruct"/>
+    </EsdlRequest>
+    <EsdlStruct nil_remove="1" name="FileUsedByQuery">
+        <EsdlElement type="string" name="FileName"/>
+        <EsdlElement type="int64" name="FileSize"/>
+        <EsdlElement type="unsigned" name="NumberOfParts"/>
+    </EsdlStruct>
+    <EsdlStruct name="QuerySuperFile">
+        <EsdlElement type="string" name="Name"/>
+        <EsdlArray item_tag="File" type="string" name="SubFiles"/>
+        <EsdlArray item_tag="SuperFile" type="QuerySuperFile" min_ver="1.57" name="SuperFiles"/>
+    </EsdlStruct>
+    <EsdlStruct exceptions_inline="1" name="QueryFilesUsed">
+        <EsdlElement type="string" name="QueryId"/>
+        <EsdlArray item_tag="File" type="FileUsedByQuery" name="Files"/>
+        <EsdlArray item_tag="SuperFile" type="QuerySuperFile" name="SuperFiles"/>
+    </EsdlStruct>
+    <EsdlStruct name="WUQueryFilesResult">
+        <EsdlArray item_tag="File" type="FileUsedByQuery" name="Files"/>
+        <EsdlArray item_tag="SuperFile" type="QuerySuperFile" name="SuperFiles"/>
+        <EsdlArray item_tag="Query" type="QueryFilesUsed" name="Queries"/>
+    </EsdlStruct>
+    <EsdlStruct name="ClusterQueryState" arrayOf="1" arrayOf="1">
+        <EsdlElement type="string" name="Cluster"/>
+        <EsdlElement type="string" name="State"/>
+        <EsdlElement type="string" min_ver="1.46" name="Errors"/>
+        <EsdlElement type="bool" min_ver="1.47" name="MixedNodeStates"/>
+    </EsdlStruct>
+    <EsdlStruct nil_remove="1" name="QuerySetQuery" arrayOf="1" arrayOf="1">
+        <EsdlElement type="string" name="Id"/>
+        <EsdlElement type="string" name="Name"/>
+        <EsdlElement type="string" name="Wuid"/>
+        <EsdlElement type="string" name="Dll"/>
+        <EsdlElement type="bool" name="Suspended"/>
+        <EsdlArray type="ClusterQueryState" name="Clusters"/>
+        <EsdlElement type="string" name="memoryLimit"/>
+        <EsdlElement type="nonNegativeInteger" name="timeLimit"/>
+        <EsdlElement type="nonNegativeInteger" name="warnTimeLimit"/>
+        <EsdlElement type="string" name="priority"/>
+        <EsdlElement type="string" name="Comment"/>
+        <EsdlElement type="string" min_ver="1.45" name="QuerySetId"/>
+        <EsdlElement type="bool" min_ver="1.46" name="IsLibrary"/>
+        <EsdlElement type="bool" min_ver="1.46" name="Activated"/>
+        <EsdlElement type="string" min_ver="1.46" name="PublishedBy"/>
+        <EsdlElement type="string" min_ver="1.48" name="snapshot"/>
+        <EsdlElement type="int" min_ver="1.83" name="PriorityID"/>
+    </EsdlStruct>
+    <EsdlStruct name="QuerySetAlias" arrayOf="1" arrayOf="1">
+        <EsdlElement type="string" name="Id"/>
+        <EsdlElement type="string" name="Name"/>
+    </EsdlStruct>
+    <EsdlEnumType name="WUQuerySetFilterType" base_type="string">
+        <EsdlEnumItem enum="All" name="ALL"/>
+        <EsdlEnumItem enum="Id" name="ID"/>
+        <EsdlEnumItem enum="Name" name="NAME"/>
+        <EsdlEnumItem enum="Alias" name="ALIAS"/>
+        <EsdlEnumItem enum="Status" name="STATUS"/>
+    </EsdlEnumType>
+    <EsdlStruct name="WUQuerySetDetailsResult" espStringArray="1">
+        <EsdlElement type="string" name="QuerySetName"/>
+        <EsdlArray type="QuerySetQuery" name="QuerysetQueries"/>
+        <EsdlArray type="QuerySetAlias" name="QuerysetAliases"/>
+        <EsdlElement type="string" min_ver="1.37" name="ClusterName"/>
+        <EsdlElement type="string" min_ver="1.37" name="Filter"/>
+        <EsdlEnum enum_type="WUQuerySetFilterType" min_ver="1.37" name="FilterType"/>
+        <EsdlArray type="string" min_ver="1.37" name="ClusterNames"/>
+    </EsdlStruct>
+    <EsdlResponse name="MultiResponse">
+        <EsdlElement optional="queryfiles" name="QueryFiles" complex_type="WUQueryFilesResult"/>
+        <EsdlElement optional="queryset" name="QuerySetDetails" complex_type="WUQuerySetDetailsResult"/>
+    </EsdlResponse>
+    <EsdlMethod response_type="MultiResponse" request_type="MultiRequest" name="Multi"/>
+
+    <EsdlService version="1.88" auth_feature="DEFERRED" name="MultiECL" default_client_version="1.88" use_method_name="1">
+        <EsdlMethod response_type="MultiResponse" request_type="MultiRequest" name="Multi"/>
+    </EsdlService>
+</esxdl>

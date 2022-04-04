@@ -1585,7 +1585,7 @@ static void updateTransformFlags(EsdlProcessMode mode, IEsdlDefMethod *mthdef, I
     }
 }
 
-int Esdl2Transformer::process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &out, const char *in, unsigned int flags, const char *ns, const char *schema_location)
+int Esdl2Transformer::process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &out, const char *in, unsigned int flags, const char *ns, const char *schema_location, XMLWriterType wt)
 {
     int rc = 0;
     IEsdlMethodInfo *mi = queryMethodInfo(service,method);
@@ -1620,7 +1620,7 @@ int Esdl2Transformer::process(IEspContext &ctx, EsdlProcessMode mode, const char
         XmlPullParser xppx(in, strlen(in)+1);
         if (gotoStartTag(xppx, root->queryName(), "Results"))
         {
-            Owned<IXmlWriterExt> respWriter = createIXmlWriterExt(0, 0, NULL, WTStandard);
+            Owned<IXmlWriterExt> respWriter = createIXmlWriterExt(0, 0, NULL, wt);
             Esdl2TransformerContext tctx(*this, respWriter, xppx, ctx.getClientVersion(), param_groups, mode, 0, ns,schema_location);
 
             tctx.flags = flags;
@@ -1637,11 +1637,20 @@ int Esdl2Transformer::process(IEspContext &ctx, EsdlProcessMode mode, const char
                     out.set(respWriter->str());
                 else
                 {
-                    OwnedPTree req = createPTreeFromXMLString(respWriter->str(), false);
+                    //tbd - replace this code
+                    OwnedPTree req;
+                    if (wt==WTJSONObject)
+                        req.setown(createPTreeFromJSONString(respWriter->str(), 0));
+                    else
+                        req.setown(createPTreeFromXMLString(respWriter->str(), 0));
                     if (!req.get())
                         req.setown(createPTree(root_type,false));
                     rootreq->addDefaults(req);
-                    toXML(req.get(), out.clear());
+
+                    if (wt==WTJSONObject)
+                        toJSON(req.get(), out.clear());
+                    else
+                        toXML(req.get(), out.clear());
                 }
             }
         }

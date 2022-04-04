@@ -379,6 +379,37 @@ static void logOptionExistsFunction (xmlXPathParserContextPtr ctxt, int nargs)
 }
 
 /**
+ * strToBool
+ * @ctxt:  an XPath parser context
+ * @nargs:  the number of arguments
+ *
+ */
+static void strToBoolFunction (xmlXPathParserContextPtr ctxt, int nargs)
+{
+    IEsdlScriptContext *scriptContext = getEsdlScriptContext(ctxt);
+    if (!scriptContext)
+    {
+        xmlXPathSetError((ctxt), XPATH_INVALID_CTXT);
+        return;
+    }
+
+    if (nargs != 1)
+    {
+        xmlXPathSetArityError(ctxt);
+        return;
+    }
+
+    xmlChar *boolstring = xmlXPathPopString(ctxt);
+    if (xmlXPathCheckError(ctxt)) //includes null check
+        return;
+
+    bool value = strToBool((const char *)boolstring);
+    xmlFree(boolstring);
+
+    xmlXPathReturnBoolean(ctxt, (!value) ? 0 : 1);
+}
+
+/**
  * storedValueExistsFunction
  * @ctxt:  an XPath parser context
  * @nargs:  the number of arguments
@@ -485,6 +516,7 @@ void registerEsdlXPathExtensionsForURI(IXpathContext *xpathContext, const char *
     xpathContext->registerFunction(uri, "getLogOption", (void *)getLogOptionFunction);
     xpathContext->registerFunction(uri, "logOptionExists", (void *)logOptionExistsFunction);
     xpathContext->registerFunction(uri, "tokenize", (void *)strTokenizeFunction);
+    xpathContext->registerFunction(uri, "strToBool", (void *)strToBoolFunction);
 }
 
 void registerEsdlXPathExtensions(IXpathContext *xpathContext, IEsdlScriptContext *context, const StringArray &prefixes)

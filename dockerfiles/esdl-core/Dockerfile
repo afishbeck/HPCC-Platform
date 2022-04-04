@@ -17,6 +17,6 @@
 
 # A version of the platform-core Dockerfile that keeps all the build artefacts in place, for use by developers wanting to debug the platform
 
-FROM hpccsystems/platform-core:f6c217cb16-Debug-dirty-c48028e36ddb6abcb0f96122c5e65fa2
+FROM hpccsystems/platform-core:49fa7e7c53-Debug-dirty-4ff8124698a2eb8112707f3527571d7d
 
 ADD multi-binding.xml /opt/HPCCSystems/bindings/multi-binding.xml

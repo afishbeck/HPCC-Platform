@@ -22,6 +22,7 @@
 #include "soapesp.hpp"
 #include "ws_ecl_client.hpp"
 #include "esdl_def.hpp"
+#include "rtlformat.hpp"
 
 typedef  enum EsdlProcessMode_
 {
@@ -58,7 +59,7 @@ interface IXmlWriterExt;
 interface IEsdlTransformer : extends IInterface
 {
     virtual IEsdlMethodInfo *queryMethodInfo(const char* service, const char *method)=0;
-    virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &xmlout, const char *xmlin, unsigned int flags=0, const char *ns=NULL, const char *schema_location=NULL)=0;
+    virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &xmlout, const char *xmlin, unsigned int flags=0, const char *ns=NULL, const char *schema_location=NULL, XMLWriterType wt = WTStandard)=0;
     virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, IPropertyTree &in, IXmlWriterExt * writer, unsigned int flags, const char *ns=NULL)=0;
     virtual int processElement(IEspContext &ctx, const char* service, const char *parentStructName, IXmlWriterExt * writer, const char *xmlin)=0;
     virtual void processHPCCResult(IEspContext &ctx, IEsdlDefMethod &mthdef, const char *xml, IXmlWriterExt * writer, StringBuffer &logdata, unsigned int flags = 0, const char *ns=NULL, const char *schema_location=NULL)=0;

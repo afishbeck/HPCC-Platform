@@ -1,11 +1,22 @@
 <EsdlBundle>
   <Binding espbinding="esdl_binding" espprocess="esdl" id="esdl.multidemo">
-    <Definition esdlservice="MultiDemo" id="MultiDemo.1" name="MultiDemo">
+    <Definition esdlservice="MultiECL" id="MultiECL.1" name="MultiECL">
       <LogTransforms/>
       <Methods>
         <Method name="Multi" querytype="script">
-          <xsdl:Service>
-          </xsdl:Service>
+          <Scripts>
+<![CDATA[
+          <Scripts xmlns:es='urn:hpcc:esdl:script'>
+            <es:Service>
+                <es:set-value target="abc" value="'xyz'"/>
+            </es:Service>
+            <es:FinalResponse target="soap:Body/MultiResponse">
+                <es:set-value target="req" select="getDataSection('esdl_request')"/>
+                <es:set-value target="def" value="'ghi'"/>
+            </es:FinalResponse>
+          </Scripts>
+]]>
+          </Scripts>
         </Method>
       </Methods>
     </Definition>
@@ -53,13 +64,13 @@
         <EsdlArray item_tag="SuperFile" type="QuerySuperFile" name="SuperFiles"/>
         <EsdlArray item_tag="Query" type="QueryFilesUsed" name="Queries"/>
     </EsdlStruct>
-    <EsdlStruct name="ClusterQueryState" arrayOf="1">
+    <EsdlStruct name="ClusterQueryState">
         <EsdlElement type="string" name="Cluster"/>
         <EsdlElement type="string" name="State"/>
         <EsdlElement type="string" min_ver="1.46" name="Errors"/>
         <EsdlElement type="bool" min_ver="1.47" name="MixedNodeStates"/>
     </EsdlStruct>
-    <EsdlStruct nil_remove="1" name="ECLGraph" arrayOf="1">
+    <EsdlStruct nil_remove="1" name="ECLGraph">
         <EsdlElement type="string" name="Name"/>
         <EsdlElement type="string" name="Label"/>
         <EsdlElement type="string" name="Type"/>
@@ -70,7 +81,7 @@
         <EsdlElement type="string" min_ver="1.53" name="WhenStarted"/>
         <EsdlElement type="string" min_ver="1.53" name="WhenFinished"/>
     </EsdlStruct>
-    <EsdlStruct nil_remove="1" name="ECLTimer" arrayOf="1">
+    <EsdlStruct nil_remove="1" name="ECLTimer">
         <EsdlElement type="string" name="Name"/>
         <EsdlElement type="string" name="Value"/>
         <EsdlElement type="int" name="count"/>
@@ -79,7 +90,7 @@
         <EsdlElement type="int64" min_ver="1.72" name="Timestamp"/>
         <EsdlElement type="string" min_ver="1.72" name="When"/>
     </EsdlStruct>
-    <EsdlStruct name="WUQueryDetailsResult" espStringArray="1">
+    <EsdlStruct name="WUQueryDetailsResult">
         <EsdlElement type="string" name="QueryId"/>
         <EsdlElement type="string" name="QuerySet"/>
         <EsdlElement type="string" name="QueryName"/>
@@ -105,7 +116,7 @@
         <EsdlArray type="ECLGraph" min_ver="1.64" name="WUGraphs"/>
         <EsdlArray type="ECLTimer" min_ver="1.64" name="WUTimers"/>
     </EsdlStruct>
-    <EsdlStruct nil_remove="1" name="QuerySetQuery" arrayOf="1">
+    <EsdlStruct nil_remove="1" name="QuerySetQuery">
         <EsdlElement type="string" name="Id"/>
         <EsdlElement type="string" name="Name"/>
         <EsdlElement type="string" name="Wuid"/>
@@ -124,7 +135,7 @@
         <EsdlElement type="string" min_ver="1.48" name="snapshot"/>
         <EsdlElement type="int" min_ver="1.83" name="PriorityID"/>
     </EsdlStruct>
-    <EsdlStruct name="QuerySetAlias" arrayOf="1">
+    <EsdlStruct name="QuerySetAlias">
         <EsdlElement type="string" name="Id"/>
         <EsdlElement type="string" name="Name"/>
     </EsdlStruct>

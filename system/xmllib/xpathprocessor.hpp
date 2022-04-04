@@ -142,6 +142,7 @@ extern "C" XMLLIB_API IXpathContext*  getXpathContext(const char * xmldoc, bool 
 #define ESDLScriptCtxSection_PreESDLResponse "pre_esdl_response"
 #define ESDLScriptCtxSection_InitialESDLResponse "initial_esdl_response"
 #define ESDLScriptCtxSection_ModifiedESDLResponse "modified_esdl_response"
+#define ESDLScriptCtxSection_FinalResponse "final_response"
 #define ESDLScriptCtxSection_ScriptRequest "script_request"
 #define ESDLScriptCtxSection_ScriptResponse "script_response"
 

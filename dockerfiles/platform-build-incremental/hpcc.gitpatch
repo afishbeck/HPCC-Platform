@@ -1,0 +1,370 @@
+diff --git a/esp/applications/dfs/esp.yaml b/esp/applications/dfs/esp.yaml
+index 120c6bb828..883ef65a8c 100644
+--- a/esp/applications/dfs/esp.yaml
++++ b/esp/applications/dfs/esp.yaml
+@@ -10,6 +10,7 @@ esp:
+    enableSEHMapping: true
+    httpConfigAccess: true
+    logLevel: 1
++   maxRequestEntityLength: 80000000
+    maxBacklogQueueSize: 200
+    portalurl: http://hpccsystems.com/download
+    logDir: "-"
+diff --git a/esp/applications/eclqueries/esp.yaml b/esp/applications/eclqueries/esp.yaml
+index 8e17ee24c3..16b70f4e4c 100644
+--- a/esp/applications/eclqueries/esp.yaml
++++ b/esp/applications/eclqueries/esp.yaml
+@@ -10,6 +10,7 @@ esp:
+    enableSEHMapping: true
+    httpConfigAccess: true
+    logLevel: 1
++   maxRequestEntityLength: 80000000
+    maxBacklogQueueSize: 200
+    portalurl: http://hpccsystems.com/download
+    logDir: "-"
+diff --git a/esp/applications/eclservices/esp.yaml b/esp/applications/eclservices/esp.yaml
+index dafbd0e05b..57550086b9 100644
+--- a/esp/applications/eclservices/esp.yaml
++++ b/esp/applications/eclservices/esp.yaml
+@@ -11,6 +11,7 @@ esp:
+    enableSEHMapping: true
+    httpConfigAccess: true
+    logLevel: 1
++   maxRequestEntityLength: 80000000
+    maxBacklogQueueSize: 200
+    portalurl: http://hpccsystems.com/download
+    logDir: "-"
+diff --git a/esp/applications/eclwatch/esp.yaml b/esp/applications/eclwatch/esp.yaml
+index d84db89f6c..58cd0b2600 100644
+--- a/esp/applications/eclwatch/esp.yaml
++++ b/esp/applications/eclwatch/esp.yaml
+@@ -10,6 +10,7 @@ esp:
+    enableSEHMapping: true
+    httpConfigAccess: true
+    logLevel: 1
++   maxRequestEntityLength: 1000000000
+    maxBacklogQueueSize: 200
+    portalurl: http://hpccsystems.com/download
+    logDir: "-"
+diff --git a/esp/applications/esdl-sandbox/esp.yaml b/esp/applications/esdl-sandbox/esp.yaml
+index 5ba16a7fe3..ad22a5fc9a 100644
+--- a/esp/applications/esdl-sandbox/esp.yaml
++++ b/esp/applications/esdl-sandbox/esp.yaml
+@@ -10,6 +10,7 @@ esp:
+    enableSEHMapping: true
+    httpConfigAccess: true
+    logLevel: 1
++   maxRequestEntityLength: 80000000
+    maxBacklogQueueSize: 200
+    logDir: "-"
+ 
+diff --git a/esp/applications/esdl/esp.yaml b/esp/applications/esdl/esp.yaml
+index 21c18b4eb2..5074ae373a 100644
+--- a/esp/applications/esdl/esp.yaml
++++ b/esp/applications/esdl/esp.yaml
+@@ -11,6 +11,7 @@ esp:
+    enableSEHMapping: true
+    httpConfigAccess: true
+    logLevel: 1
++   maxRequestEntityLength: 80000000
+    maxBacklogQueueSize: 200
+    logDir: "-"
+ 
+diff --git a/esp/applications/loggingservice/esp.yaml b/esp/applications/loggingservice/esp.yaml
+index befa474108..ad5b2e978a 100644
+--- a/esp/applications/loggingservice/esp.yaml
++++ b/esp/applications/loggingservice/esp.yaml
+@@ -11,6 +11,7 @@ esp:
+    enableSEHMapping: true
+    httpConfigAccess: true
+    logLevel: 1
++   maxRequestEntityLength: 80000000
+    maxBacklogQueueSize: 200
+    logDir: "-"
+ 
+diff --git a/esp/applications/sql2ecl/esp.yaml b/esp/applications/sql2ecl/esp.yaml
+index d820195acb..d63ad341fc 100644
+--- a/esp/applications/sql2ecl/esp.yaml
++++ b/esp/applications/sql2ecl/esp.yaml
+@@ -10,6 +10,7 @@ esp:
+    enableSEHMapping: true
+    httpConfigAccess: true
+    logLevel: 1
++   maxRequestEntityLength: 80000000
+    maxBacklogQueueSize: 200
+    portalurl: http://hpccsystems.com/download
+    logDir: "-"
+diff --git a/esp/esdllib/esdl_script.cpp b/esp/esdllib/esdl_script.cpp
+index 22cf55541a..3a594fb9d7 100644
+--- a/esp/esdllib/esdl_script.cpp
++++ b/esp/esdllib/esdl_script.cpp
+@@ -2067,7 +2067,7 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
+ 
+     IEspContext *context = reinterpret_cast<IEspContext*>(scriptCtx->queryEspContext());
+ 
+-    if (level >= LogMax)
++    if (level >= LogMin)
+     {
+         StringBuffer logtxt;
+         scriptCtx->toXML(logtxt, srcSection, false);
+@@ -2076,6 +2076,8 @@ void processServiceAndMethodTransforms(IEsdlScriptContext * scriptCtx, std::init
+         DBGLOG("BINDING CONFIG: %s", logtxt.str());
+         scriptCtx->toXML(logtxt.clear(), ESDLScriptCtxSection_TargetConfig);
+         DBGLOG("TARGET CONFIG: %s", logtxt.str());
++        scriptCtx->toXML(logtxt.clear());
++        DBGLOG("SCRIPT CONTEXT: %s", logtxt.str());
+     }
+ 
+     bool strictParams = scriptCtx->getXPathBool("config/*/@strictParams", false);
+diff --git a/esp/esdllib/esdl_script.hpp b/esp/esdllib/esdl_script.hpp
+index 6a5a07ef7f..10521ac4c7 100644
+--- a/esp/esdllib/esdl_script.hpp
++++ b/esp/esdllib/esdl_script.hpp
+@@ -71,6 +71,7 @@ inline bool isEmptyTransformSet(IEsdlTransformSet *set)
+ #define ESDLScriptEntryPoint_BackendResponse "BackendResponse"
+ #define ESDLScriptEntryPoint_ScriptedService "Service"
+ #define ESDLScriptEntryPoint_InitialEsdlResponse "EsdlResponse"
++#define ESDLScriptEntryPoint_FinalResponse "FinalResponse"
+ #define ESDLScriptEntryPoint_PreLogging "PreLogging"
+ 
+ interface IEsdlTransformEntryPointMap : extends IInterface
+diff --git a/esp/esdllib/esdl_transformer.hpp b/esp/esdllib/esdl_transformer.hpp
+index a7afcc6da4..2b8479c75b 100644
+--- a/esp/esdllib/esdl_transformer.hpp
++++ b/esp/esdllib/esdl_transformer.hpp
+@@ -22,6 +22,7 @@
+ #include "soapesp.hpp"
+ #include "ws_ecl_client.hpp"
+ #include "esdl_def.hpp"
++#include "rtlformat.hpp"
+ 
+ typedef  enum EsdlProcessMode_
+ {
+@@ -58,7 +59,7 @@ interface IXmlWriterExt;
+ interface IEsdlTransformer : extends IInterface
+ {
+     virtual IEsdlMethodInfo *queryMethodInfo(const char* service, const char *method)=0;
+-    virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &xmlout, const char *xmlin, unsigned int flags=0, const char *ns=NULL, const char *schema_location=NULL)=0;
++    virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &xmlout, const char *xmlin, unsigned int flags=0, const char *ns=NULL, const char *schema_location=NULL, XMLWriterType wt = WTStandard)=0;
+     virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, IPropertyTree &in, IXmlWriterExt * writer, unsigned int flags, const char *ns=NULL)=0;
+     virtual int processElement(IEspContext &ctx, const char* service, const char *parentStructName, IXmlWriterExt * writer, const char *xmlin)=0;
+     virtual void processHPCCResult(IEspContext &ctx, IEsdlDefMethod &mthdef, const char *xml, IXmlWriterExt * writer, StringBuffer &logdata, unsigned int flags = 0, const char *ns=NULL, const char *schema_location=NULL)=0;
+diff --git a/esp/esdllib/esdl_transformer2.cpp b/esp/esdllib/esdl_transformer2.cpp
+index 744b7863a9..7b777d7f78 100644
+--- a/esp/esdllib/esdl_transformer2.cpp
++++ b/esp/esdllib/esdl_transformer2.cpp
+@@ -1585,7 +1585,7 @@ static void updateTransformFlags(EsdlProcessMode mode, IEsdlDefMethod *mthdef, I
+     }
+ }
+ 
+-int Esdl2Transformer::process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &out, const char *in, unsigned int flags, const char *ns, const char *schema_location)
++int Esdl2Transformer::process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &out, const char *in, unsigned int flags, const char *ns, const char *schema_location, XMLWriterType wt)
+ {
+     int rc = 0;
+     IEsdlMethodInfo *mi = queryMethodInfo(service,method);
+@@ -1620,7 +1620,7 @@ int Esdl2Transformer::process(IEspContext &ctx, EsdlProcessMode mode, const char
+         XmlPullParser xppx(in, strlen(in)+1);
+         if (gotoStartTag(xppx, root->queryName(), "Results"))
+         {
+-            Owned<IXmlWriterExt> respWriter = createIXmlWriterExt(0, 0, NULL, WTStandard);
++            Owned<IXmlWriterExt> respWriter = createIXmlWriterExt(0, 0, NULL, wt);
+             Esdl2TransformerContext tctx(*this, respWriter, xppx, ctx.getClientVersion(), param_groups, mode, 0, ns,schema_location);
+ 
+             tctx.flags = flags;
+@@ -1637,11 +1637,20 @@ int Esdl2Transformer::process(IEspContext &ctx, EsdlProcessMode mode, const char
+                     out.set(respWriter->str());
+                 else
+                 {
+-                    OwnedPTree req = createPTreeFromXMLString(respWriter->str(), false);
++                    //tbd - replace this code
++                    OwnedPTree req;
++                    if (wt==WTJSONObject)
++                        req.setown(createPTreeFromJSONString(respWriter->str(), 0));
++                    else
++                        req.setown(createPTreeFromXMLString(respWriter->str(), 0));
+                     if (!req.get())
+                         req.setown(createPTree(root_type,false));
+                     rootreq->addDefaults(req);
+-                    toXML(req.get(), out.clear());
++
++                    if (wt==WTJSONObject)
++                        toJSON(req.get(), out.clear());
++                    else
++                        toXML(req.get(), out.clear());
+                 }
+             }
+         }
+diff --git a/esp/esdllib/esdl_transformer2.ipp b/esp/esdllib/esdl_transformer2.ipp
+index 88a83d5920..00940eb666 100644
+--- a/esp/esdllib/esdl_transformer2.ipp
++++ b/esp/esdllib/esdl_transformer2.ipp
+@@ -503,7 +503,7 @@ public:
+     //NOT BEING USED ANYWHERE
+     //virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, IClientWsEclRequest &clReq, IEspStruct& r, REQUEST_HOOK* reqHook);
+ 
+-    virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &xmlout, const char *xmlin, unsigned int flags = 0, const char *ns=NULL, const char *schema_location=NULL);
++    virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, StringBuffer &xmlout, const char *xmlin, unsigned int flags = 0, const char *ns=NULL, const char *schema_location=NULL, XMLWriterType wt = WTStandard);
+     virtual int process(IEspContext &ctx, EsdlProcessMode mode, const char* service, const char *method, IPropertyTree &in, IXmlWriterExt * writer, unsigned int flags, const char *ns);
+     virtual int processElement(IEspContext &ctx, const char* service, const char *parentStructName, IXmlWriterExt * writer, const char *in);
+     virtual void processHPCCResult(IEspContext &ctx, IEsdlDefMethod &mthdef, const char *xml, IXmlWriterExt * writer, StringBuffer &logdata, unsigned int flags = 0, const char *ns=NULL, const char *schema_location=NULL);
+diff --git a/esp/esdllib/esdl_xpath_extensions_libxml.cpp b/esp/esdllib/esdl_xpath_extensions_libxml.cpp
+index cb66225e93..74b2939985 100644
+--- a/esp/esdllib/esdl_xpath_extensions_libxml.cpp
++++ b/esp/esdllib/esdl_xpath_extensions_libxml.cpp
+@@ -378,6 +378,37 @@ static void logOptionExistsFunction (xmlXPathParserContextPtr ctxt, int nargs)
+     xmlXPathReturnBoolean(ctxt, (!value) ? 0 : 1);
+ }
+ 
++/**
++ * strToBool
++ * @ctxt:  an XPath parser context
++ * @nargs:  the number of arguments
++ *
++ */
++static void strToBoolFunction (xmlXPathParserContextPtr ctxt, int nargs)
++{
++    IEsdlScriptContext *scriptContext = getEsdlScriptContext(ctxt);
++    if (!scriptContext)
++    {
++        xmlXPathSetError((ctxt), XPATH_INVALID_CTXT);
++        return;
++    }
++
++    if (nargs != 1)
++    {
++        xmlXPathSetArityError(ctxt);
++        return;
++    }
++
++    xmlChar *boolstring = xmlXPathPopString(ctxt);
++    if (xmlXPathCheckError(ctxt)) //includes null check
++        return;
++
++    bool value = strToBool((const char *)boolstring);
++    xmlFree(boolstring);
++
++    xmlXPathReturnBoolean(ctxt, (!value) ? 0 : 1);
++}
++
+ /**
+  * storedValueExistsFunction
+  * @ctxt:  an XPath parser context
+@@ -485,6 +516,7 @@ void registerEsdlXPathExtensionsForURI(IXpathContext *xpathContext, const char *
+     xpathContext->registerFunction(uri, "getLogOption", (void *)getLogOptionFunction);
+     xpathContext->registerFunction(uri, "logOptionExists", (void *)logOptionExistsFunction);
+     xpathContext->registerFunction(uri, "tokenize", (void *)strTokenizeFunction);
++    xpathContext->registerFunction(uri, "strToBool", (void *)strToBoolFunction);
+ }
+ 
+ void registerEsdlXPathExtensions(IXpathContext *xpathContext, IEsdlScriptContext *context, const StringArray &prefixes)
+diff --git a/esp/platform/application_config.cpp b/esp/platform/application_config.cpp
+index 5b18be0d90..b466efb811 100644
+--- a/esp/platform/application_config.cpp
++++ b/esp/platform/application_config.cpp
+@@ -264,12 +264,15 @@ void addService(IPropertyTree *legacyEsp, IPropertyTree *app, const char *applic
+     bindService(legacyEsp, app, service, protocol, netAddress, port, bindAuth, seq);
+ }
+ 
++static constexpr unsigned defaultMaxRequestEntityLengthMB = 1000;
++
+ bool addProtocol(IPropertyTree *legacyEsp, IPropertyTree *app)
+ {
++    int maxRequestEntityLength = app->getPropInt("@maxRequestEntityLength", defaultMaxRequestEntityLengthMB * 1000000);
+     bool useTls = app->getPropBool("@tls", true);
+     if (useTls)
+     {
+-        StringBuffer protocolXml("<EspProtocol name='https' type='secure_http_protocol' plugin='esphttp' maxRequestEntityLength='60000000'/>");
++        VStringBuffer protocolXml("<EspProtocol name='https' type='secure_http_protocol' plugin='esphttp' maxRequestEntityLength='%d'/>", maxRequestEntityLength);
+         IPropertyTree *protocol = legacyEsp->addPropTree("EspProtocol", createPTreeFromXMLString(protocolXml));
+         IPropertyTree *tls = app->queryPropTree("tls_config");
+         if (protocol && tls)
+@@ -292,7 +295,7 @@ bool addProtocol(IPropertyTree *legacyEsp, IPropertyTree *app)
+     }
+     else
+     {
+-        StringBuffer protocolXml("<EspProtocol name='http' type='http_protocol' plugin='esphttp' maxRequestEntityLength='60000000'/>");
++        VStringBuffer protocolXml("<EspProtocol name='http' type='http_protocol' plugin='esphttp' maxRequestEntityLength='%d'/>", maxRequestEntityLength);
+         legacyEsp->addPropTree("EspProtocol", createPTreeFromXMLString(protocolXml));
+     }
+     return useTls;
+diff --git a/esp/services/esdl_svc_engine/esdl_binding.cpp b/esp/services/esdl_svc_engine/esdl_binding.cpp
+index 938e57680f..c5535c9aa4 100755
+--- a/esp/services/esdl_svc_engine/esdl_binding.cpp
++++ b/esp/services/esdl_svc_engine/esdl_binding.cpp
+@@ -767,6 +767,7 @@ void EsdlServiceImpl::runPostEsdlScript(IEspContext &context,
+         IEsdlTransformSet *serviceIRTs = m_transforms->queryMethodEntryPoint("", ESDLScriptEntryPoint_InitialEsdlResponse);
+         IEsdlTransformSet *methodIRTs = m_transforms->queryMethodEntryPoint(mthdef.queryName(), ESDLScriptEntryPoint_InitialEsdlResponse);
+ 
++        bool modifiedESDLResponse = (serviceIRTs || methodIRTs);
+         if (serviceIRTs || methodIRTs)
+         {
+             scriptContext->setContent(ESDLScriptCtxSection_InitialESDLResponse, content.str());
+@@ -781,6 +782,23 @@ void EsdlServiceImpl::runPostEsdlScript(IEspContext &context,
+             m_pEsdlTransformer->process(context, EsdlResponseMode, srvdef.queryName(), mthdef.queryName(), out, content.str(), txResultFlags, ns, schema_location);
+             content.swapWith(out);
+         }
++
++        IEsdlTransformSet *serviceFRTs = m_transforms->queryMethodEntryPoint("", ESDLScriptEntryPoint_FinalResponse);
++        IEsdlTransformSet *methodFRTs = m_transforms->queryMethodEntryPoint(mthdef.queryName(), ESDLScriptEntryPoint_FinalResponse);
++
++        if (serviceFRTs || methodFRTs)
++        {
++            scriptContext->setContent(ESDLScriptCtxSection_FinalResponse, content.str());
++
++            context.addTraceSummaryTimeStamp(LogNormal, "srt-scriptfinalresp");
++            processServiceAndMethodTransforms(scriptContext, {serviceFRTs, methodFRTs}, (modifiedESDLResponse) ? ESDLScriptCtxSection_ModifiedESDLResponse : ESDLScriptCtxSection_InitialESDLResponse, ESDLScriptCtxSection_FinalResponse);
++            scriptContext->toXML(content.clear(), ESDLScriptCtxSection_FinalResponse);
++            context.addTraceSummaryTimeStamp(LogNormal, "end-scriptfinalresp");
++            
++            StringBuffer scriptCtxXML;
++            scriptContext->toXML(scriptCtxXML);
++            puts(scriptCtxXML.str());
++        }
+     }
+ 
+ }
+@@ -1078,7 +1096,7 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
+                 getSoapBody(out, origResp);
+             else
+             {
+-                m_pEsdlTransformer->process(context, EsdlResponseMode, srvdef.queryName(), mthdef.queryName(), out, origResp.str(), txResultFlags, ns, schema_location);
++                m_pEsdlTransformer->process(context, EsdlResponseMode, srvdef.queryName(), mthdef.queryName(), out, origResp.str(), txResultFlags, ns, schema_location, (flags & ESDL_BINDING_RESPONSE_JSON) ? WTJSONObjectRootless : WTStandard);
+                 runPostEsdlScript(context, scriptContext, srvdef, mthdef, out, txResultFlags, ns, schema_location);
+             }
+         }
+@@ -2599,6 +2617,10 @@ int EsdlBindingImpl::HandleSoapRequest(CHttpRequest* request,
+             Owned<IEsdlScriptContext> scriptContext;
+             m_pESDLService->handleServiceRequest(*ctx, scriptContext, *srvdef, *mthdef, tgtcfg, tgtctx, ns.str(), schemaLocation.str(), pt, baseout, logdata, origResp, soapmsg, 0);
+ 
++            StringBuffer sclog;
++            scriptContext->toXML(sclog);
++            DBGLOG("HANDLED SCRIPT CONTEXT: %s", sclog.str());
++
+             StringBuffer out;
+             out.append(
+                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+diff --git a/esp/xslt/gen_form.xsl b/esp/xslt/gen_form.xsl
+index 0ecfed698a..da467bf5ad 100644
+--- a/esp/xslt/gen_form.xsl
++++ b/esp/xslt/gen_form.xsl
+@@ -1506,7 +1506,7 @@
+     <xsl:template name="showOptionalSupscript">
+       <xsl:param name="optional" select="''"/>
+       <!-- optional starts with _ is deeemed as implementation specific and don't show it -->
+-      <xsl:if test="$optional and substring($optional,1,1)!='_' and substring($optional,1,2)!='!_'">
++      <xsl:if test="false() and $optional and substring($optional,1,1)!='_' and substring($optional,1,2)!='!_'">
+         <xsl:text><![CDATA[<sup style='color:red'>]]></xsl:text>
+         <xsl:value-of select="$optional"/>
+         <xsl:text><![CDATA[</sup>]]></xsl:text>
+diff --git a/system/xmllib/xpathprocessor.hpp b/system/xmllib/xpathprocessor.hpp
+index 858b3caaa6..100b7e3082 100644
+--- a/system/xmllib/xpathprocessor.hpp
++++ b/system/xmllib/xpathprocessor.hpp
+@@ -142,6 +142,7 @@ extern "C" XMLLIB_API IXpathContext*  getXpathContext(const char * xmldoc, bool
+ #define ESDLScriptCtxSection_PreESDLResponse "pre_esdl_response"
+ #define ESDLScriptCtxSection_InitialESDLResponse "initial_esdl_response"
+ #define ESDLScriptCtxSection_ModifiedESDLResponse "modified_esdl_response"
++#define ESDLScriptCtxSection_FinalResponse "final_response"
+ #define ESDLScriptCtxSection_ScriptRequest "script_request"
+ #define ESDLScriptCtxSection_ScriptResponse "script_response"
+ 

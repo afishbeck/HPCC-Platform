@@ -767,6 +767,7 @@ void EsdlServiceImpl::runPostEsdlScript(IEspContext &context,
         IEsdlTransformSet *serviceIRTs = m_transforms->queryMethodEntryPoint("", ESDLScriptEntryPoint_InitialEsdlResponse);
         IEsdlTransformSet *methodIRTs = m_transforms->queryMethodEntryPoint(mthdef.queryName(), ESDLScriptEntryPoint_InitialEsdlResponse);
 
+        bool modifiedESDLResponse = (serviceIRTs || methodIRTs);
         if (serviceIRTs || methodIRTs)
         {
             scriptContext->setContent(ESDLScriptCtxSection_InitialESDLResponse, content.str());
@@ -780,6 +781,23 @@ void EsdlServiceImpl::runPostEsdlScript(IEspContext &context,
             StringBuffer out;
             m_pEsdlTransformer->process(context, EsdlResponseMode, srvdef.queryName(), mthdef.queryName(), out, content.str(), txResultFlags, ns, schema_location);
             content.swapWith(out);
+        }
+
+        IEsdlTransformSet *serviceFRTs = m_transforms->queryMethodEntryPoint("", ESDLScriptEntryPoint_FinalResponse);
+        IEsdlTransformSet *methodFRTs = m_transforms->queryMethodEntryPoint(mthdef.queryName(), ESDLScriptEntryPoint_FinalResponse);
+
+        if (serviceFRTs || methodFRTs)
+        {
+            scriptContext->setContent(ESDLScriptCtxSection_FinalResponse, content.str());
+
+            context.addTraceSummaryTimeStamp(LogNormal, "srt-scriptfinalresp");
+            processServiceAndMethodTransforms(scriptContext, {serviceFRTs, methodFRTs}, (modifiedESDLResponse) ? ESDLScriptCtxSection_ModifiedESDLResponse : ESDLScriptCtxSection_InitialESDLResponse, ESDLScriptCtxSection_FinalResponse);
+            scriptContext->toXML(content.clear(), ESDLScriptCtxSection_FinalResponse);
+            context.addTraceSummaryTimeStamp(LogNormal, "end-scriptfinalresp");
+            
+            StringBuffer scriptCtxXML;
+            scriptContext->toXML(scriptCtxXML);
+            puts(scriptCtxXML.str());
         }
     }
 
@@ -1078,7 +1096,7 @@ void EsdlServiceImpl::handleServiceRequest(IEspContext &context,
                 getSoapBody(out, origResp);
             else
             {
-                m_pEsdlTransformer->process(context, EsdlResponseMode, srvdef.queryName(), mthdef.queryName(), out, origResp.str(), txResultFlags, ns, schema_location);
+                m_pEsdlTransformer->process(context, EsdlResponseMode, srvdef.queryName(), mthdef.queryName(), out, origResp.str(), txResultFlags, ns, schema_location, (flags & ESDL_BINDING_RESPONSE_JSON) ? WTJSONObjectRootless : WTStandard);
                 runPostEsdlScript(context, scriptContext, srvdef, mthdef, out, txResultFlags, ns, schema_location);
             }
         }
@@ -2598,6 +2616,10 @@ int EsdlBindingImpl::HandleSoapRequest(CHttpRequest* request,
             StringBuffer soapmsg;
             Owned<IEsdlScriptContext> scriptContext;
             m_pESDLService->handleServiceRequest(*ctx, scriptContext, *srvdef, *mthdef, tgtcfg, tgtctx, ns.str(), schemaLocation.str(), pt, baseout, logdata, origResp, soapmsg, 0);
+
+            StringBuffer sclog;
+            scriptContext->toXML(sclog);
+            DBGLOG("HANDLED SCRIPT CONTEXT: %s", sclog.str());
 
             StringBuffer out;
             out.append(
