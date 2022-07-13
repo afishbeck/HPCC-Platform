@@ -11,14 +11,6 @@ The following steps can be used to set up cert-manager in a kubernetes cluster.
 
 --------------------------------------------------------------------------------------------------------
 
-## Install cert-manager custom resource defintions:
-
-This adds new custom resource types to kubernetes for certificate issuers and certificates.
-
-```
-kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.1.0/cert-manager.crds.yaml
-```
-
 ## Install cert-manager helm chart:
 
 Add Jetstack helm repo:
@@ -27,26 +19,34 @@ Add Jetstack helm repo:
 helm repo add jetstack https://charts.jetstack.io
 ```
 
-Install vault server.
+Install cert-manager server.
 
 ```bash
-helm install cert-manager jetstack/cert-manager --version v1.1.0
+helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.8.2 --set installCRDs=true
 ```
 
 ## Run from HPCC-Platform/helm directory
 
-For now this example will assume you are in the helm directory of the HPCC-Systems source.
+For now this example will assume your current working directory contains the files contained in the HPCC-Platorm source repository /heml/examples/certmanager folder.
 
 ## Create a root certificate for our local cluster certificate authority
 
 This example uses OpenSSL to generate the root certificate for our local cluster certificate authority.
 
 We can create a root certificate and private key for our local cluster certificate authority with
-a single openssl call. This call uses the openssl config file found in the examples directory (ca-req.cfg).
-
+a single openssl call. This call uses the openssl config file found in the examples directory (internal-ca.cfg).
 
 ```bash
-openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -sha256 -days 1825 -out ca.crt -config examples/certmanager/ca-req.cfg
+openssl req -x509 -newkey rsa:2048 -nodes -keyout internal-ca.key -sha256 -days 1825 -out internal-ca.crt -config internal-ca.cfg
+```
+
+## If you need to creating remote certificates for remote clients to access this cluster [optional]
+
+We can create a root certificate and private key for our remote client certificate authority with a single openssl call.
+This call uses the openssl config file found in the examples directory (remote-ca.cfg).
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -keyout remote-ca.key -sha256 -days 1825 -out remote-ca.crt -config remote-ca.cfg
 ```
 
 For additonal information on the openssl command being used checkout this link:
@@ -58,11 +58,20 @@ https://www.golinuxcloud.com/create-certificate-authority-root-ca-linux
 
 ## Create a Kubernetes TLS secret from the generated root certificate and privatekey
 
-The root certificate needs to be added as a kubernetes secret in order to be accessible to cert-manager.
+The internal CA root certificate needs to be added as a kubernetes secret in order to be accessible to cert-manager.
 The secret name matches the default name used in the local issuer configuration in values.yaml.
 
 ```bash
-kubectl create secret tls hpcc-local-issuer-key-pair --cert=ca.crt --key=ca.key
+kubectl create secret tls hpcc-local-issuer-key-pair --cert=internal-ca.crt --key=internal-ca.key
+```
+
+## If you are creating remote certificates for remote clients to access this cluster [optional]
+
+The remote CA root certificate needs to be added as a kubernetes secret in order to be accessible to cert-manager.
+The secret name matches the default name used in the local issuer configuration in values.yaml.
+
+```bash
+kubectl create secret tls hpcc-remote-issuer-key-pair --cert=remote-ca.crt --key=remote-ca.key
 ```
 
 ## Installing the HPCC with certificate generation enabled
@@ -70,7 +79,14 @@ kubectl create secret tls hpcc-local-issuer-key-pair --cert=ca.crt --key=ca.key
 Install the HPCC helm chart with the "--set certificates.enabled" option set to true.
 
 ```bash
-helm install myhpcc hpcc/ --set global.image.version=latest --set certificates.enabled=true
+helm install mycluster hpcc/hpcc --version=8.6.14 --set certificates.enabled=true
+```
+
+If creating remote certificates for remote clients to access this cluster [optional],
+add "--set certificates.issuers.remote.enabled=true" giving you the following:
+
+```bash
+helm install mycluster hpcc/hpcc --version=8.6.14 --set certificates.enabled=true --set certificates.issuers.remote.enabled=true
 ```
 
 Use kubectl to check the status of the deployed pods.  Wait until all pods are running before continuing.
@@ -182,7 +198,7 @@ The cluster ESPs are now using TLS both locally and publicly.
 Run an ecl job that requires using mutual TLS (using local client certificate):
 
 ```
-ecl run --ssl hthor examples/certmanager/localhttpcall.ecl
+ecl run --ssl hthor localhttpcall.ecl
 ```
 
 Note that for the HTTPCALL in our ecl example the url now starts with "mtls:" this tells HTTPCALL/SOAPCALL to use mutual TLS, using the local client certificate, and to verify the server using the local certificate authority certificate.
@@ -200,3 +216,51 @@ You should see a result similar to this:
 The default public issuer uses self signed certificates. This makes it very easy to set up but browsers
 will not recognize the certificates as trustworthy and the browser will warn users that the connection
 is not safe.
+
+## To create remote certificates for remote clients [optional]
+
+You must have followed the "optional" setps above to enable and setup the remote CA.
+
+Add the list of remote clients to the config of the ESP or Roxie service you want to provide access to.  For example:
+
+```yaml
+esp:
+- name: dfs
+  application: dfs
+  auth: none
+  replicas: 1
+  service:
+    visibility: local
+    servicePort: 8520
+  remoteClients:
+  - name: prod-banana-dfs-client
+#    organization: optionalcompany
+```
+Note that when using remoteClients, setting "auth: none" allows you to rely on the remote certificate for authentication.  In the case of allowing clusters to talk to each other via the DFS service this combination of (remoteClients with auth: none) is likely required.
+
+Reinstall your cluster with the modified config.
+
+Now if you do list the secrets you should see the generated client certificate secret.
+
+```bash
+kubectl get secrets
+
+NAME                                               TYPE                 DATA   AGE
+client-remote-dfs-dfs-prod-banana-tls              kubernetes.io/tls    3      22m
+```
+
+These new generated secrets are what needs to be provided / configured to the remote system client.
+
+How you copy or replicate the secret to the remote location is currently outside the scope of this document.
+
+But, once the secret is copied to where the client can access it...
+
+
+##For remote file access via DFS:
+
+If your client is being used for remote access to files via dfs you should reference the secret in that remote definition.
+
+For example:
+
+
+-- TBD -Discuss with Jake --
