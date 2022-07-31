@@ -226,7 +226,8 @@ static inline bool checkSecretExpired(unsigned created)
 class CVault
 {
 private:
-    bool useKubernetesAuth = true;
+    bool useKubernetesAuth = false;
+    bool useAppRoleAuth = false;
     CVaultKind kind;
     CriticalSection vaultCS;
     Owned<IPropertyTree> cache;
@@ -236,8 +237,15 @@ private:
     StringBuffer username;
     StringBuffer password;
     StringAttr name;
-    StringAttr role;
-    StringAttr token;
+
+    StringAttr k8sAuthRole;
+    StringAttr appRoleId;
+    StringBuffer appRoleSecretName;
+
+    StringAttr clientToken;
+    time_t clientTokenExpiration = 0;
+    bool clientTokenRenewable = false;
+    unsigned clientTokenRenewalTtl = 5;
 
 public:
     CVault(IPropertyTree *vault)
@@ -249,59 +257,136 @@ public:
             splitUrlSchemeHostPort(url.str(), username, password, schemeHostPort, path);
         name.set(vault->queryProp("@name"));
         kind = getSecretType(vault->queryProp("@kind"));
-        if (vault->hasProp("@role"))
-            role.set(vault->queryProp("@role"));
-        else
-            role.set("hpcc-vault-access");
-        if (vault->hasProp("@client-secret"))
+
+        //set up vault client auth [appRole, clientToken (aka "token from the sky"), or kubernetes auth]
+        appRoleId.set(vault->queryProp("@appRoleId"));
+        if (appRoleId.length())
         {
-            useKubernetesAuth = false;
-            //for now only support direct access token.  we can support other combinations for example login token, ldap login, etc later.
+            useAppRoleAuth = true;
+            if (vault->hasProp("@appRoleSecret"))
+                appRoleSecretName.set(vault->queryProp("@appRoleSecret"));
+            if (appRoleSecretName.isEmpty())
+                appRoleSecretName.set("appRoleSecret");
+        }
+        else if (vault->hasProp("@client-secret"))
+        {
             Owned<IPropertyTree> clientSecret = getLocalSecret("system", vault->queryProp("@client-secret"));
             if (clientSecret)
             {
                 StringBuffer tokenText;
                 getSecretKeyValue(tokenText, clientSecret, "token");
-                token.set(tokenText.str());
+                clientToken.set(tokenText.str());
             }
         }
+        else if (isContainerized())
+        {
+            useKubernetesAuth = true;
+            if (vault->hasProp("@role"))
+                k8sAuthRole.set(vault->queryProp("@role"));
+            else
+                k8sAuthRole.set("hpcc-vault-access");
+        }
     }
+
+    void vaultAuthError(const char *msg)
+    {
+        Owned<IException> e = makeStringExceptionV(0, "Vault [%s] auth error %s", name.str(), msg);
+        OERRLOG(e);
+        throw e.getClear();
+    }
+    void vaultAuthErrorV(const char* format, ...) __attribute__((format(printf, 2, 3)))
+    {
+        va_list args;
+        va_start(args, format);
+        StringBuffer msg;
+        msg.valist_appendf(format, args);
+        va_end(args);
+        vaultAuthError(msg);
+    }
+    void processClientTokenResponse(httplib::Result &res)
+    {
+        if (!res)
+            vaultAuthError("missing login response");
+        if (res->status != 200)
+            vaultAuthErrorV("[%d](%d) - response: %s", res->status, res.error(), res->body.c_str());
+        const char *json = res->body.c_str();
+        if (isEmptyString(json))
+            vaultAuthError("empty login response");
+
+        Owned<IPropertyTree> respTree = createPTreeFromJSONString(json);
+        if (!respTree)
+            vaultAuthError("parsing JSON response");
+
+        clientToken.set(respTree->queryProp("auth/client_token"));
+        if (clientToken.isEmpty())
+            vaultAuthError("response missing client_token");
+
+        clientTokenRenewable = respTree->getPropBool("auth/renewable");
+        unsigned lease_duration = respTree->getPropInt("auth/lease_duration");
+        if (lease_duration==0)
+            clientTokenExpiration = 0;
+        else
+        {
+            CDateTime t;
+            t.setNow();
+            t.adjustTimeSecs(lease_duration);
+            clientTokenExpiration = t.getSimple();
+        }
+    }
+    bool isClientTokenExpired()
+    {
+        if (clientTokenExpiration==0)
+            return false;
+        double remaining = difftime(clientTokenExpiration, time(nullptr));
+        if (remaining <= 0)
+        {
+            DBGLOG("vault auth client token expired");
+            return true;
+        }
+        //TBD check renewal
+        return false;
+    }
+
     CVaultKind getVaultKind() const { return kind; }
     void kubernetesLogin()
     {
         CriticalBlock block(vaultCS);
-        if (token.length())
+        if (clientToken.length() && !isClientTokenExpired())
             return;
         StringBuffer login_token;
         login_token.loadFile("/var/run/secrets/kubernetes.io/serviceaccount/token");
-        if (login_token.length())
+        if (login_token.isEmpty())
         {
             std::string json;
-            json.append("{\"jwt\": \"").append(login_token.str()).append("\", \"role\": \"").append(role.str()).append("\"}");
+            json.append("{\"jwt\": \"").append(login_token.str()).append("\", \"role\": \"").append(k8sAuthRole.str()).append("\"}");
             httplib::Client cli(schemeHostPort.str());
             if (username.length() && password.length())
                 cli.set_basic_auth(username, password);
             httplib::Result res = cli.Post("/v1/auth/kubernetes/login", json, "application/json");
-            if (res)
-            {
-                if (res->status == 200)
-                {
-                    const char *response = res->body.c_str();
-                    if (!isEmptyString(response))
-                    {
-                        Owned<IPropertyTree> respTree = createPTreeFromJSONString(response);
-                        if (respTree)
-                            token.set(respTree->queryProp("auth/client_token"));
-                    }
-                }
-                else
-                {
-                    Owned<IException> e = MakeStringException(0, "Vault kube auth error [%d](%d) - vault: %s - response: %s", res->status, res.error(), name.str(), res->body.c_str());
-                    OWARNLOG(e);
-                    throw e.getClear();
-                }
-            }
+            processClientTokenResponse(res);
         }
+    }
+    void appRoleLogin()
+    {
+        CriticalBlock block(vaultCS);
+        if (clientToken.length() && !isClientTokenExpired())
+            return;
+        StringBuffer appRoleSecretId;
+        Owned<IPropertyTree> appRoleSecret = getLocalSecret("system", appRoleSecretName);
+        if (!appRoleSecret)
+            vaultAuthErrorV("appRole secret %s not found", appRoleSecretName.str());
+        else if (!getSecretKeyValue(appRoleSecretId, appRoleSecret, "secret-id"))
+            vaultAuthErrorV("appRole secret id not found at '%s/secret-id'", appRoleSecretName.str());
+        if (appRoleSecretId.isEmpty())
+            vaultAuthError("missing app-role-secret-id");
+
+        std::string json;
+        json.append("{\"role_id\": \"").append(appRoleId).append("\", \"secret_id\": \"").append(appRoleSecretId).append("\"}");
+        httplib::Client cli(schemeHostPort.str());
+        if (username.length() && password.length())
+            cli.set_basic_auth(username, password);
+        httplib::Result res = cli.Post("/v1/auth/approle/login", json, "application/json");
+        processClientTokenResponse(res);
     }
     bool getCachedSecret(CVaultKind &rkind, StringBuffer &content, const char *secret, const char *version)
     {
@@ -340,18 +425,20 @@ public:
             parent->setPropTree(vername, envelope.getClear());
         }
     }
+    void checkAuthentication()
+    {
+        if (useAppRoleAuth)
+            appRoleLogin();
+        else if (useKubernetesAuth)
+            kubernetesLogin();
+        if (clientToken.isEmpty())
+            vaultAuthError("no vault access token");
+    }
     bool requestSecret(CVaultKind &rkind, StringBuffer &content, const char *secret, const char *version)
     {
         if (isEmptyString(secret))
             return false;
-        if (useKubernetesAuth && token.isEmpty())
-            kubernetesLogin();
-        if (token.isEmpty())
-        {
-            Owned<IException> e = MakeStringException(0, "Vault auth error - vault: %s - vault access token not provided", name.str());
-            OERRLOG(e);
-            throw e.getClear();
-        }
+        checkAuthentication();
         StringBuffer location(path);
         location.replaceString("${secret}", secret);
         location.replaceString("${version}", version ? version : "1");
@@ -361,7 +448,7 @@ public:
             cli.set_basic_auth(username.str(), password.str());
 
         httplib::Headers headers = {
-            { "X-Vault-Token", token.str() }
+            { "X-Vault-Token", clientToken.str() }
         };
 
         httplib::Result res = cli.Get(location, headers);
