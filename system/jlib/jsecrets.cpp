@@ -267,6 +267,7 @@ public:
                 appRoleSecretName.set(vault->queryProp("@appRoleSecret"));
             if (appRoleSecretName.isEmpty())
                 appRoleSecretName.set("appRoleSecret");
+            DBGLOG("appRoleId=%s, appRoleSecretName=%s", appRoleId.str(), appRoleSecretName.str());
         }
         else if (vault->hasProp("@client-secret"))
         {
@@ -277,6 +278,7 @@ public:
                 getSecretKeyValue(tokenText, clientSecret, "token");
                 clientToken.set(tokenText.str());
             }
+            DBGLOG("using a client-token from the sky for vault auth");
         }
         else if (isContainerized())
         {
@@ -285,12 +287,20 @@ public:
                 k8sAuthRole.set(vault->queryProp("@role"));
             else
                 k8sAuthRole.set("hpcc-vault-access");
+            DBGLOG("using kubernetes vault auth");
         }
     }
-
+    inline const char *queryAuthType()
+    {
+        if (useAppRoleAuth)
+            return "approle";
+        if (useKubernetesAuth)
+            return "kubernetes";
+        return "token";
+    }
     void vaultAuthError(const char *msg)
     {
-        Owned<IException> e = makeStringExceptionV(0, "Vault [%s] auth error %s", name.str(), msg);
+        Owned<IException> e = makeStringExceptionV(0, "Vault [%s] %s auth error %s", name.str(), queryAuthType(), msg);
         OERRLOG(e);
         throw e.getClear();
     }
@@ -368,6 +378,7 @@ public:
     }
     void appRoleLogin()
     {
+        DBGLOG("appRoleLogin");
         CriticalBlock block(vaultCS);
         if (clientToken.length() && !isClientTokenExpired())
             return;
