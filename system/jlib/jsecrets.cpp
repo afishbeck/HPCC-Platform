@@ -364,11 +364,14 @@ public:
             { "X-Vault-Token", token.str() }
         };
 
+        PROGLOG("Requesting secret %s using %s", location.str(), token.str());
         httplib::Result res = cli.Get(location, headers);
         if (res)
         {
             if (res->status == 200)
             {
+                PROGLOG("Got secret %s using %s", location.str(), token.str());
+
                 rkind = kind;
                 content.append(res->body.c_str());
                 addCachedSecret(content.str(), secret, version);
@@ -376,7 +379,7 @@ public:
             }
             else
             {
-                DBGLOG("Vault %s error accessing secret %s.%s [%d](%d) - response: %s", name.str(), secret, version ? version : "", res->status, res.error(), res->body.c_str());
+                OERRLOG("Vault %s error accessing secret %s.%s [%d](%d) - response: %s", name.str(), secret, version ? version : "", res->status, res.error(), res->body.c_str());
             }
         }
         else
@@ -611,6 +614,8 @@ static IPropertyTree *createPTreeFromVaultSecret(const char *content, CVaultKind
     if (isEmptyString(content))
         return nullptr;
 
+    PROGLOG("Cretating Ptree from %s", content);
+
     Owned<IPropertyTree> tree = createPTreeFromJSONString(content);
     if (!tree)
         return nullptr;
@@ -646,6 +651,8 @@ static IPropertyTree *getCachedVaultSecret(const char *category, const char *vau
 
 static IPropertyTree *requestVaultSecret(const char *category, const char *vaultId, const char * name, const char *version)
 {
+    PROGLOG("requestVaultSecret %s %s %s %s", category, vaultId, name, version);
+
     CVaultKind kind;
     StringBuffer json;
     IVaultManager *vaultmgr = ensureVaultManager();

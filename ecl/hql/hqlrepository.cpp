@@ -824,6 +824,7 @@ unsigned EclRepositoryManager::runGitCommand(StringBuffer * output, const char *
     if (!output)
         output= &tempOutput;
 
+    PROGLOG("runGitCommand for %s", options.gitUser.str());
     Owned<IFile> extractedKey;
     EnvironmentVector env;
     //If fetching from git and the username is specified then use the script file to provide the username/password
@@ -849,12 +850,15 @@ unsigned EclRepositoryManager::runGitCommand(StringBuffer * output, const char *
             }
             else
             {
+                PROGLOG("hqlrepository accessing git secret for %s", options.gitUser.str());
                 Owned<IPropertyTree> secret = getSecret("git", options.gitUser.str());
                 if (secret)
                 {
+                    PROGLOG("hqlrepository successfull getting git secret for %s", options.gitUser.str());
                     MemoryBuffer gitKey;
                     if (getSecretKeyValue(gitKey, secret, "password"))
                     {
+                        PROGLOG("hqlrepository successfull accessed secret password for %s length is %d", options.gitUser.str(), gitKey.length());
                         StringBuffer tempDir;
                         getTempFilePath(tempDir, "eclcc", nullptr);
 
