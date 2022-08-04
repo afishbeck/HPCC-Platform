@@ -1,6 +1,6 @@
-# Containerized HPCC Systems Secrets
+# Containerized HPCC Systems Vault Secrets using appRole vault authentication
 
-This example demonstrates HPCC use use of Kubernetes and Hashicorp Vault secrets.
+This example demonstrates HPCC use use of Hashicorp Vault secrets using appRole authentication.
 
 This example assumes you are starting from a linux command shell in the HPCC-Platform/helm directory.  From there you will find the example files and this README file in the examples/secrets directory.
 
@@ -8,7 +8,7 @@ This example assumes you are starting from a linux command shell in the HPCC-Pla
 
 This example uses Hashicorp vault.  The following steps can be used to set up a development mode only instance of vault just for the purposes of this example.  This makes it easy to test out vault functionality without going through the much more extensive configuration process for a production ready vault installation.
 
-## Install hashicorp vault command line client:
+## Install hashicorp vault command line client on your local system:
 
 https://learn.hashicorp.com/tutorials/vault/getting-started-install
 
@@ -27,10 +27,15 @@ Add Hashicorp helm repo:
 helm repo add hashicorp https://helm.releases.hashicorp.com
 ```
 
+Update Helm repos.
+
+```bash
+helm repo update
+```
+
 Install vault server.
 
-Note that a recent change to the developer mode vault means that you have to set the VAULT_DEV_LISTEN_ADDRESS environment variable as shown in order
-to access the vault service from an external pod.
+Note that a recent change to the developer mode vault means that you have to set the VAULT_DEV_LISTEN_ADDRESS environment variable as shown in order to access the vault service from an external pod.
 
 ```bash
 helm install vault hashicorp/vault --set "server.dev.enabled=true" --set 'server.extraEnvironmentVars.VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200'
@@ -59,9 +64,9 @@ vault login root
 If you don't provide the token on the command line you will be prompted to input the value and it will be hidden from view.
 
 
-## Configure vault kubernetes auth
+## Configure vault appRole auth
 
-Enabling kubernetes auth will allow k8s nodes to access the vault via their kubernetes.io access tokens.
+Enabling appRole auth will allow access the vault via the appRole authentication protocol.
 
 ```bash
 vault auth enable approle
@@ -80,7 +85,7 @@ vault write auth/approle/role/hpcc-vault-access \
     token_policies="hpcc-kv-ro" \
     secret_id_ttl=1h \
     token_num_uses=100 \
-    token_ttl=2h \
+    token_ttl=1m \
     token_max_ttl=8h \
     secret_id_num_uses=40
 ```
@@ -94,6 +99,9 @@ vault read auth/approle/role/hpcc-vault-access/role-id
 Output:
 
 role_id     <role_id>
+
+Edit examples/secrets/values-secrets-approle.yaml to set role_id for the vault configurations.
+
 
 Get a SecretID issued against the AppRole:
 
@@ -109,12 +117,9 @@ secret_id_ttl           10m
 
 Create a kubernetes secrete containing the secret_id that was just output.
 
-Create example kubernetes secret:
-
 ```bash
 kubectl create secret generic approle-secret --from-literal=secret-id=<secret_id>
 ```
-
 
 
 ## 'eclUser' category secrets
@@ -124,13 +129,6 @@ Create example vault 'eclUser' secrets:
 ```bash
 vault kv put secret/eclUser/vault-example crypt.key=@examples/secrets/crypt.key
 ```
-
-Create example kubernetes secret:
-
-```bash
-kubectl create secret generic k8s-example --from-file=crypt.key=examples/secrets/crypt.key
-```
-
 
 ## 'ecl' category secrets
 
@@ -157,24 +155,12 @@ Create example vault 'ecl' secrets:
 vault kv put secret/ecl/http-connect-vaultsecret url=@examples/secrets/url-basic username=@examples/secrets/username password=@examples/secrets/password
 ```
 
-The following vault secret will be hidden by our "local" kubernetes secret below by default.  But we can ask for it directly in our HTTPCALL (see "httpcall_vault.ecl" example).
-
-```bash
-vault kv put secret/ecl/http-connect-basicsecret url=@examples/secrets/url-basic username=@examples/secrets/username password=@examples/secrets/password
-```
-
-Create example kubernetes secret:
-
-```bash
-kubectl create secret generic http-connect-basicsecret --from-file=url=examples/secrets/url-basic --from-file=examples/secrets/username --from-file=examples/secrets/password
-```
-
 ## Installing the HPCC with the secrets added to ECL components
 
 Install the HPCC helm chart with the secrets just defined added to all components that run ECL.
 
 ```bash
-helm install myhpcc hpcc/ --set global.image.version=latest -f examples/secrets/values-secrets.yaml
+helm install myhpcc hpcc/ --set global.image.version=latest -f examples/secrets/values-secrets-approle.yaml
 ```
 
 Use kubectl to check the status of the deployed pods.  Wait until all pods are running before continuing.
@@ -194,16 +180,13 @@ https://hpccsystems.com/download#HPCC-Platform
 The following ecl commands will run the three example ECL files on hthor.
 
 ```bash
-ecl run hthor examples/secrets/crypto_secret.ecl
+ecl run hthor examples/secrets/crypto_vault_secret.ecl
 ```
 
 The expected result would be:
 
 ```xml
 <Result>
-<Dataset name='k8s_message'>
- <Row><k8s_message>top secret</k8s_message></Row>
-</Dataset>
 <Dataset name='vault_message'>
  <Row><vault_message>For your eyes only</vault_message></Row>
 </Dataset>
@@ -218,14 +201,10 @@ https://hpccsystems.com/download#HPCC-Platform
 
 --------------------------------------------------------------------------------------------------------
 
-The following ecl commands will run the three example ECL files on hthor.
+The following ecl command will run the vault secret ECL example on hthor.
 
 ```bash
-ecl run hthor examples/secrets/httpcall_secret.ecl
-
 ecl run hthor examples/secrets/httpcall_vault.ecl
-
-ecl run hthor examples/secrets/httpcall_vault_direct.ecl
 ```
 
 For each job the expected result would be:

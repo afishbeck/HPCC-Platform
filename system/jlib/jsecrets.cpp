@@ -223,11 +223,13 @@ static inline bool checkSecretExpired(unsigned created)
     return age > getSecretTimeout();
 }
 
+enum class VaultAuthType {unknown, k8s, appRole, token};
+
 class CVault
 {
 private:
-    bool useKubernetesAuth = false;
-    bool useAppRoleAuth = false;
+    VaultAuthType authType = VaultAuthType::unknown;
+
     CVaultKind kind;
     CriticalSection vaultCS;
     Owned<IPropertyTree> cache;
@@ -242,7 +244,7 @@ private:
     StringAttr appRoleId;
     StringBuffer appRoleSecretName;
 
-    StringAttr clientToken;
+    StringBuffer clientToken;
     time_t clientTokenExpiration = 0;
     bool clientTokenRenewable = false;
     unsigned clientTokenRenewalTtl = 5;
@@ -262,12 +264,11 @@ public:
         appRoleId.set(vault->queryProp("@appRoleId"));
         if (appRoleId.length())
         {
-            useAppRoleAuth = true;
+            authType = VaultAuthType::appRole;
             if (vault->hasProp("@appRoleSecret"))
                 appRoleSecretName.set(vault->queryProp("@appRoleSecret"));
             if (appRoleSecretName.isEmpty())
                 appRoleSecretName.set("appRoleSecret");
-            DBGLOG("appRoleId=%s, appRoleSecretName=%s", appRoleId.str(), appRoleSecretName.str());
         }
         else if (vault->hasProp("@client-secret"))
         {
@@ -275,14 +276,16 @@ public:
             if (clientSecret)
             {
                 StringBuffer tokenText;
-                getSecretKeyValue(tokenText, clientSecret, "token");
-                clientToken.set(tokenText.str());
+                if (getSecretKeyValue(clientToken, clientSecret, "token"))
+                {
+                    authType = VaultAuthType::appRole;
+                    PROGLOG("using a client token for vault auth");
+                }
             }
-            DBGLOG("using a client-token from the sky for vault auth");
         }
         else if (isContainerized())
         {
-            useKubernetesAuth = true;
+            authType = VaultAuthType::k8s;
             if (vault->hasProp("@role"))
                 k8sAuthRole.set(vault->queryProp("@role"));
             else
@@ -292,11 +295,16 @@ public:
     }
     inline const char *queryAuthType()
     {
-        if (useAppRoleAuth)
-            return "approle";
-        if (useKubernetesAuth)
-            return "kubernetes";
-        return "token";
+        switch (authType)
+        {
+            case VaultAuthType::appRole:
+                return "approle";
+            case VaultAuthType::k8s:
+                return "kubernetes";
+            case VaultAuthType::token:
+                return "token";
+        }
+        return "unknown";
     }
     void vaultAuthError(const char *msg)
     {
@@ -326,11 +334,11 @@ public:
         Owned<IPropertyTree> respTree = createPTreeFromJSONString(json);
         if (!respTree)
             vaultAuthError("parsing JSON response");
-
-        clientToken.set(respTree->queryProp("auth/client_token"));
-        if (clientToken.isEmpty())
+        const char *token = respTree->queryProp("auth/client_token");
+        if (isEmptyString(token))
             vaultAuthError("response missing client_token");
 
+        clientToken.set(token);
         clientTokenRenewable = respTree->getPropBool("auth/renewable");
         unsigned lease_duration = respTree->getPropInt("auth/lease_duration");
         if (lease_duration==0)
@@ -358,29 +366,35 @@ public:
     }
 
     CVaultKind getVaultKind() const { return kind; }
-    void kubernetesLogin()
+
+    //if we tried to use our token and it returned access denied it could be that we need to login again, or
+    //  perhaps it could be specific permissions about the secret that was being accessed, I don't think we can tell the difference
+    void kubernetesLogin(bool permissionDenied)
     {
+        DBGLOG("kubernetesLogin %s", permissionDenied ? "because permission denied" : "");
         CriticalBlock block(vaultCS);
-        if (clientToken.length() && !isClientTokenExpired())
+        if (!permissionDenied && (clientToken.length() && !isClientTokenExpired()))
             return;
         StringBuffer login_token;
         login_token.loadFile("/var/run/secrets/kubernetes.io/serviceaccount/token");
         if (login_token.isEmpty())
-        {
-            std::string json;
-            json.append("{\"jwt\": \"").append(login_token.str()).append("\", \"role\": \"").append(k8sAuthRole.str()).append("\"}");
-            httplib::Client cli(schemeHostPort.str());
-            if (username.length() && password.length())
-                cli.set_basic_auth(username, password);
-            httplib::Result res = cli.Post("/v1/auth/kubernetes/login", json, "application/json");
-            processClientTokenResponse(res);
-        }
+            vaultAuthError("missing k8s auth token");
+
+        std::string json;
+        json.append("{\"jwt\": \"").append(login_token.str()).append("\", \"role\": \"").append(k8sAuthRole.str()).append("\"}");
+        httplib::Client cli(schemeHostPort.str());
+        if (username.length() && password.length())
+            cli.set_basic_auth(username, password);
+        httplib::Result res = cli.Post("/v1/auth/kubernetes/login", json, "application/json");
+        processClientTokenResponse(res);
     }
-    void appRoleLogin()
+    //if we tried to use our token and it returned access denied it could be that we need to login again, or
+    //  perhaps it could be specific permissions about the secret that was being accessed, I don't think we can tell the difference
+    void appRoleLogin(bool permissionDenied)
     {
-        DBGLOG("appRoleLogin");
+        DBGLOG("appRoleLogin %s", permissionDenied ? "because permission denied" : "");
         CriticalBlock block(vaultCS);
-        if (clientToken.length() && !isClientTokenExpired())
+        if (!permissionDenied && (clientToken.length() && !isClientTokenExpired()))
             return;
         StringBuffer appRoleSecretId;
         Owned<IPropertyTree> appRoleSecret = getLocalSecret("system", appRoleSecretName);
@@ -398,6 +412,17 @@ public:
             cli.set_basic_auth(username, password);
         httplib::Result res = cli.Post("/v1/auth/approle/login", json, "application/json");
         processClientTokenResponse(res);
+    }
+    void checkAuthentication(bool permissionDenied)
+    {
+        if (authType == VaultAuthType::appRole)
+            appRoleLogin(permissionDenied);
+        else if (authType == VaultAuthType::k8s)
+            kubernetesLogin(permissionDenied);
+        else if (permissionDenied && authType == VaultAuthType::token)
+            vaultAuthError("token permission denied"); //don't permenently invalidate token. Try again next time because it could be permissions for a particular secret rather than invalid token
+        if (clientToken.isEmpty())
+            vaultAuthError("no vault access token");
     }
     bool getCachedSecret(CVaultKind &rkind, StringBuffer &content, const char *secret, const char *version)
     {
@@ -436,23 +461,9 @@ public:
             parent->setPropTree(vername, envelope.getClear());
         }
     }
-    void checkAuthentication()
+    bool requestSecretAtLocation(CVaultKind &rkind, StringBuffer &content, const char *location, const char *secret, const char *version, bool permissionDenied)
     {
-        if (useAppRoleAuth)
-            appRoleLogin();
-        else if (useKubernetesAuth)
-            kubernetesLogin();
-        if (clientToken.isEmpty())
-            vaultAuthError("no vault access token");
-    }
-    bool requestSecret(CVaultKind &rkind, StringBuffer &content, const char *secret, const char *version)
-    {
-        if (isEmptyString(secret))
-            return false;
-        checkAuthentication();
-        StringBuffer location(path);
-        location.replaceString("${secret}", secret);
-        location.replaceString("${version}", version ? version : "1");
+        checkAuthentication(permissionDenied);
 
         httplib::Client cli(schemeHostPort.str());
         if (username.length() && password.length())
@@ -472,14 +483,27 @@ public:
                 addCachedSecret(content.str(), secret, version);
                 return true;
             }
+            else if (res->status == 403)
+                return requestSecretAtLocation(rkind, content, location, secret, version, true); //force relogging in, and try again just in case the token was invalidated
             else
             {
-                DBGLOG("Vault %s error accessing secret %s.%s [%d](%d) - response: %s", name.str(), secret, version ? version : "", res->status, res.error(), res->body.c_str());
+                OERRLOG("Vault %s error accessing secret %s.%s [%d](%d) - response: %s", name.str(), secret, version ? version : "", res->status, res.error(), res->body.c_str());
             }
         }
         else
             OERRLOG("Error: Vault %s http error (%d) accessing secret %s.%s", name.str(), res.error(), secret, version ? version : "");
         return false;
+    }
+    bool requestSecret(CVaultKind &rkind, StringBuffer &content, const char *secret, const char *version)
+    {
+        if (isEmptyString(secret))
+            return false;
+
+        StringBuffer location(path);
+        location.replaceString("${secret}", secret);
+        location.replaceString("${version}", version ? version : "1");
+
+        return requestSecretAtLocation(rkind, content, location, secret, version, false);
     }
 };
 
