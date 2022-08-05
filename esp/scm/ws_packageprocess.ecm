@@ -48,6 +48,7 @@ ESPrequest AddPackageRequest
     [min_ver("1.05")] bool DfuOverwrite(false);
     [min_ver("1.05")] bool OnlyCopyFiles(false); //Copies the files needed for the command but doesn't actually complete the command
     [min_ver("1.05")] bool StopIfFilesCopied(false); //Command only completes if no files need copying.  User can run again after DFU Publisher Workunit completes.
+    [min_ver("1.06")] bool CopyAllFiles(false); //Copy every file in packagemap, not just those currently used by queries.
 };
 
 
@@ -352,7 +353,7 @@ ESPresponse [exceptions_inline] GetPartFromPackageMapResponse
     string Content;
 };
 
-ESPservice [auth_feature("NONE"), version("1.05"), default_client_version("1.05"), exceptions_inline("./smc_xslt/exceptions.xslt")] WsPackageProcess
+ESPservice [auth_feature("NONE"), version("1.06"), default_client_version("1.06"), exceptions_inline("./smc_xslt/exceptions.xslt")] WsPackageProcess
 {
     ESPmethod Echo(EchoRequest, EchoResponse);
     ESPmethod [auth_feature("PackageMapAccess:WRITE")] AddPackage(AddPackageRequest, AddPackageResponse);

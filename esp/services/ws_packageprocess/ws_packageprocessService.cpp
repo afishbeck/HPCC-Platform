@@ -251,6 +251,7 @@ void fixPackageMapFileIds(IPropertyTree *pm, bool preloadAll)
 #define PKGADD_MAP_REPLACE      0x0400
 #define PKGADD_SEG_ADD          0x1000
 #define PKGADD_SEG_REPLACE      0x2000
+#define PKGADD_ALL_FILES        0x4000
 
 class PackageMapUpdater
 {
@@ -848,6 +849,7 @@ bool CWsPackageProcessEx::onAddPackage(IEspContext &context, IEspAddPackageReque
     updater.setFlag(PKGADD_MAP_REPLACE, req.getOverWrite());
     updater.setFlag(PKGADD_ALLOW_FOREIGN, req.getAllowForeignFiles());
     updater.setFlag(PKGADD_PRELOAD_ALL, req.getPreloadAllPackages());
+    updater.setFlag(PKGADD_ALL_FILES, req.getCopyAllFiles());
 
     updater.setPMID(req.getTarget(), req.getPackageMap(), req.getGlobalScope());
     updater.setProcess(req.getProcess());
