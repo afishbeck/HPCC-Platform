@@ -1079,6 +1079,7 @@ ESPrequest [nil_remove] WUEclDefinitionActionRequest
     string DfuQueue;
     bool OnlyCopyFiles(false); //Copies the files needed for the command but doesn't actually complete the command
     bool StopIfFilesCopied(false); //Command only completes if no files need copying.  User can run again after DFU Publisher Workunit completes.
+    [min_ver("1.96")] string RemoteStorage;
 };
 
 ESPresponse [exceptions_inline] WUEclDefinitionActionResponse

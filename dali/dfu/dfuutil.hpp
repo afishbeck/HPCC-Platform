@@ -94,7 +94,8 @@ interface IDFUhelper: extends IInterface
                          IUserDescriptor *userdesc,                // user desc for local dali
                          const char *foreigndali,                  // can be omitted if srcname foreign or local
                          unsigned overwriteFlags,                   // overwrite destination options
-                         bool dophysicalcopy
+                         bool dophysicalcopy,
+                         const char *remoteStorageName
                          ) = 0;
 
     virtual void cloneFileRelationships(

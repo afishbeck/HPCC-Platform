@@ -111,6 +111,7 @@ typedef IEclCommand *(*EclCommandFactory)(const char *cmdname);
 #define ECLOPT_DFU_OVERWRITE "--dfu-overwrite"
 #define ECLOPT_STOP_IF_FILES_COPIED "--stop-if-files-copied"
 #define ECLOPT_DFU_QUEUE "--dfu-queue"
+#define ECLOPT_REMOTE_STORAGE "--remote-storage"
 #define ECLOPT_DFU_WAIT "--dfu-wait"
 
 #define ECLOPT_ACTIVE "--active"
@@ -461,6 +462,7 @@ public:
         req->setDfuOverwrite(optDfuOverwrite);
         req->setStopIfFilesCopied(optStopIfFilesCopied);
         req->setOnlyCopyFiles(optOnlyCopyFiles);
+        req->setRemoteStorage(optRemoteStorage);
     }
 
     template<class TResponse>
@@ -486,6 +488,8 @@ public:
             return true;
         if (iter.matchFlag(optOnlyCopyFiles, ECLOPT_ONLY_COPY_FILES))
             return true;
+        if (iter.matchOption(optRemoteStorage, ECLOPT_REMOTE_STORAGE))
+            return true;
         return false;
     }
     void usage()
@@ -499,11 +503,13 @@ public:
             "   --dfu-overwrite        Set DFU copy command to overwrite physical files that are already on disk.\n"
             "   --only-copy-files      Copy the files needed for the query, but don't publish the query\n"
             "   --stop-if-files-copied If all files already exist, publish the query.\n"
-            "                          Otherwise, copy the files needed for the query, but don't publish the query\n",
+            "                          Otherwise, copy the files needed for the query, but don't publish the query\n"
+            "   --remote-storage       The name of the remote storage plane to use for copying files\n",
             stdout);
     }
 public:
     StringAttr optDfuQueue;
+    StringAttr optRemoteStorage;
     unsigned optDfuWaitSec = 1800; //30 minutes
     bool optDfuCopyFiles = false;
     bool optDfuOverwrite = false;
