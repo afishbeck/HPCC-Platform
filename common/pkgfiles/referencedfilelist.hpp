@@ -43,6 +43,7 @@
 #define RefFileNotOnSource    0x0400
 #define RefFileOptional       0x0800 //File referenced in more than one place can be both optional and not optional
 #define RefFileNotOptional    0x1000
+#define RefFileRemoteLFN      0x2000
 
 
 interface IReferencedFile : extends IInterface
@@ -70,14 +71,14 @@ interface IReferencedFileList : extends IInterface
     virtual void addFiles(StringArray &files)=0;
 
     virtual IReferencedFileIterator *getFiles()=0;
-    virtual void resolveFiles(const StringArray &locations, const char *remoteIP, const char * remotePrefix, const char *srcCluster, bool checkLocalFirst, bool addSubFiles, bool trackSubFiles, bool resolveForeign=false)=0;
+    virtual void resolveFiles(const StringArray &locations, const char *remoteStorage, const char *remoteDali, const char * remotePrefix, const char *srcCluster, bool checkLocalFirst, bool addSubFiles, bool trackSubFiles, bool resolveForeign)=0;
     virtual void cloneAllInfo(StringBuffer &publisherWuid, const char *dstCluster, unsigned updateFlags, IDFUhelper *helper, bool cloneSuperInfo, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defRepFolder)=0;
     virtual void cloneFileInfo(StringBuffer &publisherWuid, const char *dstCluster, unsigned updateFlags, IDFUhelper *helper, bool cloneSuperInfo, bool cloneForeign, unsigned redundancy, unsigned channelsPerNode, int replicateOffset, const char *defRepFolder)=0;
     virtual void cloneRelationships()=0;
     virtual void setDfuQueue(const char *dfu_queue) = 0;
 };
 
-extern REFFILES_API const char *skipForeign(const char *name, StringBuffer *ip=NULL);
+extern REFFILES_API const char *skipForeign(const char *name, StringBuffer *ip=nullptr);
 
 extern REFFILES_API IReferencedFileList *createReferencedFileList(const char *user, const char *pw, bool allowForeignFiles, bool allowFileSizeCalc, const char *jobname = nullptr);
 extern REFFILES_API IReferencedFileList *createReferencedFileList(IUserDescriptor *userDesc, bool allowForeignFiles, bool allowFileSizeCalc, const char *jobname = nullptr);

@@ -365,7 +365,7 @@ void QueryFilesInUse::loadTarget(IPropertyTree *t, const char *target, unsigned 
             return;
         StringArray locations;
         locations.append(process.str());
-        wufiles->resolveFiles(locations, NULL, NULL, NULL, true, true, true, false);
+        wufiles->resolveFiles(locations, nullptr, nullptr, nullptr, nullptr, true, true, true, false);
 
         Owned<IReferencedFileIterator> files = wufiles->getFiles();
         ForEach(*files)
@@ -792,7 +792,7 @@ public:
         const char * targetPlaneOrGroup = process;
         locations.append(targetPlaneOrGroup);
 #endif
-        files->resolveFiles(locations, remoteIP, remotePrefix, srcCluster, !(updateFlags & (DALI_UPDATEF_REPLACE_FILE | DALI_UPDATEF_CLONE_FROM | DALI_UPDATEF_SUPERFILES)), true, false, true);
+        files->resolveFiles(locations, remoteStorage, remoteDaliIP, remotePrefix, srcCluster, !(updateFlags & (DALI_UPDATEF_REPLACE_FILE | DALI_UPDATEF_CLONE_FROM | DALI_UPDATEF_SUPERFILES)), true, false, true);
         Owned<IDFUhelper> helper = createIDFUhelper();
         files->setDfuQueue(dfu_queue);
 #ifdef _CONTAINERIZED
@@ -821,11 +821,12 @@ public:
     Owned<IReferencedFileList> files;
 
     StringBuffer process;
-    StringAttr remoteIP;
+    StringAttr remoteDaliIP;
     StringAttr remotePrefix;
     StringAttr srcCluster;
     StringAttr queryname;
     StringAttr dfu_queue;
+    StringAttr remoteStorage;
 };
 
 #ifndef _CONTAINERIZED
@@ -979,11 +980,12 @@ bool CWsWorkunitsEx::onWUPublishWorkunit(IEspContext &context, IEspWUPublishWork
     {
         QueryFileCopier cpr(target);
         cpr.init(context, req.getAllowForeignFiles(), queryName);
-        cpr.remoteIP.set(daliIP);
+        cpr.remoteDaliIP.set(daliIP);
         cpr.remotePrefix.set(srcPrefix);
         cpr.srcCluster.set(srcCluster);
         cpr.queryname.set(queryName);
         cpr.dfu_queue.set(req.getDfuQueue());
+        cpr.remoteStorage.set(req.getRemoteStorage());
         cpr.copy(publisherWuid, cw, updateFlags);
 
         if (req.getIncludeFileErrors())
@@ -2155,11 +2157,12 @@ bool CWsWorkunitsEx::onWURecreateQuery(IEspContext &context, IEspWURecreateQuery
 
                 QueryFileCopier cpr(target);
                 cpr.init(context, req.getAllowForeignFiles(), srcQueryName);
-                cpr.remoteIP.set(daliIP);
+                cpr.remoteDaliIP.set(daliIP);
                 cpr.remotePrefix.set(srcPrefix);
                 cpr.srcCluster.set(srcCluster);
                 cpr.queryname.set(srcQueryName);
                 cpr.dfu_queue.set(req.getDfuQueue());
+                cpr.remoteStorage.set(req.getRemoteStorage());
                 cpr.copy(publisherWuid, cw, updateFlags);
 
                 if (req.getIncludeFileErrors())
@@ -2567,7 +2570,7 @@ bool CWsWorkunitsEx::getQueryFiles(IEspContext &context, const char* wuid, const
         wufiles->addFilesFromQuery(cw, (ps) ? ps->queryActiveMap(target) : NULL, query);
         StringArray locations;
         locations.append(process.str());
-        wufiles->resolveFiles(locations, NULL, NULL, NULL, true, true, true, true);
+        wufiles->resolveFiles(locations, nullptr, NULL, NULL, NULL, true, true, true, true);
         Owned<IReferencedFileIterator> refFileItr = wufiles->getFiles();
         ForEach(*refFileItr)
         {
@@ -3240,7 +3243,7 @@ public:
     {
         if (cloneFilesEnabled)
         {
-            wufiles->resolveFiles(locations, dfsIP, srcPrefix, srcCluster, !(updateFlags & (DALI_UPDATEF_REPLACE_FILE | DALI_UPDATEF_CLONE_FROM)), true, false, true);
+            wufiles->resolveFiles(locations, remoteStorage, dfsIP, srcPrefix, srcCluster, !(updateFlags & (DALI_UPDATEF_REPLACE_FILE | DALI_UPDATEF_CLONE_FROM)), true, false, true);
             Owned<IDFUhelper> helper = createIDFUhelper();
             Owned <IConstWUClusterInfo> cl = getWUClusterInfoByName(target);
             if (cl)
@@ -3288,6 +3291,7 @@ public:
     StringArray copiedQueryIds;
     StringArray missingWuids;
     StringAttr dfu_queue;
+    StringAttr remoteStorage;
 };
 
 bool CWsWorkunitsEx::onWUCopyQuerySet(IEspContext &context, IEspWUCopyQuerySetRequest &req, IEspWUCopyQuerySetResponse &resp)
@@ -3336,6 +3340,7 @@ bool CWsWorkunitsEx::onWUCopyQuerySet(IEspContext &context, IEspWUCopyQuerySetRe
             if (req.getDfuOverwrite())
                 updateFlags |= DFU_UPDATEF_OVERWRITE;
             cloner.dfu_queue.set(req.getDfuQueue());
+            cloner.remoteStorage.set(req.getRemoteStorage());
 
             cloner.enableFileCloning(updateFlags, req.getDfsServer(), process.str(), req.getSourceProcess(), req.getAllowForeignFiles());
         }
@@ -3452,11 +3457,12 @@ bool CWsWorkunitsEx::onWUQuerysetCopyQuery(IEspContext &context, IEspWUQuerySetC
 
         QueryFileCopier cpr(target);
         cpr.init(context, req.getAllowForeignFiles(), targetQueryName);
-        cpr.remoteIP.set(daliIP);
+        cpr.remoteDaliIP.set(daliIP);
         cpr.remotePrefix.set(srcPrefix);
         cpr.srcCluster.set(srcCluster);
         cpr.queryname.set(targetQueryName);
         cpr.dfu_queue.set(req.getDfuQueue());
+        cpr.remoteStorage.set(req.getRemoteStorage());
         cpr.copy(publisherWuid, cw, updateFlags);
 
         if (req.getIncludeFileErrors())

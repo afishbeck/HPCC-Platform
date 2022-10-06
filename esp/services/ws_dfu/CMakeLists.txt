@@ -31,6 +31,7 @@ set (    SRCS
          ${ESPSCM_GENERATED_DIR}/ws_dfu_common_esp.cpp 
          ${ESPSCM_GENERATED_DIR}/ws_dfu_esp.cpp 
          ${ESPSCM_GENERATED_DIR}/ws_dfuXref_esp.cpp 
+         ${HPCC_SOURCE_DIR}/esp/bindings/SOAP/client
          ${HPCC_SOURCE_DIR}/esp/scm/ws_dfu_common.ecm
          ${HPCC_SOURCE_DIR}/esp/scm/ws_dfu.ecm
          ${HPCC_SOURCE_DIR}/esp/scm/ws_dfuXref.ecm
@@ -79,6 +80,7 @@ include_directories (
          ./../../../common/fileview2 
          ./../../bindings/SOAP/xpp 
          ${HPCC_SOURCE_DIR}/esp/clients
+         ${HPCC_SOURCE_DIR}/esp/clients/ws_dfsclient
     )
 
 ADD_DEFINITIONS( -D_USRDLL -DWS_DFU_EXPORTS -DWSDFU_API_LOCAL -DWSDFUXREF_API_LOCAL )
@@ -109,6 +111,7 @@ target_link_libraries ( ws_dfu
          roxiecommlib 
          wsdfuaccess
          pkgfiles
+         ws_dfsclient
     )
 
 if (NOT CONTAINERIZED)

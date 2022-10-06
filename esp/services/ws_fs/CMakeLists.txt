@@ -63,6 +63,7 @@ include_directories (
          ${HPCC_SOURCE_DIR}/common/thorhelper
          ${HPCC_SOURCE_DIR}/rtl/include
          ${HPCC_SOURCE_DIR}/rtl/eclrtl
+         ${HPCC_SOURCE_DIR}/esp/clients/ws_dfsclient
          )
 
 ADD_DEFINITIONS( -D_USRDLL -DFileSpray_API_LOCAL )
