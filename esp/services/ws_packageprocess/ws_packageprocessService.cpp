@@ -124,7 +124,7 @@ bool isFileKnownOnCluster(const char *logicalname, const char *target, IUserDesc
     return isFileKnownOnCluster(logicalname, clusterInfo, userdesc);
 }
 
-void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, StringArray &notFound, IPropertyTree *packageMap, const char *lookupDaliIp, IConstWUClusterInfo *dstInfo, const char *srcCluster, const char *remotePrefix, IUserDescriptor* userdesc, bool allowForeignFiles)
+void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, StringArray &notFound, IPropertyTree *packageMap, const char *remoteStorage, const char *lookupDaliIp, IConstWUClusterInfo *dstInfo, const char *srcCluster, const char *remotePrefix, IUserDescriptor* userdesc, bool allowForeignFiles)
 {
     StringBuffer user;
     StringBuffer password;
@@ -146,14 +146,14 @@ void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, Stri
     StringBuffer targetPlane; //roxies default plane, where files will be copied if not found in locations
     getRoxieDirectAccessPlanes(locations, targetPlane, clusterName.str(), true);
 
-    wufiles->resolveFiles(locations, lookupDaliIp, remotePrefix, srcCluster, !(updateFlags & (DALI_UPDATEF_REPLACE_FILE | DALI_UPDATEF_CLONE_FROM)), false, false);
+    wufiles->resolveFiles(locations, remoteStorage, lookupDaliIp, remotePrefix, srcCluster, !(updateFlags & (DALI_UPDATEF_REPLACE_FILE | DALI_UPDATEF_CLONE_FROM)), false, false, false);
     wufiles->cloneAllInfo(publisherWuid, targetPlane, updateFlags, helper, true, false, 0, 1, 0, nullptr);
 #else
     StringArray locations;
     SCMStringBuffer processName;
     dstInfo->getRoxieProcess(processName);
     locations.append(processName.str());
-    wufiles->resolveFiles(locations, lookupDaliIp, remotePrefix, srcCluster, !(updateFlags & (DALI_UPDATEF_REPLACE_FILE | DALI_UPDATEF_CLONE_FROM)), false, false);
+    wufiles->resolveFiles(locations, lookupDaliIp, remoteStorage, remotePrefix, srcCluster, !(updateFlags & (DALI_UPDATEF_REPLACE_FILE | DALI_UPDATEF_CLONE_FROM)), false, false, false);
 
     StringBuffer defReplicateFolder;
     getConfigurationDirectory(NULL, "data2", "roxie", processName.str(), defReplicateFolder);
@@ -170,13 +170,13 @@ void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, Stri
     }
 }
 
-void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, StringArray &notFound, IPropertyTree *packageMap, const char *lookupDaliIp, const char *dstCluster, const char *srcCluster, const char *prefix, IUserDescriptor* userdesc, bool allowForeignFiles)
+void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, StringArray &notFound, IPropertyTree *packageMap, const char *remoteStorage, const char *lookupDaliIp, const char *dstCluster, const char *srcCluster, const char *prefix, IUserDescriptor* userdesc, bool allowForeignFiles)
 {
     Owned<IConstWUClusterInfo> clusterInfo = getWUClusterInfoByName(dstCluster);
     if (!clusterInfo)
         throw MakeStringException(PKG_TARGET_NOT_DEFINED, "Could not find information about target cluster %s ", dstCluster);
 
-    cloneFileInfoToDali(publisherWuid, updateFlags, notFound, packageMap, lookupDaliIp, clusterInfo, srcCluster, prefix, userdesc, allowForeignFiles);
+    cloneFileInfoToDali(publisherWuid, updateFlags, notFound, packageMap, remoteStorage, lookupDaliIp, clusterInfo, srcCluster, prefix, userdesc, allowForeignFiles);
 }
 
 void makePackageActive(IPropertyTree *pkgSet, IPropertyTree *psEntryNew, const char *target, bool activate)
@@ -273,6 +273,7 @@ public:
     StringAttr process;
     StringAttr target;
     StringAttr dfuQueue;
+    StringAttr remoteStorage;
     unsigned flags;
     unsigned dfuWait = 1800000; //wait for DFU Copy, default 30 minutes (only used if !req.getOnlyCopyFiles() and !req.getStopIfFilesCopied())
 
@@ -381,7 +382,7 @@ public:
     void cloneDfsInfo(unsigned updateFlags, StringArray &filesNotFound, IPropertyTree *pt)
     {
         if (!streq(target.get(), "*"))
-            cloneFileInfoToDali(publisherWuid, updateFlags, filesNotFound, pt, daliIP, ensureClusterInfo(), srcCluster, prefix, userdesc, checkFlag(PKGADD_ALLOW_FOREIGN));
+            cloneFileInfoToDali(publisherWuid, updateFlags, filesNotFound, pt, remoteStorage, daliIP, ensureClusterInfo(), srcCluster, prefix, userdesc, checkFlag(PKGADD_ALLOW_FOREIGN));
         else
         {
             CConstWUClusterInfoArray clusters;
@@ -390,7 +391,7 @@ public:
             {
                 IConstWUClusterInfo &cluster = clusters.item(i);
                 if (cluster.getPlatform() == RoxieCluster)
-                    cloneFileInfoToDali(publisherWuid, updateFlags, filesNotFound, pt, daliIP, &cluster, srcCluster, prefix, userdesc, checkFlag(PKGADD_ALLOW_FOREIGN));
+                    cloneFileInfoToDali(publisherWuid, updateFlags, filesNotFound, pt, remoteStorage, daliIP, &cluster, srcCluster, prefix, userdesc, checkFlag(PKGADD_ALLOW_FOREIGN));
             }
         }
     }
@@ -838,6 +839,7 @@ static void setDfuOptions(PackageMapUpdater &updater, unsigned &updateFlags, TRe
         updateFlags |= DFU_UPDATEF_OVERWRITE;
     updater.dfuQueue.set(req.getDfuQueue());
     updater.dfuWait = req.getDfuWait();
+    updater.remoteStorage.set(req.getRemoteStorage());
 }
 
 bool CWsPackageProcessEx::onAddPackage(IEspContext &context, IEspAddPackageRequest &req, IEspAddPackageResponse &resp)
@@ -1260,7 +1262,7 @@ void CWsPackageProcessEx::validatePackage(IEspContext &context, IEspValidatePack
         pmfiles->addFilesFromPackageMap(mapTree);
         StringArray locations;
         locations.append(process.str());
-        pmfiles->resolveFiles(locations, nullptr, nullptr, nullptr, true, false, false);
+        pmfiles->resolveFiles(locations, nullptr, nullptr, nullptr, nullptr, true, false, false, false);
         Owned<IReferencedFileIterator> files = pmfiles->getFiles();
         ForEach(*files)
         {
