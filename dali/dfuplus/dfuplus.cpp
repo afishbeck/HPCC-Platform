@@ -351,6 +351,17 @@ int CDfuPlusHelper::doit()
     return 0;
 }
 
+void CDfuPlusHelper::setContainerMtlsSecret(IEspClientRpcSettings &rpc)
+{
+#ifdef _CONTAINERIZED
+    //will only affect HTTPS
+    const char *mtlsSecretName = globals->queryProp("mtls-secret");
+    if (!isEmptyString(mtlsSecretName))
+        rpc.setMtlsSecretName(mtlsSecretName);
+#endif
+}
+
+
 bool CDfuPlusHelper::fixedSpray(const char* srcxml,const char* srcip,const char* srcfile,const char* srcplane,
                                 const MemoryBuffer &xmlbuf,const char* dstcluster,const char* dstname,
                                 const char *format, StringBuffer &retwuid, StringBuffer &except)
@@ -376,6 +387,8 @@ bool CDfuPlusHelper::fixedSpray(const char* srcxml,const char* srcip,const char*
     }
 
     Owned<IClientSprayFixed> req = sprayclient->createSprayFixedRequest();
+    setContainerMtlsSecret(req->rpc());
+
     if(isEmptyString(srcxml))
     {
         info("\nFixed spraying from %s on %s to %s\n", srcfile, srcplane?srcplane:srcip, dstname);
@@ -451,6 +464,7 @@ bool CDfuPlusHelper::variableSpray(const char* srcxml,const char* srcip,const ch
                                    const char *format,StringBuffer &retwuid, StringBuffer &except)
 {
     Owned<IClientSprayVariable> req = sprayclient->createSprayVariableRequest();
+    setContainerMtlsSecret(req->rpc());
     if(isEmptyString(srcxml))
     {
         info("\nVariable spraying from %s on %s to %s\n", srcfile, srcplane?srcplane:srcip, dstname);
@@ -690,6 +704,7 @@ int CDfuPlusHelper::replicate()
     bool nowait = globals->getPropBool("nowait", false);
 
     Owned<IClientReplicate> req = sprayclient->createReplicateRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setSourceLogicalName(srcname);
     req->setReplicateOffset(globals->getPropInt("replicateoffset",1));
     bool repeatlast = globals->getPropBool("repeatlast");
@@ -761,6 +776,7 @@ int CDfuPlusHelper::despray()
     }
 
     Owned<IClientDespray> req = sprayclient->createDesprayRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setSourceLogicalName(srcname);
     StringBuffer extrainfo;
     if(isEmptyString(dstxml))
@@ -858,6 +874,7 @@ int CDfuPlusHelper::copy()
     info("\nCopying from %s to %s\n", srcname, dstname);
 
     Owned<IClientCopy> req = sprayclient->createCopyRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setSourceLogicalName(srcname);
     req->setDestLogicalName(dstname);
     if(dstcluster != nullptr)
@@ -957,6 +974,7 @@ int CDfuPlusHelper::copysuper()
     info("\nCopying superfile from %s to %s\n", srcname, dstname);
 
     Owned<IClientCopy> req = sprayclient->createCopyRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setSuperCopy(true);
     req->setSourceLogicalName(srcname);
     req->setDestLogicalName(dstname);
@@ -1039,6 +1057,7 @@ int CDfuPlusHelper::monitor()
 
 
     Owned<IClientDfuMonitorRequest> req = sprayclient->createDfuMonitorRequest();
+    setContainerMtlsSecret(req->rpc());
     if (eventname)
         req->setEventName(eventname);
     if (lfn)
@@ -1138,6 +1157,7 @@ int CDfuPlusHelper::remove()
         throw MakeStringException(-1, "file name not specified");
 
     Owned<IClientDFUArrayActionRequest> req = dfuclient->createDFUArrayActionRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setType("Delete");
     req->setLogicalFiles(files);
 
@@ -1207,6 +1227,7 @@ int CDfuPlusHelper::rename()
     info("\nRenaming from %s to %s\n", srcname, dstname);
 
     Owned<IClientRename> req = sprayclient->createRenameRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setSrcname(srcname);
     req->setDstname(dstname);
 
@@ -1323,6 +1344,7 @@ int CDfuPlusHelper::superfile(const char* action)
         }
 
         Owned<IClientSuperfileActionRequest> req = dfuclient->createSuperfileActionRequest();
+        setContainerMtlsSecret(req->rpc());
         req->setAction(action);
         req->setSuperfile(superfile);
         req->setSubfiles(subfiles);
@@ -1352,6 +1374,7 @@ int CDfuPlusHelper::superfile(const char* action)
     else if(stricmp(action, "list") == 0)
     {
         Owned<IClientSuperfileListRequest> req = dfuclient->createSuperfileListRequest();
+        setContainerMtlsSecret(req->rpc());
         req->setSuperfile(superfile);
         Owned<IClientSuperfileListResponse> resp = dfuclient->SuperfileList(req);
 
@@ -1381,6 +1404,7 @@ int CDfuPlusHelper::savexml()
         throw MakeStringException(-1, "srcname not specified");
 
     Owned<IClientSavexmlRequest> req = dfuclient->createSavexmlRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setName(lfn);
 
     Owned<IClientSavexmlResponse> resp = dfuclient->Savexml(req);
@@ -1448,6 +1472,7 @@ int CDfuPlusHelper::add()
         const char* dstcluster = globals->queryProp("dstcluster");
 
         Owned<IClientAddRequest> req = dfuclient->createAddRequest();
+        setContainerMtlsSecret(req->rpc());
         req->setDstname(lfn);
         req->setXmlmap(xmlbuf);
         req->setDstcluster(dstcluster);
@@ -1466,6 +1491,7 @@ int CDfuPlusHelper::add()
     else
     {
         Owned<IClientAddRemoteRequest> req = dfuclient->createAddRemoteRequest();
+        setContainerMtlsSecret(req->rpc());
         req->setDstname(lfn);
         req->setSrcname(srcname);
         req->setSrcdali(srcdali);
@@ -1553,6 +1579,7 @@ int CDfuPlusHelper::reportDfuWorkunitStatus(IConstDFUWorkunit & dfuwu, bool jobi
 int CDfuPlusHelper::reportDfuWorkunitStatus(const char *wuid)
 {
     Owned<IClientGetDFUWorkunit> req = sprayclient->createGetDFUWorkunitRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setWuid(wuid);
 
     Owned<IClientGetDFUWorkunitResponse> resp = sprayclient->GetDFUWorkunit(req);
@@ -1565,6 +1592,7 @@ int CDfuPlusHelper::reportDfuWorkunitStatus(const char *wuid)
 int CDfuPlusHelper::reportDfuPublisherStatus(const char *wuid)
 {
     Owned<IClientGetDFUWorkunits> req = sprayclient->createGetDFUWorkunitsRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setPublisherWuid(wuid);
 
     Owned<IClientGetDFUWorkunitsResponse> resp = sprayclient->GetDFUWorkunits(req);
@@ -1584,6 +1612,7 @@ int CDfuPlusHelper::abort()
         throw MakeStringException(-1, "wuid not specified");
 
     Owned<IClientAbortDFUWorkunit> req = sprayclient->createAbortDFUWorkunitRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setWuid(wuid);
 
     Owned<IClientAbortDFUWorkunitResponse> resp = sprayclient->AbortDFUWorkunit(req);
@@ -1631,6 +1660,7 @@ int CDfuPlusHelper::listhistory()
         throw MakeStringException(-1, "srcname not specified");
 
     Owned<IClientListHistoryRequest> req = dfuclient->createListHistoryRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setName(lfn);
 
     Owned<IClientListHistoryResponse> resp = dfuclient->ListHistory(req);
@@ -1821,6 +1851,7 @@ int CDfuPlusHelper::erasehistory()
         // Get and backup file history before erased.
         // If any problem happens during the backup the history remain intact.
         Owned<IClientListHistoryRequest> req = dfuclient->createListHistoryRequest();
+        setContainerMtlsSecret(req->rpc());
         req->setName(lfn);
 
         Owned<IClientListHistoryResponse> resp = dfuclient->ListHistory(req);
@@ -1863,6 +1894,7 @@ int CDfuPlusHelper::erasehistory()
     }
 
     Owned<IClientEraseHistoryRequest> req = dfuclient->createEraseHistoryRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setName(lfn);
 
     Owned<IClientEraseHistoryResponse> resp = dfuclient->EraseHistory(req);
@@ -1888,6 +1920,7 @@ int CDfuPlusHelper::resubmit()
         throw MakeStringException(-1, "wuid not specified");
 
     Owned<IClientSubmitDFUWorkunit> req = sprayclient->createSubmitDFUWorkunitRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setWuid(wuid);
 
     Owned<IClientSubmitDFUWorkunitResponse> resp = sprayclient->SubmitDFUWorkunit(req);
@@ -1913,6 +1946,7 @@ int CDfuPlusHelper::waitToFinish(const char* wuid)
         return 0;
 
     Owned<IClientGetDFUWorkunit> req = sprayclient->createGetDFUWorkunitRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setWuid(wuid);
 
     int wait_cycle = 10;
@@ -1987,6 +2021,7 @@ int CDfuPlusHelper::updatejobname(const char* wuid, const char* jobname)
         throw MakeStringException(-1, "jobname not specified");
 
     Owned<IClientGetDFUWorkunit> req = sprayclient->createGetDFUWorkunitRequest();
+    setContainerMtlsSecret(req->rpc());
     req->setWuid(wuid);
 
     Owned<IClientGetDFUWorkunitResponse> resp = sprayclient->GetDFUWorkunit(req);
@@ -2004,6 +2039,7 @@ int CDfuPlusHelper::updatejobname(const char* wuid, const char* jobname)
     dfuwu.setJobName(jobname);
 
     Owned<IClientUpdateDFUWorkunit> updatereq = sprayclient->createUpdateDFUWorkunitRequest();
+    setContainerMtlsSecret(req->rpc());
     updatereq->setWu(dfuwu);
     updatereq->setStateOrig(dfuwu.getState());
     sprayclient->UpdateDFUWorkunit(updatereq);

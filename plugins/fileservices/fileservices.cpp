@@ -2855,6 +2855,24 @@ static bool build_dfuplus_globals(int argc, const char *argv[], IProperties * gl
         if (strchr(argv[i],'='))
             globals->loadProp(argv[i]);
 
+    const char *server = globals->queryProp("server");
+
+    // if server matches the exact string "eclservices" we can look up the settings for that service
+    if (!isEmptyString(server) && streq(server, "eclservices"))
+    {
+        const char *url = fsGetEspURL(nullptr, nullptr);
+        if (!isEmptyString(url))
+        {
+            if (strncmp("mtls:", url, 5)==0)
+            {
+                if (!globals->hasProp("mtls-secret"))
+                    globals->setProp("mtls-secret", "local");
+                url+=5;
+            }
+        }
+        globals->setProp("server", url);
+    }
+
     StringBuffer tmp;
     if (globals->hasProp("encrypt")) {
         encrypt(tmp.clear(),globals->queryProp("encrypt") );  // basic encryption at this stage
