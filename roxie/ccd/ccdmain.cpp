@@ -1411,7 +1411,7 @@ int CCD_API roxie_main(int argc, const char *argv[], const char * defaultYaml)
                     {
                         roxiePort = port;
                         if (roxieFarm.getPropBool("@tls"))
-                            roxiePortTlsClientConfig = createTlsClientSecretInfo(roxieFarm.queryProp("@issuer"), !roxieFarm.getPropBool("@public"), roxieFarm.getPropBool("@selfSigned"));
+                            roxiePortTlsClientConfig = queryTlsClientSecretInfo(roxieFarm.queryProp("@issuer"), !roxieFarm.getPropBool("@public"), roxieFarm.getPropBool("@selfSigned"));
                         debugEndpoint.set(roxiePort, ip);
                     }
                     bool suspended = roxieFarm.getPropBool("@suspended", false);

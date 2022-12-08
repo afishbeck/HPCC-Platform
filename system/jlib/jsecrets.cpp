@@ -898,23 +898,41 @@ const MemoryAttr &getSecretUdpKey(bool required)
     return udpKey;
 }
 
-IPropertyTree *createTlsClientSecretInfo(const char *issuer, bool mutual, bool acceptSelfSigned, bool addCACert)
+IPropertyTree *queryTlsClientInfoBySecret(const char *category, const char *secretname, bool addCert, bool acceptSelfSigned, bool addCACert)
 {
-    if (isEmptyString(issuer))
+    if (isEmptyString(category)||isEmptyString(secretname))
         return nullptr;
+
+    StringBuffer cacheId(category);
+    //mangle the category part of the id just in case, secretname is out of our control and could (as unlikely as it is) have any of these tags as part of the name
+    if (addCert)
+        cacheId.append("__crt");
+    if (acceptSelfSigned)
+        cacheId.append("__ss");
+    if (addCACert)
+        cacheId.append("__ca");
+    cacheId.append(':').append(secretname);
+
+    CriticalBlock block(mtlsInfoCacheCS);
+    IPropertyTree *info = mtlsInfoCache->queryPropTree(cacheId);
+    if (info)
+        return info;
 
     StringBuffer filepath;
     StringBuffer secretpath;
-    buildSecretPath(secretpath, "certificates", issuer);
+    buildSecretPath(secretpath, category, secretname);
 
-    Owned<IPropertyTree> info = createPTree();
-
-    if (mutual)
+    if (addCert)
     {
         filepath.set(secretpath).append("tls.crt");
         if (!checkFileExists(filepath))
             return nullptr;
+    }
 
+    info = mtlsInfoCache->setPropTree(cacheId);
+
+    if (addCert)
+    {
         info->setProp("certificate", filepath.str());
         filepath.set(secretpath).append("tls.key");
         if (checkFileExists(filepath))
@@ -936,49 +954,22 @@ IPropertyTree *createTlsClientSecretInfo(const char *issuer, bool mutual, bool a
     verify->setPropBool("@accept_selfsigned", acceptSelfSigned);
     verify->setProp("trusted_peers", "anyone");
 
-    return info.getClear();
+    return info;
+}
+
+IPropertyTree *queryTlsClientSecretInfo(const char *issuer, bool addCert, bool acceptSelfSigned, bool addCACert)
+{
+    return queryTlsClientInfoBySecret("certificates", issuer, addCert, acceptSelfSigned, addCACert);
+}
+
+IPropertyTree *queryEclClientSecretInfo(const char *secretname, bool addCert, bool acceptSelfSigned, bool addCACert)
+{
+    return queryTlsClientInfoBySecret("ecl", secretname, addCert, acceptSelfSigned, addCACert);
 }
 
 IPropertyTree *queryTlsSecretInfo(const char *name)
 {
-    if (isEmptyString(name))
-        return nullptr;
-    CriticalBlock block(mtlsInfoCacheCS);
-    IPropertyTree *info = mtlsInfoCache->queryPropTree(name);
-    if (info)
-        return info;
-
-    StringBuffer filepath;
-    StringBuffer secretpath;
-
-    buildSecretPath(secretpath, "certificates", name);
-
-    filepath.set(secretpath).append("tls.crt");
-    if (!checkFileExists(filepath))
-        return nullptr;
-
-    info = mtlsInfoCache->setPropTree(name);
-    info->setProp("certificate", filepath.str());
-    filepath.set(secretpath).append("tls.key");
-    if (checkFileExists(filepath))
-        info->setProp("privatekey", filepath.str());
-    IPropertyTree *verify = ensurePTree(info, "verify");
-    if (verify)
-    {
-        filepath.set(secretpath).append("ca.crt");
-        if (checkFileExists(filepath))
-        {
-            IPropertyTree *ca = ensurePTree(verify, "ca_certificates");
-            if (ca)
-                ca->setProp("@path", filepath.str());
-        }
-        // TLS TODO: do we want to always require verify, even if no ca ?
-        verify->setPropBool("@enable", true);
-        verify->setPropBool("@address_match", false);
-        verify->setPropBool("@accept_selfsigned", false);
-        verify->setProp("trusted_peers", "anyone");
-    }
-    return info;
+    return queryTlsClientInfoBySecret("certificates", name, true, false, true);
 }
 
 enum UseMTLS { UNINIT, DISABLED, ENABLED };

@@ -242,7 +242,7 @@ storage:
 ## The local issuer can also be configured to use an external certificate authority or vault.
 ##
 certificates:
-  enabled: false
+  enabled: true
   issuers:
     local:
       name: hpcc-local-issuer

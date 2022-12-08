@@ -827,7 +827,7 @@ private:
     CTimeMon timeLimitMon;
     bool complete, timeLimitExceeded;
     bool customClientCert = false;
-    bool localClientCert = false;
+    IPropertyTree *tlsInfo = nullptr;
     IRoxieAbortMonitor * roxieAbortMonitor;
 
 protected:
@@ -964,7 +964,7 @@ public:
             throw MakeStringException(0, "%sCALL specified no URLs",wscType == STsoap ? "SOAP" : "HTTP");
         if (0==strncmp(hosts, "mtls:", 5))
         {
-            localClientCert = true;
+            tlsInfo = queryTlsSecretInfo("local");
             hosts += 5;
         }
         if (0==strncmp(hosts, "secret:", 7))
@@ -1004,6 +1004,10 @@ public:
             urlListParser.getUrls(urlArray, auth);
             proxyAddress.set(secret->queryProp("proxy"));
             getSecretKeyValue(proxyAddress.clear(), secret, "proxy");
+
+            //if mtls was not specified, and this secret contains a client cert (tls.crt) then use it, otherwise tlsInfo will be null
+            if (!tlsInfo)
+                tlsInfo = queryEclClientSecretInfo(secretName, true, false, true);
         }
         else
         {
@@ -1125,10 +1129,11 @@ public:
     {
         if (!ownedSC)
         {
-            if (clientCert != NULL)
+            //client cert from the caller specifiying mtls or a secret name wins over the global roxie client cert
+            if (tlsInfo)
+                ownedSC.setown(createSecureSocketContextEx2(tlsInfo, ClientSocket));
+            else if (clientCert != NULL)
                 ownedSC.setown(createSecureSocketContextEx(clientCert->certificate, clientCert->privateKey, clientCert->passphrase, ClientSocket));
-            else if (localClientCert)
-                ownedSC.setown(createSecureSocketContextSecret("local", ClientSocket));
             else
                 ownedSC.setown(createSecureSocketContext(ClientSocket));
         }

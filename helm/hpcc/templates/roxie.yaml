@@ -36,6 +36,7 @@ data:
     roxie:
 {{- $root := .root -}}
 {{- $component := .me }}
+{{- $mtlsEnabled := (eq (include "hpcc.isMtlsEnabled" (dict "root" .root)) "true") }}
       services:
   {{- range $service := .me.services }}
       - name: {{ $service.name }}
@@ -43,13 +44,42 @@ data:
    {{- if ne (int $service.servicePort) 0 }}
      {{- include "hpcc.addTLSServiceEntries" (dict "root" $root "service" $service "component" $component "visibility" $service.visibility) | indent 6 }}
    {{- end }}
+   {{- if $mtlsEnabled -}}
+    {{- $externalCert := (ne (include "hpcc.isVisibilityPublic" (dict "root" $root "visibility" $service.visibility)) "") -}}
+    {{- $externalIssuerName := ternary "remote" "public" (eq "true" ( include "hpcc.usesRemoteClientCertificates" $service )) -}}
+    {{- $issuerName := ternary $externalIssuerName "local" $externalCert }}
+        tls_config:
+    {{- if $externalCert }}
+          certificate: /opt/HPCCSystems/secrets/certificates/{{ $issuerName }}/tls.crt
+          privatekey: /opt/HPCCSystems/secrets/certificates/{{ $issuerName }}/tls.key
+     {{- if (hasKey $service "remoteClients" )}}
+          verify:
+            enable: true
+            address_match: false
+            accept_selfsigned: false
+            trusted_peers: [ {{ include "hpcc.getTrustedPeerString" (dict "root" .root "remoteClients" $service.remoteClients "instance" $service.name "component" "roxie" "visibility" $service.visibility) }} ]
+            ca_certificates:
+              path: /opt/HPCCSystems/secrets/certificates/{{ $issuerName }}/ca.crt
+     {{- end }}
+    {{- else }}
+          certificate: /opt/HPCCSystems/secrets/certificates/local/tls.crt
+          privatekey: /opt/HPCCSystems/secrets/certificates/local/tls.key
+          verify:
+            enable: true
+            address_match: false
+            accept_selfsigned: false
+            trusted_peers: [ anyone ]
+            ca_certificates:
+              path: /opt/HPCCSystems/secrets/certificates/local/ca.crt
+    {{- end }}
   {{- end }}
+ {{- end }}
+
 {{ toYaml ( omit .me "logging" "topoServer" "encryptInTransit" "env" "services") | indent 6 }}
       numChannels: {{ .numChannels }}
       topologyServers: "{{ .toponame }}:{{ .topoport }}"
       heartbeatInterval: {{ .heartbeatInterval }}
       resolveLocally: false
-{{- $mtlsEnabled := (eq (include "hpcc.isMtlsEnabled" (dict "root" .root)) "true") -}}
 {{/* By default use encryption if local certificates are enabled, but allow it to be turned off via roxie .encryptInTransit value */}}
 {{- if (hasKey .me "encryptInTransit") -}}
   {{- if and (.me.encryptInTransit) (not $mtlsEnabled) -}}
