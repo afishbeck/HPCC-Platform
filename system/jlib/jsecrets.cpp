@@ -254,9 +254,15 @@ public:
     {
         cache.setown(createPTree());
         StringBuffer url;
+        const char *urlattr = vault->queryProp("@url");
+        PROGLOG("vault configured url %s", urlattr ? urlattr : "null");
         replaceEnvVariables(url, vault->queryProp("@url"), false);
+        PROGLOG("vault replaced env vars url %s", url.str());
         if (url.length())
+        {
             splitUrlSchemeHostPort(url.str(), username, password, schemeHostPort, path);
+            PROGLOG("vault schemahostport %s, path %s", schemeHostPort.str(), path.str());
+        }
         name.set(vault->queryProp("@name"));
         kind = getSecretType(vault->queryProp("@kind"));
 
@@ -273,6 +279,7 @@ public:
                 appRoleSecretName.set(vault->queryProp("@appRoleSecret"));
             if (appRoleSecretName.isEmpty())
                 appRoleSecretName.set("appRoleSecret");
+            PROGLOG("using approle for vault auth role-id %s secret-name %s", appRoleId.str(), appRoleSecretName.str());
         }
         else if (vault->hasProp("@client-secret"))
         {
@@ -354,7 +361,10 @@ public:
     bool isClientTokenExpired()
     {
         if (clientTokenExpiration==0)
+        {
+            PROGLOG("vault auth client token no expiration");
             return false;
+        }
         double remaining = difftime(clientTokenExpiration, time(nullptr));
         if (remaining <= 0)
         {
@@ -362,6 +372,7 @@ public:
             return true;
         }
         //TBD check renewal
+        PROGLOG("vault auth client token NOT expired");
         return false;
     }
 
@@ -410,12 +421,22 @@ public:
 
         std::string json;
         json.append("{\"role_id\": \"").append(appRoleId).append("\", \"secret_id\": \"").append(appRoleSecretId).append("\"}");
+
+        PROGLOG("preparing to post approle login to %s", schemeHostPort.str());
+
         httplib::Client cli(schemeHostPort.str());
         if (username.length() && password.length())
+        {
             cli.set_basic_auth(username, password);
+            PROGLOG("approle login unexpected credentials used user - %s, pw - %s", username.str(), password.str());
+        }
         httplib::Headers headers;
         if (vaultNamespace.length())
+        {
             headers.emplace("X-Vault-Namespace", vaultNamespace.str());
+            PROGLOG("approle login namespace %s", vaultNamespace.str());
+        }
+
         httplib::Result res = cli.Post("/v1/auth/approle/login", headers, json, "application/json");
         processClientTokenResponse(res);
     }
@@ -496,15 +517,15 @@ public:
                  //try again forcing relogin, but only once.  Just in case the token was invalidated but hasn't passed expiration time (for example max usage count exceeded).
                 if (permissionDenied==false)
                     return requestSecretAtLocation(rkind, content, location, secret, version, true);
-                OERRLOG("Vault %s permission denied accessing secret (check namespace=%s?) %s.%s [%d](%d) - response: %s", name.str(), vaultNamespace.str(), secret, version ? version : "", res->status, res.error(), res->body.c_str());
+                OERRLOG("Vault %s permission denied accessing secret (check namespace=%s?) %s.%s location %s [%d](%d) - response: %s", name.str(), vaultNamespace.str(), secret, version ? version : "", location ? location : "null", res->status, res.error(), res->body.c_str());
             }
             else
             {
-                OERRLOG("Vault %s error accessing secret %s.%s [%d](%d) - response: %s", name.str(), secret, version ? version : "", res->status, res.error(), res->body.c_str());
+                OERRLOG("Vault %s error accessing secret %s.%s location %s [%d](%d) - response: %s", name.str(), secret, version ? version : "", location ? location : "null", res->status, res.error(), res->body.c_str());
             }
         }
         else
-            OERRLOG("Error: Vault %s http error (%d) accessing secret %s.%s", name.str(), res.error(), secret, version ? version : "");
+            OERRLOG("Error: Vault %s http error (%d) accessing secret %s.%s location %s", name.str(), res.error(), secret, version ? version : "", location ? location : "null");
         return false;
     }
     bool requestSecret(CVaultKind &rkind, StringBuffer &content, const char *secret, const char *version)
