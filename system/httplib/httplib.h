@@ -5908,7 +5908,7 @@ inline bool SSLClient::initialize_ssl(Socket &socket) {
           verify_result_ = SSL_get_verify_result(ssl);
 
           if (verify_result_ != X509_V_OK) {
-            PROGLOG("HTTPLIB Error verifying server certificate SSL_get_verify_result %d", verify_result_);
+            PROGLOG("HTTPLIB Error verifying server certificate SSL_get_verify_result %ld", verify_result_);
             error_ = Error::SSLServerVerification;
             return false;
           }
