@@ -19,6 +19,7 @@
 #define ECLCMD_COMMON_HPP
 
 #include "ws_workunits.hpp"
+#include "ws_fs.hpp"
 #include "eclcc.hpp"
 
 //=========================================================================================
@@ -461,6 +462,16 @@ public:
         req->setDfuOverwrite(optDfuOverwrite);
         req->setStopIfFilesCopied(optStopIfFilesCopied);
         req->setOnlyCopyFiles(optOnlyCopyFiles);
+        req->setDfuPublisherWuid(optDfuPublisherWuid);
+    }
+
+    void preallocatePublisherWuid(EclCmdWithEclTarget &cmd);
+
+    bool finalizeOptions(EclCmdWithEclTarget &cmd, IProperties *globals)
+    {
+        if (optDfuCopyFiles)
+            preallocatePublisherWuid(cmd);
+        return true;
     }
 
     template<class TResponse>
@@ -503,6 +514,7 @@ public:
             stdout);
     }
 public:
+    StringAttr optDfuPublisherWuid;
     StringAttr optDfuQueue;
     unsigned optDfuWaitSec = 1800; //30 minutes
     bool optDfuCopyFiles = false;

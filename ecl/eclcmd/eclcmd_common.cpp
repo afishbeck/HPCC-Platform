@@ -23,8 +23,9 @@
 #include "workunit.hpp"
 #include "eclwatch_errorlist.hpp"
 
-
 #include "eclcmd_common.hpp"
+
+#include "ws_fs.hpp"
 
 static StringBuffer eclccpath;
 
@@ -894,4 +895,39 @@ eclCmdOptionMatchIndicator EclCmdWithQueryTarget::parseCommandLineOptions(ArgvIt
             return ind;
     }
     return EclCmdOptionMatch;
+}
+
+void EclCmdOptionsDFU::preallocatePublisherWuid(EclCmdWithEclTarget &cmd)
+{
+    Owned<IClientFileSpray> client = createCmdClientExt(FileSpray, cmd, "");
+    Owned<IClientCreateDFUPublisherWorkunit> req = client->createCreateDFUPublisherWorkunitRequest();
+    Owned<IClientCreateDFUPublisherWorkunitResponse> resp;
+    try
+    {
+         resp.setown(client->CreateDFUPublisherWorkunit(req));
+    }
+    catch (IException *E)
+    {
+        //if we can't preallocate the publisher DFU workunit it's might be because the server is too old, an expected scenario pre release 9.x, we'll just create the publisher wuid the old way
+        StringBuffer msg;
+        int code = E->errorCode();
+        E->errorMessage(msg);
+        E->Release();
+
+        //Not ideal way of detecting this, but all we're trying to do is to improve the info message if we detect the server is old
+        if (code == -2 && strieq(msg, "400: Bad Request [Method CreateDFUPublisherWorkunit not available in service FileSpray"))
+            fprintf(stdout, "\nCan't preallocate the Publisher Workunit, server too old, workunit will be created during processing.\n");
+        else
+            fprintf(stderr, "\nError trying to preallocate the publisher DFU Workunit, will try to create workunit during processing instead.\n%d - %s\n", code, msg.str());
+        return;
+    }
+
+    const char *publisherWuid = resp ? resp->getResult().getID() : nullptr;
+    if (!isEmptyString(publisherWuid))
+    {
+        fprintf(stdout, "\nAllocated Publisher workunit: %s", publisherWuid);
+        optDfuPublisherWuid.set(publisherWuid);
+    }
+    else
+        fprintf(stderr, "\nUnable to to preallocate the publisher DFU Workunit.  Workunit will be created during processing instead.\n");
 }

@@ -124,7 +124,7 @@ bool isFileKnownOnCluster(const char *logicalname, const char *target, IUserDesc
     return isFileKnownOnCluster(logicalname, clusterInfo, userdesc);
 }
 
-void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, StringArray &notFound, IPropertyTree *packageMap, const char *lookupDaliIp, IConstWUClusterInfo *dstInfo, const char *srcCluster, const char *remotePrefix, IUserDescriptor* userdesc, bool allowForeignFiles)
+void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, StringArray &notFound, IPropertyTree *packageMap, const char *lookupDaliIp, IConstWUClusterInfo *dstInfo, const char *srcCluster, const char *remotePrefix, IUserDescriptor* userdesc, bool allowForeignFiles, const char *jobname=nullptr)
 {
     StringBuffer user;
     StringBuffer password;
@@ -135,7 +135,7 @@ void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, Stri
         userdesc->getPassword(password);
     }
 
-    Owned<IReferencedFileList> wufiles = createReferencedFileList(user, password, allowForeignFiles, false);
+    Owned<IReferencedFileList> wufiles = createReferencedFileList(user, password, allowForeignFiles, false, jobname);
     wufiles->addFilesFromPackageMap(packageMap);
 
     Owned<IDFUhelper> helper = createIDFUhelper();
@@ -170,13 +170,13 @@ void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, Stri
     }
 }
 
-void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, StringArray &notFound, IPropertyTree *packageMap, const char *lookupDaliIp, const char *dstCluster, const char *srcCluster, const char *prefix, IUserDescriptor* userdesc, bool allowForeignFiles)
+void cloneFileInfoToDali(StringBuffer &publisherWuid, unsigned updateFlags, StringArray &notFound, IPropertyTree *packageMap, const char *lookupDaliIp, const char *dstCluster, const char *srcCluster, const char *prefix, IUserDescriptor* userdesc, bool allowForeignFiles, const char *jobname=nullptr)
 {
     Owned<IConstWUClusterInfo> clusterInfo = getWUClusterInfoByName(dstCluster);
     if (!clusterInfo)
         throw MakeStringException(PKG_TARGET_NOT_DEFINED, "Could not find information about target cluster %s ", dstCluster);
 
-    cloneFileInfoToDali(publisherWuid, updateFlags, notFound, packageMap, lookupDaliIp, clusterInfo, srcCluster, prefix, userdesc, allowForeignFiles);
+    cloneFileInfoToDali(publisherWuid, updateFlags, notFound, packageMap, lookupDaliIp, clusterInfo, srcCluster, prefix, userdesc, allowForeignFiles, jobname);
 }
 
 void makePackageActive(IPropertyTree *pkgSet, IPropertyTree *psEntryNew, const char *target, bool activate)
@@ -838,6 +838,7 @@ static void setDfuOptions(PackageMapUpdater &updater, unsigned &updateFlags, TRe
         updateFlags |= DFU_UPDATEF_OVERWRITE;
     updater.dfuQueue.set(req.getDfuQueue());
     updater.dfuWait = req.getDfuWait();
+    updater.publisherWuid = req.getDfuPublisherWuid();
 }
 
 bool CWsPackageProcessEx::onAddPackage(IEspContext &context, IEspAddPackageRequest &req, IEspAddPackageResponse &resp)

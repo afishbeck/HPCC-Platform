@@ -964,9 +964,22 @@ void ReferencedFileList::cloneFileInfo(StringBuffer &publisherWuid, const char *
             getDefaultDFUName(dfuQueueName);
 
         Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
-        publisher.setown(factory->createPublisherWorkUnit());
-        publisher->setJobName(jobName.isEmpty() ? "copy published files" : jobName);
-        publisher->setQueue(dfuQueueName);
+        if (!publisherWuid.isEmpty())
+        {
+            //Publisher WUIDs can be preallocated in order to provide them to the user early in the process, but only newly created publisher workunits can be used
+            publisher.setown(factory->updateWorkUnit(publisherWuid, true));
+            if(!publisher)
+                throw makeStringException(-1, "Failed to open preallocated Publisher DFU Workunit.");
+            if (publisher->queryProgress()->getState()!=DFUstate_unknown)
+                throw makeStringException(-1, "Cannot clone files by reusing a previously used publisher workunit.");
+        }
+        else
+        {
+            publisher.setown(factory->createPublisherWorkUnit());
+            publisher->setJobName(jobName.isEmpty() ? "copy published files" : jobName);
+            publisher->setQueue(dfuQueueName);
+        }
+
         publisherWuid.set(publisher->queryId());
     }
 
@@ -984,6 +997,9 @@ void ReferencedFileList::cloneFileInfo(StringBuffer &publisherWuid, const char *
     if (cloneSuperInfo)
         ForEach(files)
             files.queryObject().cloneSuperInfo(publisher, updateFlags, this, user, remote);
+    IDFUprogress *progress = publisher->queryUpdateProgress();
+    if (progress->getState()==DFUstate_unknown) //indicates that no child tasks were added
+        progress->setState(DFUstate_finished); //don't just delete because empty, automated systems are tracking
 }
 
 void ReferencedFileList::cloneRelationships()
