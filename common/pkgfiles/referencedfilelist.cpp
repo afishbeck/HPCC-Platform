@@ -997,9 +997,12 @@ void ReferencedFileList::cloneFileInfo(StringBuffer &publisherWuid, const char *
     if (cloneSuperInfo)
         ForEach(files)
             files.queryObject().cloneSuperInfo(publisher, updateFlags, this, user, remote);
-    IDFUprogress *progress = publisher->queryUpdateProgress();
-    if (progress->getState()==DFUstate_unknown) //indicates that no child tasks were added
-        progress->setState(DFUstate_finished); //don't just delete because empty, automated systems are tracking
+    if (publisher)
+    {
+        IDFUprogress *progress = publisher->queryUpdateProgress();
+        if (progress && progress->getState()==DFUstate_unknown) //indicates that no child tasks were added
+            progress->setState(DFUstate_finished); //don't just delete because empty, automated systems are tracking
+    }
 }
 
 void ReferencedFileList::cloneRelationships()

@@ -914,7 +914,7 @@ void EclCmdOptionsDFU::preallocatePublisherWuid(EclCmdWithEclTarget &cmd)
         E->errorMessage(msg);
         E->Release();
 
-        //Not ideal way of detecting this, but all we're trying to do is to improve the info message if we detect the server is old
+        //Not ideal way of detecting this, but all we're trying to do is to improve the info message when the server is old
         if (code == -2 && strieq(msg, "400: Bad Request [Method CreateDFUPublisherWorkunit not available in service FileSpray"))
             fprintf(stdout, "\nCan't preallocate the Publisher Workunit, server too old, workunit will be created during processing.\n");
         else

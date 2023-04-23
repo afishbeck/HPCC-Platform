@@ -974,7 +974,7 @@ bool CWsWorkunitsEx::onWUPublishWorkunit(IEspContext &context, IEspWUPublishWork
     if (req.getDfuOverwrite())
         updateFlags |= DFU_UPDATEF_OVERWRITE;
 
-    StringBuffer publisherWuid;
+    StringBuffer publisherWuid(req.getDfuPublisherWuid());
     if (!req.getDontCopyFiles())
     {
         QueryFileCopier cpr(target);
@@ -2126,7 +2126,7 @@ bool CWsWorkunitsEx::onWURecreateQuery(IEspContext &context, IEspWURecreateQuery
 
         if (req.getRepublish())
         {
-            StringBuffer publisherWuid;
+            StringBuffer publisherWuid(req.getDfuPublisherWuid());
             if (!req.getDontCopyFiles())
             {
                 StringBuffer daliIP;
@@ -3313,7 +3313,7 @@ bool CWsWorkunitsEx::onWUCopyQuerySet(IEspContext &context, IEspWUCopyQuerySetRe
     cloner.setQueryDirectory(queryDirectory);
 
     SCMStringBuffer process;
-    StringBuffer publisherWuid;
+    StringBuffer publisherWuid(req.getDfuPublisherWuid());
     if (req.getCopyFiles())
     {
         Owned <IConstWUClusterInfo> clusterInfo = getWUClusterInfoByName(target);
@@ -3429,7 +3429,7 @@ bool CWsWorkunitsEx::onWUQuerysetCopyQuery(IEspContext &context, IEspWUQuerySetC
     Owned<IWorkUnitFactory> factory = getWorkUnitFactory(context.querySecManager(), context.queryUser());
     Owned<IConstWorkUnit> cw = factory->openWorkUnit(wuid.str());
 
-    StringBuffer publisherWuid;
+    StringBuffer publisherWuid(req.getDfuPublisherWuid());
     if (!req.getDontCopyFiles())
     {
         StringBuffer daliIP;
@@ -3571,7 +3571,7 @@ bool CWsWorkunitsEx::onWUQuerysetImport(IEspContext &context, IEspWUQuerysetImpo
         else
             cloner.cloneAllLocal(activate, req.getQueryMask());
 
-        StringBuffer publisherWuid;
+        StringBuffer publisherWuid(req.getDfuPublisherWuid());
         cloner.cloneFiles(publisherWuid);
         if (req.getIncludeFileErrors())
             cloner.gatherFileErrors(resp.getFileErrors());

@@ -111,6 +111,7 @@ typedef IEclCommand *(*EclCommandFactory)(const char *cmdname);
 #define ECLOPT_ALLOW_FOREIGN "--allow-foreign"
 #define ECLOPT_DFU_OVERWRITE "--dfu-overwrite"
 #define ECLOPT_STOP_IF_FILES_COPIED "--stop-if-files-copied"
+#define ECLOPT_PREALLOCATE_PUBLISHER "--preallocate-publisher"
 #define ECLOPT_DFU_QUEUE "--dfu-queue"
 #define ECLOPT_DFU_WAIT "--dfu-wait"
 
@@ -469,7 +470,7 @@ public:
 
     bool finalizeOptions(EclCmdWithEclTarget &cmd, IProperties *globals)
     {
-        if (optDfuCopyFiles)
+        if (optPreallocatePublisherWuid && optDfuCopyFiles)
             preallocatePublisherWuid(cmd);
         return true;
     }
@@ -495,6 +496,8 @@ public:
             return true;
         if (iter.matchFlag(optStopIfFilesCopied, ECLOPT_STOP_IF_FILES_COPIED))
             return true;
+        if (iter.matchFlag(optPreallocatePublisherWuid, ECLOPT_PREALLOCATE_PUBLISHER))
+            return true;
         if (iter.matchFlag(optOnlyCopyFiles, ECLOPT_ONLY_COPY_FILES))
             return true;
         return false;
@@ -510,7 +513,9 @@ public:
             "   --dfu-overwrite        Set DFU copy command to overwrite physical files that are already on disk.\n"
             "   --only-copy-files      Copy the files needed for the query, but don't publish the query\n"
             "   --stop-if-files-copied If all files already exist, publish the query.\n"
-            "                          Otherwise, copy the files needed for the query, but don't publish the query\n",
+            "                          Otherwise, copy the files needed for the query, but don't publish the query\n"
+            "   --preallocate-publisher Allocate and display the publisher wuid immediately, so that it can be tracked\n"
+            "                           even if the command line is diconnected\n",
             stdout);
     }
 public:
@@ -521,6 +526,7 @@ public:
     bool optDfuOverwrite = false;
     bool optOnlyCopyFiles = false;
     bool optStopIfFilesCopied = false;
+    bool optPreallocatePublisherWuid = false; //better allows automated tracking to have the publisher wuid available immediately
 };
 
 void outputExceptionEx(IException &e);
