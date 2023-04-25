@@ -533,6 +533,8 @@ public:
             usage();
             return false;
         }
+        if (!dfuOptions.finalizeOptions(*this, globals))
+            return false;
         StringBuffer err;
         if (optFileName.isEmpty())
             err.append("\n ... Missing package file name\n");
@@ -712,6 +714,8 @@ public:
             usage();
             return false;
         }
+        if (!dfuOptions.finalizeOptions(*this, globals))
+            return false;
         StringBuffer err;
         if (optSrcPath.isEmpty())
             err.append("\n ... Missing path to source packagemap\n");
@@ -1279,6 +1283,8 @@ public:
             usage();
             return false;
         }
+        if (!dfuOptions.finalizeOptions(*this, globals))
+            return false;
         StringBuffer err;
         if (optFileName.isEmpty())
             err.append("\n ... Missing package file name\n");
