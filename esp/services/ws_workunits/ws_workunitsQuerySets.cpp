@@ -3287,6 +3287,7 @@ public:
     StringArray existingQueryIds;
     StringArray copiedQueryIds;
     StringArray missingWuids;
+    StringBuffer dfu_jobname;
     StringAttr dfu_queue;
 };
 
@@ -3332,7 +3333,10 @@ bool CWsWorkunitsEx::onWUCopyQuerySet(IEspContext &context, IEspWUCopyQuerySetRe
             if (req.getAppendCluster())
                 updateFlags |= DALI_UPDATEF_APPEND_CLUSTER;
             if (req.getDfuCopyFiles())
+            {
                 updateFlags |= DFU_UPDATEF_COPY;
+                cloner.dfu_jobname.append("copy queryset ").append(srcTarget);
+            }
             if (req.getDfuOverwrite())
                 updateFlags |= DFU_UPDATEF_OVERWRITE;
             cloner.dfu_queue.set(req.getDfuQueue());
@@ -3457,6 +3461,7 @@ bool CWsWorkunitsEx::onWUQuerysetCopyQuery(IEspContext &context, IEspWUQuerySetC
         cpr.srcCluster.set(srcCluster);
         cpr.queryname.set(targetQueryName);
         cpr.dfu_queue.set(req.getDfuQueue());
+
         cpr.copy(publisherWuid, cw, updateFlags);
 
         if (req.getIncludeFileErrors())

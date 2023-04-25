@@ -380,8 +380,11 @@ public:
     }
     void cloneDfsInfo(unsigned updateFlags, StringArray &filesNotFound, IPropertyTree *pt)
     {
+        const char *jobname = pmPart ? pmPart->queryProp("@id") : nullptr;
+        if (isEmptyString(jobname))
+            jobname = pmid.str();
         if (!streq(target.get(), "*"))
-            cloneFileInfoToDali(publisherWuid, updateFlags, filesNotFound, pt, daliIP, ensureClusterInfo(), srcCluster, prefix, userdesc, checkFlag(PKGADD_ALLOW_FOREIGN));
+            cloneFileInfoToDali(publisherWuid, updateFlags, filesNotFound, pt, daliIP, ensureClusterInfo(), srcCluster, prefix, userdesc, checkFlag(PKGADD_ALLOW_FOREIGN), jobname);
         else
         {
             CConstWUClusterInfoArray clusters;
@@ -390,7 +393,7 @@ public:
             {
                 IConstWUClusterInfo &cluster = clusters.item(i);
                 if (cluster.getPlatform() == RoxieCluster)
-                    cloneFileInfoToDali(publisherWuid, updateFlags, filesNotFound, pt, daliIP, &cluster, srcCluster, prefix, userdesc, checkFlag(PKGADD_ALLOW_FOREIGN));
+                    cloneFileInfoToDali(publisherWuid, updateFlags, filesNotFound, pt, daliIP, &cluster, srcCluster, prefix, userdesc, checkFlag(PKGADD_ALLOW_FOREIGN), jobname);
             }
         }
     }
@@ -415,12 +418,10 @@ public:
                     if (progress)
                         state = progress->getState();
                 }
-
             }
         }
         encodeDFUstate(state, publisherState);
-        if (state != DFUstate_finished)
-            return false;
+        return (state == DFUstate_finished);
     }
     bool waitForDfuWorkunit()
     {

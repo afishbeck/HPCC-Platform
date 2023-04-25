@@ -480,7 +480,7 @@ public:
     {
         if (isEmptyString(resp->getDfuPublisherWuid()))
             return !optOnlyCopyFiles;
-        fprintf(stdout, "\nDFU publisher file copying Wuid: %s is %s\n", resp->getDfuPublisherWuid(), isEmptyString(resp->getDfuPublisherState()) ? "in unknown state" : resp->getDfuPublisherState());
+        fprintf(stdout, "\nDFU Publisher file copying Wuid: %s is %s\n", resp->getDfuPublisherWuid(), isEmptyString(resp->getDfuPublisherState()) ? "in unknown state" : resp->getDfuPublisherState());
         return (!optOnlyCopyFiles && !optStopIfFilesCopied);
     }
 

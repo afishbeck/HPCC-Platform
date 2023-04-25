@@ -1521,7 +1521,7 @@ bool CFileSprayEx::onCreateDFUPublisherWorkunit(IEspContext &context, IEspCreate
 {
     try
     {
-        context.ensureFeatureAccess(DFU_WU_URL, SecAccess_Write, ECLWATCH_DFU_WU_ACCESS_DENIED, "Failed to create DFU publisher workunit. Permission denied.");
+        context.ensureFeatureAccess(DFU_WU_URL, SecAccess_Write, ECLWATCH_DFU_WU_ACCESS_DENIED, "Failed to create DFU Publisher workunit. Permission denied.");
 
         Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
         Owned<IDFUWorkUnit> wu = factory->createPublisherWorkUnit();
