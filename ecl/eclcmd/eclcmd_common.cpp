@@ -897,7 +897,7 @@ eclCmdOptionMatchIndicator EclCmdWithQueryTarget::parseCommandLineOptions(ArgvIt
     return EclCmdOptionMatch;
 }
 
-void EclCmdOptionsDFU::preallocatePublisherWuid(EclCmdWithEclTarget &cmd)
+void EclCmdOptionsDFU::preallocatePublisherWuid(EclCmdCommon &cmd)
 {
     Owned<IClientFileSpray> client = createCmdClientExt(FileSpray, cmd, "");
     Owned<IClientCreateDFUPublisherWorkunit> req = client->createCreateDFUPublisherWorkunitRequest();

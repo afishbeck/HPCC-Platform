@@ -466,9 +466,9 @@ public:
         req->setDfuPublisherWuid(optDfuPublisherWuid);
     }
 
-    void preallocatePublisherWuid(EclCmdWithEclTarget &cmd);
+    void preallocatePublisherWuid(EclCmdCommon &cmd);
 
-    bool finalizeOptions(EclCmdWithEclTarget &cmd, IProperties *globals)
+    bool finalizeOptions(EclCmdCommon &cmd, IProperties *globals)
     {
         if (optPreallocatePublisherWuid && optDfuCopyFiles)
             preallocatePublisherWuid(cmd);

@@ -398,18 +398,34 @@ public:
     {
         cloneDfsInfo(updateFlags, filesNotFound, pmPart);
     }
-    bool waitForDfuWorkunit()
+    bool updateDfuPublisherState(bool waitForCompletion)
     {
+        DFUstate state = DFUstate_unknown;
         if (!publisherWuid.isEmpty())
         {
             Owned<IDFUWorkUnitFactory> factory = getDFUWorkUnitFactory();
             Owned<IConstDFUWorkUnit> dfuPublisherWu = factory->openWorkUnit(publisherWuid, false);
-            DFUstate state = dfuPublisherWu->pollForCompletion(dfuWait);
-            StringBuffer statemsg;
-            encodeDFUstate(state, publisherState);
-            if (state != DFUstate_finished)
-                return false;
+            if (dfuPublisherWu)
+            {
+                if (waitForCompletion)
+                    state = dfuPublisherWu->pollForCompletion(dfuWait);
+                else
+                {
+                    IConstDFUprogress *progress = dfuPublisherWu->queryProgress();
+                    if (progress)
+                        state = progress->getState();
+                }
+
+            }
         }
+        encodeDFUstate(state, publisherState);
+        if (state != DFUstate_finished)
+            return false;
+    }
+    bool waitForDfuWorkunit()
+    {
+        if (!publisherWuid.isEmpty())
+            return updateDfuPublisherState(true);
         return true;
     }
 
@@ -436,7 +452,10 @@ public:
         }
 
         if (copyonly || (stopifcopy && !publisherWuid.isEmpty()))
+        {
+            updateDfuPublisherState(false);
             return false;
+        }
         if (!waitForDfuWorkunit())
             return false;
         if (pmExisting)
@@ -526,7 +545,10 @@ public:
         cloneDfsInfo(updateFlags, filesNotFound);
 
         if (copyonly || (stopifcopy && !publisherWuid.isEmpty()))
+        {
+            updateDfuPublisherState(false);
             return false;
+        }
 
         if (existingPart)
             pmExisting->removeTree(existingPart);

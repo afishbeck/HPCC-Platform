@@ -969,6 +969,7 @@ void ReferencedFileList::cloneFileInfo(StringBuffer &publisherWuid, const char *
                 publisher.setown(factory->updateWorkUnit(publisherWuid, true));
                 if (publisher)
                 {
+                    publisher->setJobName(jobName.isEmpty() ? "copy published files" : jobName);
                     IDFUprogress *progress = publisher->queryUpdateProgress();
                     if (progress)
                         progress->setState(DFUstate_finished); //don't just delete because empty, automated systems might be tracking
