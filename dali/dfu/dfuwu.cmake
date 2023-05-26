@@ -53,5 +53,6 @@ target_link_libraries ( dfuwu
          hrpc 
          remote 
          dalibase 
+         ws_dfsclient
     )
 

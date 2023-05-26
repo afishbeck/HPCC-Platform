@@ -593,6 +593,8 @@ static void appendRemoteLocations(IPartDescriptor *pdesc, StringArray &locations
         pdesc->getFilename(copy,r);
         StringBuffer path;
         r.getRemotePath(path);
+        path.replaceString("127.0.0.1", "host.docker.internal");
+
         if (localFileName && r.isLocal())
         {
             StringBuffer l;
