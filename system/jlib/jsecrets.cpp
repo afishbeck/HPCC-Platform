@@ -1061,7 +1061,7 @@ const MemoryAttr &getSecretUdpKey(bool required)
     return udpKey;
 }
 
-IPropertyTree *createTlsClientSecretInfo(const char *issuer, bool mutual, bool acceptSelfSigned, bool addCACert)
+IPropertyTree *createTlsClientSecretInfo(const char *issuer, bool acceptSelfSigned, bool addCACert, bool verifyServer)
 {
     if (isEmptyString(issuer))
         return nullptr;
@@ -1072,7 +1072,7 @@ IPropertyTree *createTlsClientSecretInfo(const char *issuer, bool mutual, bool a
 
     Owned<IPropertyTree> info = createPTree();
 
-    if (mutual)
+    if (strieq(issuer, "remote")||strieq(issuer, "local"))
     {
         filepath.set(secretpath).append("tls.crt");
         if (!checkFileExists(filepath))
@@ -1124,6 +1124,7 @@ IPropertyTree *queryTlsSecretInfo(const char *name)
         return nullptr;
 
     info = mtlsInfoCache->setPropTree(name);
+    info->setProp("@issuer", name);
     info->setProp("certificate", filepath.str());
     filepath.set(secretpath).append("tls.key");
     if (checkFileExists(filepath))
@@ -1138,13 +1139,29 @@ IPropertyTree *queryTlsSecretInfo(const char *name)
             if (ca)
                 ca->setProp("@path", filepath.str());
         }
-        // TLS TODO: do we want to always require verify, even if no ca ?
-        verify->setPropBool("@enable", true);
+        //For now only the "public" issuer implies client certificates are not required
+        verify->setPropBool("@enable", !strieq(name, "public"));
         verify->setPropBool("@address_match", false);
         verify->setPropBool("@accept_selfsigned", false);
         verify->setProp("trusted_peers", "anyone");
     }
     return info;
+}
+
+IPropertyTree *getTlsSecretInfoWithTrustedPeers(const char *issuer, const char *trusted_peers)
+{
+    IPropertyTree *issuerConfig = queryTlsSecretInfo(issuer);
+    if (!issuerConfig)
+        return nullptr;
+    if (isEmptyString(trusted_peers))
+        return LINK(issuerConfig);
+    Owned<IPropertyTree> tlsConfig = createPTreeFromIPT(issuerConfig);
+    if (!tlsConfig)
+        return nullptr;
+
+    IPropertyTree *verify = ensurePTree(tlsConfig, "verify");
+    verify->setProp("trusted_peers", trusted_peers);
+    return tlsConfig.getClear();
 }
 
 enum UseMTLS { UNINIT, DISABLED, ENABLED };
