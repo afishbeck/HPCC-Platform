@@ -29,7 +29,7 @@
 
 //================================================================================================================================
 
-IHpccProtocolListener *createProtocolListener(const char *protocol, IHpccProtocolMsgSink *sink, unsigned port, unsigned listenQueue, const char *certFile, const char *keyFile, const char *passPhrase);
+IHpccProtocolListener *createProtocolListener(const char *protocol, IHpccProtocolMsgSink *sink, unsigned port, unsigned listenQueue, const char *certIssuer, const char *certFile, const char *keyFile, const char *passPhrase);
 
 class CHpccProtocolPlugin : implements IHpccProtocolPlugin, public CInterface
 {
@@ -60,9 +60,9 @@ public:
         maxHttpConnectionRequests = ctx.ctxGetPropInt("@maxHttpConnectionRequests", 0);
         maxHttpKeepAliveWait = ctx.ctxGetPropInt("@maxHttpKeepAliveWait", 5000); // In milliseconds
     }
-    IHpccProtocolListener *createListener(const char *protocol, IHpccProtocolMsgSink *sink, unsigned port, unsigned listenQueue, const char *config, const char *certFile=nullptr, const char *keyFile=nullptr, const char *passPhrase=nullptr)
+    IHpccProtocolListener *createListener(const char *protocol, IHpccProtocolMsgSink *sink, unsigned port, unsigned listenQueue, const char *config, const char *certIssuer, const char *certFile, const char *keyFile, const char *passPhrase)
     {
-        return createProtocolListener(protocol, sink, port, listenQueue, certFile, keyFile, passPhrase);
+        return createProtocolListener(protocol, sink, port, listenQueue, certIssuer, certFile, keyFile, passPhrase);
     }
 public:
     StringArray targetNames;
@@ -224,6 +224,7 @@ class ProtocolSocketListener : public ProtocolListener
     Owned<ISocket> socket;
     SocketEndpoint ep;
     StringAttr protocol;
+    StringAttr certIssuer;
     StringAttr certFile;
     StringAttr keyFile;
     StringAttr passPhrase;
@@ -231,20 +232,28 @@ class ProtocolSocketListener : public ProtocolListener
     bool isSSL = false;
 
 public:
-    ProtocolSocketListener(IHpccProtocolMsgSink *_sink, unsigned _port, unsigned _listenQueue, const char *_protocol, const char *_certFile, const char *_keyFile, const char *_passPhrase)
+    ProtocolSocketListener(IHpccProtocolMsgSink *_sink, unsigned _port, unsigned _listenQueue, const char *_protocol, const char *_certIssuer, const char *_certFile, const char *_keyFile, const char *_passPhrase)
       : ProtocolListener(_sink)
     {
         port = _port;
         listenQueue = _listenQueue;
         ep.set(port, queryHostIP());
         protocol.set(_protocol);
+        certIssuer.set(_certIssuer);
         certFile.set(_certFile);
         keyFile.set(_keyFile);
         passPhrase.set(_passPhrase);
         isSSL = streq(protocol.str(), "ssl");
+        DBGLOG("ProtocolSocketListener port=%d, certIssuer=%s, certFile=%s, keyFile=%s", port, _certIssuer, _certFile, _keyFile);
+
 #ifdef _USE_OPENSSL
         if (isSSL)
-            secureContext.setown(createSecureSocketContextEx(certFile.get(), keyFile.get(), passPhrase.get(), ServerSocket));
+        {
+            if (certIssuer.length())
+                secureContext.setown(createSecureSocketContextSecretSrv(certIssuer, false));
+            else
+                secureContext.setown(createSecureSocketContextEx(certFile.get(), keyFile.get(), passPhrase.get(), ServerSocket));
+        }
 #endif
     }
 
@@ -2222,11 +2231,11 @@ void ProtocolSocketListener::runOnce(const char *query)
     p->runOnce(query);
 }
 
-IHpccProtocolListener *createProtocolListener(const char *protocol, IHpccProtocolMsgSink *sink, unsigned port, unsigned listenQueue, const char *certFile=nullptr, const char *keyFile=nullptr, const char *passPhrase=nullptr)
+IHpccProtocolListener *createProtocolListener(const char *protocol, IHpccProtocolMsgSink *sink, unsigned port, unsigned listenQueue, const char *certIssuer, const char *certFile, const char *keyFile, const char *passPhrase)
 {
     if (traceLevel)
-        DBGLOG("Creating Roxie socket listener, protocol %s, pool size %d, listen queue %d%s", protocol, sink->getPoolSize(), listenQueue, sink->getIsSuspended() ? " SUSPENDED":"");
-    return new ProtocolSocketListener(sink, port, listenQueue, protocol, certFile, keyFile, passPhrase);
+        DBGLOG("Creating Roxie socket listener, protocol %s, issuer=%s, pool size %d, listen queue %d%s", protocol, certIssuer ? certIssuer : "none", sink->getPoolSize(), listenQueue, sink->getIsSuspended() ? " SUSPENDED":"");
+    return new ProtocolSocketListener(sink, port, listenQueue, protocol, certIssuer, certFile, keyFile, passPhrase);
 }
 
 extern IHpccProtocolPlugin *loadHpccProtocolPlugin(IHpccProtocolPluginContext *ctx, IActiveQueryLimiterFactory *_limiterFactory)

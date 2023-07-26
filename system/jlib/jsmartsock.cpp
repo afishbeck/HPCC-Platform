@@ -216,8 +216,12 @@ CSmartSocketFactory::CSmartSocketFactory(IPropertyTree &service, bool _retry, un
         throw createSmartSocketException(0, "CSmartSocket factory both name and port required for service configuration");
 
     tlsService  = service.getPropBool("@tls");
+    const char *issuer = service.queryProp("@issuer");
+    bool mutual = !service.getPropBool("@public");
+    if (issuer && strieq(issuer, "remote"))
+        mutual = true;
     if (tlsService)
-        tlsConfig.setown(createTlsClientSecretInfo(service.queryProp("@issuer"), !service.getPropBool("@public"), service.getPropBool("@selfSigned"), service.getPropBool("@caCert")));
+        tlsConfig.setown(createTlsClientSecretInfo(issuer, mutual, service.getPropBool("@selfSigned"), service.getPropBool("@caCert")));
 
     StringBuffer s;
     s.append(name).append(':').append(port);
