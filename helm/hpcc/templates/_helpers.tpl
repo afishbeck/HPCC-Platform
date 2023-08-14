@@ -1025,6 +1025,7 @@ Generate instance queue names
 
 {{/*
 Generate service entries for TLS
+  pass in includeTlsVerifyConfig: true, to include the tls verify settings
 */}}
 {{- define "hpcc.addTLSServiceEntries" -}}
   {{- $externalService := (ne ( include "hpcc.isVisibilityPublic" (dict "root" .root "visibility" .visibility)) "") }}
@@ -1051,6 +1052,9 @@ Generate service entries for TLS
   issuer: {{ $issuerKeyName }}
   selfSigned: {{ (hasKey $issuerSpec "selfSigned") }}
   caCert: {{ (not (hasKey $issuerSpec "selfSigned")) }}
+          {{- if (and (.includeTrustedPeers) (or (hasKey .service "remoteClients" ) (hasKey .service "trustClients" ))) }}
+  trusted_peers: [ {{ include "hpcc.getTrustedPeerString" (dict "root" .root "remoteClients" .remoteClients "trustClients" .trustClients "instance" .service.name "visibility" .service.visibility "includeRoxieAndEclWatch" .includeRoxieAndEclWatch) | quote }} ]
+          {{- end }}
         {{- end }}
       {{- end }}
     {{- end }}
@@ -1752,7 +1756,7 @@ use "public" or "local"
 
 {{/*
 Builds the commonName for a client certificate.  Used in creation of both certificate and access control list.
-  Pass in root, client (name), instance (myeclwatch), component (eclwatch), visibility, external (bool, optional)
+  Pass in root, client (name), instance (myeclwatch), visibility, external (bool, optional)
 */}}
 {{- define "hpcc.getClientCommonName" -}}
  {{- if (.root.Values.certificates | default dict).enabled -}}
@@ -1776,7 +1780,7 @@ Builds the commonName for a client certificate.  Used in creation of both certif
 
 {{/*
 Turns arrays of trustClients and remoteClients into a | delimited string to be used for the trusted_peers element of SecureSocket settings.
-  Pass in root, trustClients, remoteClients, instance (myeclwatch), component (eclwatch), visibility
+  Pass in root, trustClients, remoteClients, instance (myeclwatch), visibility
 */}}
 {{- define "hpcc.getTrustedPeerString" -}}
  {{- if not (or (hasKey . "remoteClients") (hasKey . "trustClients")) -}}
@@ -1784,15 +1788,29 @@ Turns arrays of trustClients and remoteClients into a | delimited string to be u
  {{- else -}}
   {{/* Turn remoteClients array into one single array element which is a | delimited string */}}
   {{- $instance := .instance -}}
-  {{- $component := .component -}}
   {{- $visibility := .visibility -}}
   {{- $root := .root -}}
   {{- range $remoteClient := .remoteClients -}}
-   {{- include "hpcc.getClientCommonName" (dict "root" $root "client" $remoteClient.name "instance" $instance "component" $component "visibility" $visibility "issuerKeyName" "remote") -}}|
+   {{- include "hpcc.getClientCommonName" (dict "root" $root "client" $remoteClient.name "instance" $instance "visibility" $visibility "issuerKeyName" "remote") -}}|
   {{- end -}}
-  {{/* append trustClients array to | delimited string */}}
   {{- range $trustClient := .trustClients -}}
    {{- $trustClient.commonName -}}|
+  {{- end -}}
+  {{- if .includeRoxieAndEclWatch -}}
+   {{- $remoteIssuer := get $root.Values.certificates.issuers "remote" -}}
+   {{- if and ($remoteIssuer) (hasKey $remoteIssuer "domain") -}}
+    {{- $domain := $remoteIssuer.domain -}}
+    {{- range $esp := $root.Values.esp -}}
+     {{- if or (eq $esp.application "eclwatch") (eq $esp.application "eclservices") -}}
+      {{- $esp.name -}}.{{- $domain -}}|
+     {{- end -}}
+    {{- end -}}
+    {{- range $roxie := $root.Values.roxie -}}
+     {{- range $roxieService := $roxie.services -}}
+      {{- $roxieService.name -}}.{{- $domain -}}|
+     {{- end -}}
+    {{- end -}}
+   {{- end -}}
   {{- end -}}
  {{- end -}}
 {{- end }}

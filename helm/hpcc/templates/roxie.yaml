@@ -41,7 +41,7 @@ data:
       - name: {{ $service.name }}
 {{ toYaml (omit $service "tls" "name") | indent 8 }}
    {{- if ne (int $service.servicePort) 0 }}
-     {{- include "hpcc.addTLSServiceEntries" (dict "root" $root "service" $service "component" $component "visibility" $service.visibility "trustClients" $service.trustClients "includeTlsConfig" true) | indent 6 }}
+     {{- include "hpcc.addTLSServiceEntries" (dict "root" $root "service" $service "component" $component "visibility" $service.visibility "remoteClients" $service.remoteClients "trustClients" $service.trustClients "includeTrustedPeers" true "includeRoxieAndEclWatch" true) | indent 6 }}
    {{- end }}
   {{- end }}
 {{ toYaml ( omit .me "logging" "topoServer" "encryptInTransit" "env" "services") | indent 6 }}
@@ -100,6 +100,9 @@ data:
 {{- $servername := printf "%s-server" $roxie.name -}}
 {{- $udpkeyname := $roxie.name -}}
 {{- range $service := $roxie.services }}
+ {{- range $remoteClient := $service.remoteClients }}
+  {{ include "hpcc.addExternalRemoteClientCertificate" (dict "root" $ "client" $remoteClient.name "organization" $remoteClient.organization "instance" $service.name "component" "roxie" "visibility" $service.visibility "secretTemplate" $remoteClient.secretTemplate) }}
+ {{- end }}
  {{- if ne (int $service.servicePort)  0 }}
   {{- $_ := set $service "port" $service.servicePort }} 
  {{- end }}

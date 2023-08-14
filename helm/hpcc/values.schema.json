@@ -2256,6 +2256,9 @@
           "type": "boolean",
           "description": "Whether the roxie service uses tls.  Requires cert-manager or custom certificate."
         },
+        "remoteClients": {
+          "$ref": "#/definitions/remoteClients"
+        },
         "trustClients": {
           "$ref": "#/definitions/trustClients"
         }

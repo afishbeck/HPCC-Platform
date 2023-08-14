@@ -52,7 +52,7 @@ data:
           enable: true
           address_match: false
           accept_selfsigned: false
-          trusted_peers: [ {{ include "hpcc.getTrustedPeerString" (dict "root" .root "remoteClients" .me.remoteClients "trustClients" .me.trustClients "instance" .me.name "component" .me.application "visibility" .me.service.visibility) | quote }} ]
+          trusted_peers: [ {{ include "hpcc.getTrustedPeerString" (dict "root" .root "remoteClients" .me.remoteClients "trustClients" .me.trustClients "instance" .me.name "visibility" .me.service.visibility) | quote }} ]
           ca_certificates:
             path: /opt/HPCCSystems/secrets/certificates/{{ $issuerKeyName }}/ca.crt
    {{- end }}
