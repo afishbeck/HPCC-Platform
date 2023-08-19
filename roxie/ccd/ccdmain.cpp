@@ -1458,7 +1458,7 @@ int CCD_API roxie_main(int argc, const char *argv[], const char * defaultYaml)
                     {
                         roxiePort = port;
                         if (roxieFarm.getPropBool("@tls"))
-                            roxiePortTlsClientConfig = createTlsClientSecretInfo(roxieFarm.queryProp("@issuer"), roxieFarm.getPropBool("@selfSigned"));
+                            roxiePortTlsClientConfig = createIssuerTlsClientConfig(roxieFarm.queryProp("@issuer"), roxieFarm.getPropBool("@selfSigned"));
                         debugEndpoint.set(roxiePort, ip);
                     }
                     bool suspended = roxieFarm.getPropBool("@suspended", false);
@@ -1480,7 +1480,7 @@ int CCD_API roxie_main(int argc, const char *argv[], const char * defaultYaml)
                                 const char *certIssuer = roxieFarm.queryProp("@issuer");
                                 if (isEmptyString(certIssuer))
                                     certIssuer = roxieFarm.getPropBool("@public", true) ? "public" : "local";
-                                tlsConfig.setown(getTlsSecretInfoWithTrustedPeers(certIssuer, roxieFarm.queryProp("trusted_peers")));
+                                tlsConfig.setown(getIssuerTlsServerConfigWithTrustedPeers(certIssuer, roxieFarm.queryProp("trusted_peers")));
                                 if (!tlsConfig)
                                     throw MakeStringException(ROXIE_FILE_ERROR, "TLS secret for issuer %s not found", certIssuer);
                                 DBGLOG("Roxie service, port(%d) TLS issuer (%s)", port, certIssuer);

@@ -1061,7 +1061,7 @@ const MemoryAttr &getSecretUdpKey(bool required)
     return udpKey;
 }
 
-IPropertyTree *createTlsClientSecretInfo(const char *issuer, bool acceptSelfSigned, bool addCACert, bool verifyServer)
+IPropertyTree *createIssuerTlsClientConfig(const char *issuer, bool acceptSelfSigned, bool addCACert)
 {
     if (isEmptyString(issuer))
         return nullptr;
@@ -1102,7 +1102,7 @@ IPropertyTree *createTlsClientSecretInfo(const char *issuer, bool acceptSelfSign
     return info.getClear();
 }
 
-IPropertyTree *queryTlsSecretInfo(const char *name)
+IPropertyTree *queryIssuerTlsServerConfig(const char *name)
 {
     if (isEmptyString(name))
         return nullptr;
@@ -1148,13 +1148,14 @@ IPropertyTree *queryTlsSecretInfo(const char *name)
     return info;
 }
 
-IPropertyTree *getTlsSecretInfoWithTrustedPeers(const char *issuer, const char *trusted_peers)
+IPropertyTree *getIssuerTlsServerConfigWithTrustedPeers(const char *issuer, const char *trusted_peers)
 {
-    IPropertyTree *issuerConfig = queryTlsSecretInfo(issuer);
+    IPropertyTree *issuerConfig = queryIssuerTlsServerConfig(issuer);
     if (!issuerConfig)
         return nullptr;
     if (isEmptyString(trusted_peers))
         return LINK(issuerConfig);
+    //TBD: might cache in the future, but needs thought, lookup must include trusted_peers, but will there be cases where trusted_peers can change dynamically?
     Owned<IPropertyTree> tlsConfig = createPTreeFromIPT(issuerConfig);
     if (!tlsConfig)
         return nullptr;
