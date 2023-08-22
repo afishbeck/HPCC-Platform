@@ -1878,6 +1878,67 @@ spec:
 {{- end }}
 
 {{/*
+*/}}
+
+   {{- $categories := list "system" "storage" "esp" "codeSign" "codeVerify" "authn" "eclUser" "ecl" "git" -}}
+   {{- range $category := $categories }}
+    {{ include "hpcc.addVaultClientCertificate" (dict "root" $ "category" $category) }}
+   {{- end }}
+
+{{- define "hpcc.addVaultClientCertificate" }}
+ {{- if (.root.Values.certificates | default dict).enabled -}}
+  {{- $issuerKeyName := "vaultclient" -}}
+  {{- if eq (include "hpcc.isIssuerEnabled" (dict "root" .root "issuerKeyName" $issuerKeyName)) "true" -}}
+   {{- $issuer := get .root.Values.certificates.issuers $issuerKeyName -}}
+   {{- if not $issuer -}}
+    {{- $_ := fail (printf "Issuer %s for vault access client certificates not found." $issuerKeyName) -}}
+   {{- else -}}
+    {{- if not $issuer.enabled -}}
+     {{- $_ := fail (printf "Issuer %s for vault access client certificates not enabled." $issuerKeyName) -}}
+    {{- end }}
+    {{- if not $issuer.domain -}}
+     {{- $_ := fail (printf "Domain required for Issuer %s for vault access client certificates." $issuerKeyName) -}}
+    {{- end }}
+    {{- $namespace := .root.Release.Namespace -}}
+    {{- $category := .category -}}
+    {{- $secretTemplate := $issuer.secretTemplate -}}
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vaultclient-{{ $category }}-cert
+  namespace: {{ $namespace }}
+spec:
+  # Secret names are always required.
+  secretName: vaultclient-{{ $category }}-tls
+    {{- if $secretTemplate }}
+  secretTemplate:
+{{ toYaml $secretTemplate | indent 4 }}
+    {{- end }}
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  subject:
+    organizations:
+    - HPCC Vault Client
+  commonName: {{ $category }}.vaultclient.{{ $issuer.domain }}
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - client auth
+  issuerRef:
+    name: {{ $issuer.name }}
+    kind: {{ $issuer.kind }}
+    group: cert-manager.io
+---
+   {{- end }}
+  {{- end }}
+ {{- end }}
+{{- end }}
+
+{{/*
 Experimental: Use certmanager to generate a key for roxie udp encryption.
 A public certificate and private key are generated under /opt/HPCCSystems/secrets/certificates/udp.
 Current udp encryption design would only use the private key.
