@@ -132,7 +132,7 @@ spec:
     {{- $_ := fail (printf "\n\nEnabling certificate generation requires cert-manager resources. Please intall cert-manager. To disable mTLS security set \"certificates.enabled=false\". To bypass this validation check set \"global.noResourceValidation=true\". \n" ) -}}
    {{- end -}}
   {{- end -}}
-  {{- if hasKey "issuers" $.Values.certificaates -}}
+  {{- if hasKey $.Values.certificates "issuers" -}}
    {{- range $k, $v := .Values.certificates.issuers }}
 {{- include "hpcc.addIssuer" (dict "root" $ "issuerKeyName" $k "me" $v ) }}
    {{- end }}

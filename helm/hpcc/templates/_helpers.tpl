@@ -583,7 +583,9 @@ readinessProbe:
 Generate vault info
 */}}
 {{- define "hpcc.generateVaultConfig" -}}
+{{- $root := .root -}}
 {{- $secretsCategories := .secretsCategories -}}
+{{- $vaultClientIssuerEnabled := eq (include "hpcc.isIssuerEnabled" (dict "root" .root "issuerKeyName" "vaultclient")) "true" -}}
 vaults:
 {{- range  $categoryname, $category := .root.Values.vaults -}}
  {{- if (has $categoryname $secretsCategories) }}
@@ -607,6 +609,19 @@ vaults:
     {{- if index $vault "appRoleSecret" }}
       appRoleSecret: {{ index $vault "appRoleSecret" }}
     {{- end -}}
+    {{- if $vaultClientIssuerEnabled }}
+     {{- if not (index $vault "client-secret") }}
+      {{- if not (index $vault "appRoleId") }}
+      useTLSCertificateAuth: true
+       {{- $issuer := $root.Values.certificates.issuers.vaultclient }}
+       {{- if index $issuer "rolePrefix" }}
+      role: {{ (printf "%s%s" $issuer.rolePrefix (lower $categoryname)) | quote }}
+       {{- else }}
+      role: {{ (printf "hpcc-%s" (lower $categoryname)) | quote }}
+       {{- end }}
+      {{- end }}
+     {{- end }}
+    {{- end }}
     {{- if (hasKey $vault "retries") }}
       retries: {{ $vault.retries }}
     {{- end }}
@@ -1880,11 +1895,6 @@ spec:
 {{/*
 */}}
 
-   {{- $categories := list "system" "storage" "esp" "codeSign" "codeVerify" "authn" "eclUser" "ecl" "git" -}}
-   {{- range $category := $categories }}
-    {{ include "hpcc.addVaultClientCertificate" (dict "root" $ "category" $category) }}
-   {{- end }}
-
 {{- define "hpcc.addVaultClientCertificate" }}
  {{- if (.root.Values.certificates | default dict).enabled -}}
   {{- $issuerKeyName := "vaultclient" -}}
@@ -1906,11 +1916,11 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: vaultclient-{{ $category }}-cert
+  name: vaultclient-{{ lower $category }}-cert
   namespace: {{ $namespace }}
 spec:
   # Secret names are always required.
-  secretName: vaultclient-{{ $category }}-tls
+  secretName: vaultclient-{{ lower $category }}-tls
     {{- if $secretTemplate }}
   secretTemplate:
 {{ toYaml $secretTemplate | indent 4 }}
@@ -1937,6 +1947,46 @@ spec:
   {{- end }}
  {{- end }}
 {{- end }}
+
+
+{{/*
+*/}}
+{{- define "hpcc.addVaultClientCertificateVolumeMounts" -}}
+ {{- if (.root.Values.certificates | default dict).enabled -}}
+  {{- $issuerKeyName := "vaultclient" -}}
+  {{- if eq (include "hpcc.isIssuerEnabled" (dict "root" .root "issuerKeyName" $issuerKeyName)) "true" -}}
+   {{- $issuer := get .root.Values.certificates.issuers $issuerKeyName -}}
+   {{- if $issuer -}}
+    {{- if $issuer.enabled -}}
+     {{- range $category := $secretsCategories -}}
+- name: certificate-{{ $issuerKeyName }}-{{ $category }}
+  mountPath: /opt/HPCCSystems/secrets/certificates/{{ $issuerKeyName }}/{{ $category }}
+     {{- end -}}
+    {{- end -}}
+   {{ end -}}
+  {{- end -}}
+ {{- end -}}
+{{- end -}}
+
+{{/*
+*/}}
+{{- define "hpcc.addVaultClientCertificateVolumes" -}}
+ {{- if (.root.Values.certificates | default dict).enabled -}}
+  {{- $issuerKeyName := "vaultclient" -}}
+  {{- if eq (include "hpcc.isIssuerEnabled" (dict "root" .root "issuerKeyName" $issuerKeyName)) "true" -}}
+   {{- $issuer := get .root.Values.certificates.issuers $issuerKeyName -}}
+   {{- if $issuer -}}
+    {{- if $issuer.enabled -}}
+     {{- range $category := $secretsCategories -}}
+- name: certificate-{{ $issuerKeyName }}-{{ $category }}
+  secret:
+    secretName: {{ $issuerKeyName }}-{{ $category }}-tls
+     {{- end -}}
+    {{- end -}}
+   {{ end -}}
+  {{- end -}}
+ {{- end -}}
+{{- end -}}
 
 {{/*
 Experimental: Use certmanager to generate a key for roxie udp encryption.
