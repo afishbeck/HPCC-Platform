@@ -1145,6 +1145,76 @@ public:
     }
 };
 
+
+//json operations currently act as string builder operations, and currently only function as children of CEsdlTransformOperationJsonPostContent
+//   but the API could actually support other modes which may be added in the future
+class CEsdlTransformOperationJsonObject : public CEsdlTransformOperationWithChildren
+{
+protected:
+    Owned<ICompiledXpath> m_select;
+    bool m_required = true;
+
+public:
+    CEsdlTransformOperationJsonObject(IXmlPullParser &xpp, StartTag &stag, const StringBuffer &prefix) : CEsdlTransformOperationWithoutChildren(xpp, stag, prefix){}
+
+    virtual ~CEsdlTransformOperationJsonObject(){}
+
+    virtual bool exec(CriticalSection *crit, IInterface *preparedForAsync, IEsdlScriptContext * scriptContext, IXpathContext * targetContext, IXpathContext * sourceContext) override
+    {
+        OptionalCriticalBlock block(crit);
+
+        if (!m_select)
+            return false; //only here if "optional" backward compatible support for now (optional syntax errors aren't actually helpful
+        try
+        {
+            StringBuffer value;
+            sourceContext->evaluateAsString(m_select, value);
+            targetContext->ensureAppendToValue(".", value, m_required);
+            return true;
+        }
+        catch (IException* e)
+        {
+            int code = e->errorCode();
+            StringBuffer msg;
+            e->errorMessage(msg);
+            e->Release();
+            recordError(code, msg);
+        }
+        catch (...)
+        {
+            recordError(ESDL_SCRIPT_Error, "unknown exception processing");
+        }
+        return false;
+    }
+};
+
+void loadJsonStringBuilderChildren(IArrayOf<IEsdlTransformOperation> &operations, IXmlPullParser &xpp, const StringBuffer &prefix, bool withVariables, IEsdlOperationTraceMessenger& messenger, IEsdlFunctionRegister *functionRegister)
+{
+    int type = 0;
+    while(true)
+    {
+        type = xpp.next();
+        switch(type)
+        {
+            case XmlPullParser::START_TAG:
+            {
+                StartTag opTag;
+                xpp.readStartTag(opTag);
+                const char *op = opTag.getLocalName();
+                if (streq(op, "json-object"))
+                    operations.append(*new CEsdlTransformOperationJsonObject(xpp, opTag, prefix));
+                break;
+            }
+            case XmlPullParser::END_TAG:
+            {
+                return;
+            }
+        }
+    }
+}
+
+
+
 class OperationStateHttpPostXml : public CInterfaceOf<IInterface> //plain CInterface doesn't actually give us our opaque IInterface pointer
 {
 public:
